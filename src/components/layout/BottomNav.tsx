@@ -12,8 +12,8 @@ import {
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/customers", label: "Customers", icon: Users },
-  { path: "/koperasi", label: "Koperasi", icon: Building2 },
   { path: "/products", label: "Products", icon: Package },
+  { path: "/koperasi", label: "Koperasi", icon: Building2 },
   { path: "/transactions", label: "POS", icon: ShoppingCart },
 ];
 
@@ -29,12 +29,12 @@ export function BottomNav() {
             <NavLink
               key={item.path}
               to={item.path}
-              className="relative flex flex-col items-center gap-1 px-3 py-2"
+              className="relative flex flex-col items-center gap-1 py-2"
             >
               {isActive && (
                 <motion.div
                   layoutId="bottom-nav-active"
-                  className="absolute -top-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-primary"
+                  className="absolute -top-1 left-0 w-full h-1 rounded-full bg-primary"
                   transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                 />
               )}

@@ -25,8 +25,8 @@ export default function Dashboard() {
           <GlassCard key={stat.label} hover delay={i * 0.08}>
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-                <div className="mt-2 text-2xl font-bold text-foreground">
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+                <div className="mt-2 text-xl font-bold text-foreground">
                   <AnimatedCounter
                     end={stat.value}
                     prefix={stat.prefix}

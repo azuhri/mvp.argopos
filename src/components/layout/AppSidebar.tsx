@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Snowflake,
 } from "lucide-react";
+import { config } from "@/lib/config";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -48,7 +49,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
               exit={{ opacity: 0 }}
               className="font-bold text-lg tracking-tight text-foreground whitespace-nowrap"
             >
-              FrostPOS
+              {config.appName}
             </motion.span>
           )}
         </div>
