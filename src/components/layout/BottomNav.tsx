@@ -1,33 +1,24 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import {
-  LayoutDashboard,
-  Users,
-  Building2,
-  Package,
-  ShoppingCart,
-} from "lucide-react";
-
-const navItems = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/customers", label: "Customers", icon: Users },
-  { path: "/products", label: "Products", icon: Package },
-  { path: "/koperasi", label: "Koperasi", icon: Building2 },
-  { path: "/transactions", label: "POS", icon: ShoppingCart },
-];
+import { useAuth } from "@/lib/auth";
+import { NAV_ITEMS } from "@/lib/navigation";
 
 export function BottomNav() {
   const location = useLocation();
+  const { canRead } = useAuth();
+
+  // Filter mobile navigation items based on user permissions
+  const visibleNavItems = NAV_ITEMS.filter(item => item.mobile && canRead(item.key));
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-strong border-t border-border/40 px-2 pb-safe">
       <div className="flex items-center justify-around h-16">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <NavLink
-              key={item.path}
+              key={item.key}
               to={item.path}
               className="relative flex flex-col items-center gap-1 py-2"
             >

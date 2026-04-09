@@ -2,6 +2,7 @@
 export const config = {
   // App Configuration
   appName: import.meta.env.VITE_APP_NAME || 'ArgoPOS',
+  appNameCommerce: import.meta.env.VITE_APP_NAME_COMMERCE || 'ArgoPOS Commerce',
   appUrl: import.meta.env.VITE_APP_URL || 'http://localhost:5173',
   
   // API Configuration

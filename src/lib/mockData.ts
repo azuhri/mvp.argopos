@@ -1,5 +1,6 @@
 // Mock data for the application
 
+
 export interface Customer {
   id: string;
   name: string;
@@ -31,6 +32,7 @@ export interface Product {
   stock: number;
   unit: string;
   image?: string;
+  image_url?: string;
 }
 
 export interface Transaction {
@@ -62,14 +64,13 @@ export const mockKoperasi: Koperasi[] = [
 ];
 
 export const mockProducts: Product[] = [
-  { id: "1", name: "Frozen Chicken Nuggets", category: "Nugget", price: 45000, stock: 120, unit: "pack" },
-  { id: "2", name: "Frozen Sausage Premium", category: "Sausage", price: 38000, stock: 85, unit: "pack" },
-  { id: "3", name: "Frozen Fish Fillet", category: "Seafood", price: 65000, stock: 8, unit: "pack" },
-  { id: "4", name: "Frozen Dim Sum Assorted", category: "Dim Sum", price: 52000, stock: 200, unit: "box" },
-  { id: "5", name: "Frozen French Fries", category: "Potato", price: 28000, stock: 150, unit: "pack" },
-  { id: "6", name: "Frozen Meatball Premium", category: "Meatball", price: 42000, stock: 3, unit: "pack" },
-  { id: "7", name: "Frozen Spring Roll", category: "Snack", price: 35000, stock: 95, unit: "pack" },
-  { id: "8", name: "Frozen Shrimp Tempura", category: "Seafood", price: 78000, stock: 45, unit: "box" },
+  { id: "1", name: "Bakso Sapi Packshot", category: "Nugget", price: 45000, stock: 120, unit: "pack", image_url: "image/BAKSO SAPI PACKSHOT.png" },
+  { id: "2", name: "Karage Packshot", category: "Sausage", price: 38000, stock: 85, unit: "pack", image_url: "image/KARAGE PACKSHOT.png" },
+  { id: "3", name: "Nugget Packshot", category: "Seafood", price: 65000, stock: 8, unit: "pack", image_url: "image/NUGGET PACKSHOT.PNG" },
+  { id: "4", name: "Pokpok Packshot", category: "Dim Sum", price: 52000, stock: 200, unit: "box", image_url: "image/POKPOK PACKSHOT.png" },
+  { id: "5", name: "Sosis Cocktail Packshot", category: "Sausage", price: 28000, stock: 150, unit: "pack", image_url: "image/SOSIS COCKTAIL PACKSHOT.png" },
+  { id: "6", name: "Strips Packshot", category: "Meatball", price: 42000, stock: 3, unit: "pack", image_url: "image/STRIPS PACKSHOT.png" },
+  { id: "7", name: "Frozen Chicken Nuggets", category: "Snack", price: 35000, stock: 95, unit: "pack", image_url: "image/NUGGET PACKSHOT.PNG" },
 ];
 
 export const mockTransactions: Transaction[] = [

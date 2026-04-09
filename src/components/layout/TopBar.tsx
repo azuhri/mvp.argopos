@@ -1,12 +1,37 @@
-import { Search, Bell } from "lucide-react";
+import { Search, Bell, LogOut, User } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface TopBarProps {
   title: string;
 }
 
 export function TopBar({ title }: TopBarProps) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    toast.success("Logout berhasil");
+    navigate("/login", { replace: true });
+  };
+
+  const getUserInitial = () => {
+    if (!user) return "U";
+    return user.name.charAt(0).toUpperCase();
+  };
+
   return (
     <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-border/40 glass-strong sticky top-0 z-30">
       <h1 className="text-lg font-semibold text-foreground">{title}</h1>
@@ -27,9 +52,25 @@ export function TopBar({ title }: TopBarProps) {
 
         <ThemeToggle />
 
-        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-          <span className="text-sm font-semibold text-primary">A</span>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-9 w-9 rounded-lg bg-primary/10 hover:bg-primary/20">
+              <span className="text-sm font-semibold text-primary">{getUserInitial()}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="glass-card">
+            <div className="px-2 py-1.5">
+              <p className="text-sm font-medium text-foreground">{user?.name}</p>
+              <p className="text-xs text-muted-foreground">{user?.email}</p>
+              <p className="text-xs text-muted-foreground capitalize">{user?.role?.replace("_", " ")}</p>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

@@ -2,24 +2,13 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import {
-  LayoutDashboard,
-  Users,
-  Building2,
-  Package,
-  ShoppingCart,
   ChevronLeft,
   ChevronRight,
   Snowflake,
 } from "lucide-react";
 import { config } from "@/lib/config";
-
-const navItems = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/customers", label: "Customers", icon: Users },
-  { path: "/koperasi", label: "Koperasi", icon: Building2 },
-  { path: "/products", label: "Products", icon: Package },
-  { path: "/transactions", label: "Transactions", icon: ShoppingCart },
-];
+import { useAuth } from "@/lib/auth";
+import { NAV_ITEMS, type NavItemConfig } from "@/lib/navigation";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -28,6 +17,10 @@ interface SidebarProps {
 
 export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
+  const { canRead } = useAuth();
+
+  // Filter navigation items based on user permissions
+  const visibleNavItems = NAV_ITEMS.filter(item => canRead(item.key));
 
   return (
     <motion.aside
@@ -57,11 +50,11 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 py-4 px-3 space-y-1">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <NavLink
-              key={item.path}
+              key={item.key}
               to={item.path}
               className={cn(
                 "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
