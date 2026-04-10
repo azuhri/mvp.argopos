@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Search, ShoppingBag, Star } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { mockProducts } from "@/lib/mockData";
-import { addToCart } from "@/lib/storefront";
+import { addToCart, getCartSummary, removeFromCart, updateCartQty, clearCart } from "@/lib/storefront";
 import { toast } from "sonner";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
 import { config } from "@/lib/config";
@@ -16,6 +16,26 @@ import CardProduct from "@/components/shared/CardProduct";
 export default function Store() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [cartSummary, setCartSummary] = useState(getCartSummary());
+  const [updating, setUpdating] = useState<string | null>(null);
+
+  // Update cart summary when localStorage changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setCartSummary(getCartSummary());
+    };
+    
+    // Listen for storage changes
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also update on interval for same-tab updates
+    const interval = setInterval(handleStorageChange, 100);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   const categories = ["all", ...Array.from(new Set(mockProducts.map((p) => p.category)))];
   const filtered = mockProducts.filter((p) => {
@@ -24,9 +44,33 @@ export default function Store() {
     return matchesSearch && matchesCategory;
   });
 
+  const { items, total, totalItems } = cartSummary;
+
+  const handleUpdateQty = async (productId: string, newQty: number) => {
+    if (newQty < 0) return;
+
+    setUpdating(productId);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    if (newQty === 0) {
+      removeFromCart(productId);
+      toast.success("Produk dihapus dari keranjang");
+    } else {
+      updateCartQty(productId, newQty);
+    }
+    setUpdating(null);
+  };
+
   const handleAddToCart = (productId: string, productName: string) => {
     addToCart(productId);
+    setCartSummary(getCartSummary()); // Trigger re-render
     toast.success(`${productName} ditambahkan ke keranjang`);
+  };
+
+  const handleClearCart = () => {
+    clearCart();
+    setCartSummary(getCartSummary()); // Trigger re-render
+    toast.success("Keranjang dikosongkan");
   };
 
   return (
@@ -68,7 +112,7 @@ export default function Store() {
             whileHover={{ y: -4, scale: 1.02 }}
             className="glass-card-hover overflow-hidden cursor-pointer group"
           >
-            <CardProduct product={product} />
+            <CardProduct product={product} handleAddToCart={handleAddToCart} />
           </motion.div>
         ))}
       </div>

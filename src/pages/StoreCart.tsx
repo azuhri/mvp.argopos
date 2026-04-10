@@ -2,12 +2,13 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Minus, Plus, ShoppingBag, Trash2, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { getCartSummary, updateCartQty, removeFromCart, clearCart } from "@/lib/storefront";
 import { formatCurrency } from "@/lib/mockData";
+import { config } from "@/lib/config";
 import { toast } from "sonner";
+import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
 
 export default function StoreCart() {
   const { items, total, totalItems } = getCartSummary();
@@ -35,7 +36,7 @@ export default function StoreCart() {
 
   if (items.length === 0) {
     return (
-      <AppLayout title="Cart">
+      <AppLayoutCommerce title={config.appNameCommerce}>
         <div className="text-center py-20">
           <ShoppingBag className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">Keranjang Kosong</h2>
@@ -44,12 +45,12 @@ export default function StoreCart() {
             <Link to="/store">Belanja Sekarang</Link>
           </Button>
         </div>
-      </AppLayout>
+      </AppLayoutCommerce>
     );
   }
 
   return (
-    <AppLayout title="Cart">
+    <AppLayoutCommerce title={config.appNameCommerce}>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Cart Items */}
         <div className="lg:col-span-2 space-y-4">
@@ -162,6 +163,6 @@ export default function StoreCart() {
           </GlassCard>
         </div>
       </div>
-    </AppLayout>
+    </AppLayoutCommerce>
   );
 }

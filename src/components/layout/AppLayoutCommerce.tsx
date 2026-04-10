@@ -31,8 +31,6 @@ export function AppLayoutCommerce({ children, title }: AppLayoutProps) {
           {children}
         </main>
       </div>
-
-      <BottomNav />
     </div>
   );
 }

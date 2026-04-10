@@ -4,7 +4,9 @@ import { Product } from "@/types/product";
 import { Button } from "../ui/button";
 import { Star } from "lucide-react";
 
-export default function CardProduct({ product }: { product: Product }) {
+
+export default function CardProduct({ product, handleAddToCart }: { product: Product, handleAddToCart: (id: string, name: string) => void }) {
+    
   return <React.Fragment>
     <div className="aspect-square bg-gradient-to-br from-primary/5 to-accent/5 rounded-lg mb-3 flex items-center justify-center">
               <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
@@ -37,7 +39,7 @@ export default function CardProduct({ product }: { product: Product }) {
                 <Button
                   size="sm"
                   className="w-full btn-tap"
-                //   onClick={() => handleAddToCart(product.id, product.name)}
+                  onClick={() => handleAddToCart(product.id, product.name)}
                 >
                   + Keranjang
                 </Button>
