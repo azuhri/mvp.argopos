@@ -54,8 +54,8 @@ export function TopBarCommerce({ title }: TopBarCommerceProps) {
     return (
         <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-border/40 glass-strong sticky top-0 z-30">
             <div className="flex gap-2 items-center">
-                <div className="p-2 px-3 rounded-sm bg-primary flex items-center justify-center">
-                    <ShoppingCartIcon size={25} strokeWidth={2} className="text-primary-foreground" />
+                <div className="p-2 px-2 rounded-sm bg-primary flex items-center justify-center">
+                    <ShoppingBag className="h-5 w-5 text-primary-foreground" />
                 </div>
                 <h1 className="text-lg font-semibold text-foreground">{title}</h1>
             </div>
@@ -143,9 +143,11 @@ export function TopBarCommerce({ title }: TopBarCommerceProps) {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <p className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {totalItems}
-                    </p>
+                    {totalItems > 0 && (
+                        <p className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                            {totalItems}
+                        </p>
+                    )}
                 </div>
             </div>
         </header>

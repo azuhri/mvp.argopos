@@ -19,6 +19,9 @@ import MasterUsers from "./pages/master/Users";
 import MasterLocations from "./pages/master/Locations";
 import MasterRoles from "./pages/master/Roles";
 import MasterStocks from "./pages/master/Stocks";
+import MasterProducts from "./pages/master/Products";
+import CreateProduct from "./pages/master/CreateProduct";
+import MasterCategories from "./pages/master/Categories";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -121,6 +124,27 @@ const App = () => (
               <ProtectedRoute>
                 <PermissionRoute menuKey="master_stock">
                   <MasterStocks />
+                </PermissionRoute>
+              </ProtectedRoute>
+            } />
+             <Route path="/master/products" element={
+              <ProtectedRoute>
+                <PermissionRoute menuKey="master_products">
+                  <MasterProducts />
+                </PermissionRoute>
+              </ProtectedRoute>
+            } />
+            <Route path="/master/products/create" element={
+              <ProtectedRoute>
+                <PermissionRoute menuKey="master_products">
+                  <CreateProduct />
+                </PermissionRoute>
+              </ProtectedRoute>
+            } />
+            <Route path="/master/categories" element={
+              <ProtectedRoute>
+                <PermissionRoute menuKey="master_products">
+                  <MasterCategories />
                 </PermissionRoute>
               </ProtectedRoute>
             } />

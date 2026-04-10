@@ -4,11 +4,13 @@ import { motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  ShoppingBag,
   Snowflake,
 } from "lucide-react";
 import { config } from "@/lib/config";
 import { useAuth } from "@/lib/auth";
-import { NAV_ITEMS, type NavItemConfig } from "@/lib/navigation";
+import { NAV_GROUPS_MENUS, type NavItemConfig } from "@/lib/navigation";
+import { Separator } from "../ui/separator";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -19,8 +21,10 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const { canRead } = useAuth();
 
-  // Filter navigation items based on user permissions
-  const visibleNavItems = NAV_ITEMS.filter(item => canRead(item.key));
+  const visibleGroups = NAV_GROUPS_MENUS.map(group => ({
+    ...group,
+    listMenus: group.listMenus.filter(item => canRead(item.key)),
+  })).filter(group => group.listMenus.length > 0);
 
   return (
     <motion.aside
@@ -33,7 +37,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="flex items-center h-16 px-4 border-b border-border/40">
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <Snowflake className="h-5 w-5 text-primary-foreground" />
+            <ShoppingBag className="h-5 w-5 text-primary-foreground" />
           </div>
           {!collapsed && (
             <motion.span
@@ -49,40 +53,62 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 px-3 space-y-1">
-        {visibleNavItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <NavLink
-              key={item.key}
-              to={item.path}
-              className={cn(
-                "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
-              )}
-            >
-              {isActive && (
-                <motion.div
-                  layoutId="sidebar-active"
-                  className="absolute inset-0 rounded-lg bg-accent border border-primary/10"
-                  transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
-                />
-              )}
-              <item.icon className="h-5 w-5 flex-shrink-0 relative z-10" />
-              {!collapsed && (
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="relative z-10 whitespace-nowrap"
-                >
-                  {item.label}
-                </motion.span>
-              )}
-            </NavLink>
-          );
-        })}
+      <nav className="flex-1 py-4 px-3 my-4">
+        {visibleGroups.map((group) => (
+          <div key={group.group}>
+            {!collapsed && (
+              <div className="mt-2 px-3">
+                <p className="mb-2 text-[0.6rem] font-normal text-muted-foreground uppercase tracking-wide">
+                  {group.group} FEATURES
+                </p>
+                <Separator className="mb-2" />
+              </div>
+            )}
+
+            <div className="">
+              {group.listMenus.map((item) => {
+                const isActive = location.pathname === item.path;
+
+                return (
+                  <NavLink
+                    key={item.key}
+                    to={item.path}
+                    className={cn(
+                      "relative my-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                      isActive
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                    )}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="sidebar-active"
+                        className="absolute inset-0 rounded-lg bg-accent border border-primary/10"
+                        transition={{
+                          type: "spring",
+                          bounce: 0.15,
+                          duration: 0.5,
+                        }}
+                      />
+                    )}
+
+                    <item.icon className="h-5 w-5 flex-shrink-0 relative z-10" />
+
+                    {!collapsed && (
+                      <motion.span
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="relative z-10 whitespace-nowrap"
+                      >
+                        {item.label}
+                      </motion.span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Collapse toggle */}

@@ -12,14 +12,15 @@ import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
 
 export default function StoreCart() {
   const { items, total, totalItems } = getCartSummary();
+  const [cart, setCart] = useState(getCartSummary());
   const [updating, setUpdating] = useState<string | null>(null);
 
   const handleUpdateQty = async (productId: string, newQty: number) => {
     if (newQty < 0) return;
-    
+
     setUpdating(productId);
     await new Promise((resolve) => setTimeout(resolve, 300));
-    
+
     if (newQty === 0) {
       removeFromCart(productId);
       toast.success("Produk dihapus dari keranjang");
@@ -28,9 +29,13 @@ export default function StoreCart() {
     }
     setUpdating(null);
   };
+  const refreshCart = () => {
+    setCart(getCartSummary());
+  };
 
   const handleClearCart = () => {
     clearCart();
+    refreshCart();
     toast.success("Keranjang dikosongkan");
   };
 
@@ -73,9 +78,9 @@ export default function StoreCart() {
               >
                 <div className="flex gap-4">
                   <div className="h-20 w-20 rounded-lg bg-gradient-to-br from-primary/5 to-accent/5 flex items-center justify-center flex-shrink-0">
-                    <ShoppingBag className="h-8 w-8 text-primary/30" />
+                    <img src={item.product.image_url} alt={item.product.name} className="h-16 w-16 object-cover" />
                   </div>
-                  
+
                   <div className="flex-1 space-y-2">
                     <div>
                       <h3 className="font-medium">{item.product.name}</h3>
@@ -84,7 +89,7 @@ export default function StoreCart() {
                         {formatCurrency(item.product.price)}
                       </p>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Button
@@ -107,7 +112,7 @@ export default function StoreCart() {
                           <Plus className="h-3 w-3" />
                         </Button>
                       </div>
-                      
+
                       <div className="text-right">
                         <p className="font-semibold text-sm">
                           {formatCurrency(item.subtotal)}
@@ -133,7 +138,7 @@ export default function StoreCart() {
         <div className="lg:col-span-1">
           <GlassCard className="sticky top-20">
             <h3 className="font-semibold mb-4">Ringkasan Pesanan</h3>
-            
+
             <div className="space-y-3 mb-4">
               <div className="flex justify-between text-sm">
                 <span>Subtotal ({totalItems} item)</span>

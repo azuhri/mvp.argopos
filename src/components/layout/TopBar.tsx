@@ -24,7 +24,7 @@ export function TopBar({ title }: TopBarProps) {
   const handleLogout = () => {
     logout();
     toast.success("Logout berhasil");
-    navigate("/login", { replace: true });
+    navigate("/auth/sign-in", { replace: true });
   };
 
   const getUserInitial = () => {

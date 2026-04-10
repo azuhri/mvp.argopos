@@ -13,7 +13,8 @@ export type MenuKey =
   | "master_users"
   | "master_locations"
   | "master_roles"
-  | "master_stock";
+  | "master_stock"
+  | "master_products";
 
 export type RoleName = "super_admin" | "staff_internal" | "sales_external";
 
@@ -42,6 +43,7 @@ const ROLE_PERMISSIONS: Record<RoleName, PermissionMap> = {
     master_locations: "write",
     master_roles: "write",
     master_stock: "write",
+    master_products: "write",
   },
   staff_internal: {
     dashboard: "read",
@@ -55,6 +57,7 @@ const ROLE_PERMISSIONS: Record<RoleName, PermissionMap> = {
     master_locations: "read",
     master_roles: "hidden",
     master_stock: "write",
+    master_products: "write",
   },
   sales_external: {
     dashboard: "read",
@@ -68,6 +71,7 @@ const ROLE_PERMISSIONS: Record<RoleName, PermissionMap> = {
     master_locations: "hidden",
     master_roles: "hidden",
     master_stock: "hidden",
+    master_products: "hidden",
   },
 };
 

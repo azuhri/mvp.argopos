@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { NAV_ITEMS, type MenuKey } from "@/lib/navigation";
+import { NAV_GROUPS_MENUS, type MenuKey } from "@/lib/navigation";
 
 interface Role {
   id: string;
@@ -24,7 +24,7 @@ const mockRoles: Role[] = [
     name: "Super Admin",
     description: "Akses penuh ke semua fitur",
     permissions: Object.fromEntries(
-      NAV_ITEMS.map(item => [item.key, "write" as const])
+      NAV_GROUPS_MENUS.flatMap(group => group.listMenus).map(item => [item.key, "write" as const])
     ) as Record<MenuKey, "write">,
     userCount: 1,
   },

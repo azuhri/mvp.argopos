@@ -1,4 +1,4 @@
-import { useState, ReactNode } from "react";
+import { useState, useEffect, ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { BottomNav } from "./BottomNav";
 import { TopBar } from "./TopBar";
@@ -10,7 +10,29 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, title }: AppLayoutProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    // Read from localStorage on initial load
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("sidebar:collapsed");
+        return saved !== null ? JSON.parse(saved) : false;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
+
+  // Update localStorage when state changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("sidebar:collapsed", JSON.stringify(collapsed));
+      } catch {
+        // Silent fail
+      }
+    }
+  }, [collapsed]);
 
   return (
     <div className="min-h-screen bg-background">

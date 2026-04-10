@@ -2,14 +2,16 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
-import { NAV_ITEMS } from "@/lib/navigation";
+import { NAV_GROUPS_MENUS } from "@/lib/navigation";
 
 export function BottomNav() {
   const location = useLocation();
   const { canRead } = useAuth();
 
   // Filter mobile navigation items based on user permissions
-  const visibleNavItems = NAV_ITEMS.filter(item => item.mobile && canRead(item.key));
+  const visibleNavItems = NAV_GROUPS_MENUS.flatMap(group => 
+    group.listMenus.filter(item => item.mobile && canRead(item.key))
+  );
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-strong border-t border-border/40 px-2 pb-safe">

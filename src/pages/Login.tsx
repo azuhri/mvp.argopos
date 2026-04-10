@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const roleRedirectMap = {
-  super_admin: "/",
+  super_admin: "/dashboard",
   staff_internal: "/transactions",
   sales_external: "/store",
 } as const;
