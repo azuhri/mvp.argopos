@@ -15,6 +15,7 @@ import Products from "./pages/Products";
 import Transactions from "./pages/Transactions";
 import Store from "./pages/Store";
 import StoreCart from "./pages/StoreCart";
+import StoreProductDetail from "./pages/StoreProductDetail";
 import MasterUsers from "./pages/master/Users";
 import MasterLocations from "./pages/master/Locations";
 import MasterRoles from "./pages/master/Roles";
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/commerce" replace />} />
             <Route path="/commerce" element={<Store />} />
             <Route path="/commerce/cart" element={<StoreCart />} />
+            <Route path="/commerce/product/:productId" element={<StoreProductDetail />} />
             <Route path="/auth/sign-in" element={<Login />} />
             <Route path="/access-denied" element={<AccessDenied />} />
             

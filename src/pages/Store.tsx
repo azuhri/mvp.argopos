@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Search, ShoppingBag, Star } from "lucide-react";
+import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Input } from "@/components/ui/input";
@@ -104,16 +105,21 @@ export default function Store() {
       {/* Product Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {filtered.map((product, i) => (
-          <motion.div
+          <Link 
             key={product.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            whileHover={{ y: -4, scale: 1.02 }}
-            className="glass-card-hover overflow-hidden cursor-pointer group"
+            to={`/commerce/product/${product.id}`}
+            className="block"
           >
-            <CardProduct product={product} handleAddToCart={handleAddToCart} />
-          </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              whileHover={{ y: -4, scale: 1.02 }}
+              className="glass-card-hover overflow-hidden cursor-pointer group"
+            >
+              <CardProduct product={product} handleAddToCart={handleAddToCart} />
+            </motion.div>
+          </Link>
         ))}
       </div>
 

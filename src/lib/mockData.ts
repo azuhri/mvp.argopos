@@ -33,6 +33,7 @@ export interface Product {
   unit: string;
   image?: string;
   image_url?: string;
+  display_image_url?: string[];
 }
 
 export interface Transaction {
@@ -64,13 +65,62 @@ export const mockKoperasi: Koperasi[] = [
 ];
 
 export const mockProducts: Product[] = [
-  { id: "1", name: "Bakso Sapi Packshot", category: "Nugget", price: 45000, stock: 120, unit: "pack", image_url: "/image/BAKSO SAPI PACKSHOT.png" },
-  { id: "2", name: "Karage Packshot", category: "Sausage", price: 38000, stock: 85, unit: "pack", image_url: "/image/KARAGE PACKSHOT.png" },
-  { id: "3", name: "Nugget Packshot", category: "Seafood", price: 65000, stock: 8, unit: "pack", image_url: "/image/NUGGET PACKSHOT.PNG" },
-  { id: "4", name: "Pokpok Packshot", category: "Dim Sum", price: 52000, stock: 200, unit: "box", image_url: "/image/POKPOK PACKSHOT.png" },
-  { id: "5", name: "Sosis Cocktail Packshot", category: "Sausage", price: 28000, stock: 150, unit: "pack", image_url: "/image/SOSIS COCKTAIL PACKSHOT.png" },
-  { id: "6", name: "Strips Packshot", category: "Meatball", price: 42000, stock: 3, unit: "pack", image_url: "/image/STRIPS PACKSHOT.png" },
-  { id: "7", name: "Frozen Chicken Nuggets", category: "Snack", price: 35000, stock: 95, unit: "pack", image_url: "/image/NUGGET PACKSHOT.PNG" },
+  {
+    id: "1", name: "Bakso Sapi Packshot", category: "Nugget", price: 45000, stock: 120, unit: "pack", image_url: "/image/BAKSO SAPI PACKSHOT.png", display_image_url: [
+      "/image/display-product1.jpeg",
+      "/image/display-product2.jpeg",
+      "/image/display-product3.jpeg",
+      "/image/display-product4.jpeg",
+    ]
+  },
+  {
+    id: "2", name: "Karage Packshot", category: "Sausage", price: 38000, stock: 85, unit: "pack", image_url: "/image/KARAGE PACKSHOT.png", display_image_url: [
+      "/image/display-product1.jpeg",
+      "/image/display-product2.jpeg",
+      "/image/display-product3.jpeg",
+      "/image/display-product4.jpeg",
+    ]
+  },
+  {
+    id: "3", name: "Nugget Packshot", category: "Seafood", price: 65000, stock: 8, unit: "pack", image_url: "/image/NUGGET PACKSHOT.PNG", display_image_url: [
+      "/image/display-product1.jpeg",
+      "/image/display-product2.jpeg",
+      "/image/display-product3.jpeg",
+      "/image/display-product4.jpeg",
+    ]
+  },
+  {
+    id: "4", name: "Pokpok Packshot", category: "Dim Sum", price: 52000, stock: 200, unit: "box", image_url: "/image/POKPOK PACKSHOT.png", display_image_url: [
+      "/image/display-product1.jpeg",
+      "/image/display-product2.jpeg",
+      "/image/display-product3.jpeg",
+      "/image/display-product4.jpeg",
+    ]
+  },
+  {
+    id: "5", name: "Sosis Cocktail Packshot", category: "Sausage", price: 28000, stock: 150, unit: "pack", image_url: "/image/SOSIS COCKTAIL PACKSHOT.png", display_image_url: [
+      "/image/display-product1.jpeg",
+      "/image/display-product2.jpeg",
+      "/image/display-product3.jpeg",
+      "/image/display-product4.jpeg",
+    ]
+  },
+  {
+    id: "6", name: "Strips Packshot", category: "Meatball", price: 42000, stock: 3, unit: "pack", image_url: "/image/STRIPS PACKSHOT.png", display_image_url: [
+      "/image/display-product1.jpeg",
+      "/image/display-product2.jpeg",
+      "/image/display-product3.jpeg",
+      "/image/display-product4.jpeg",
+    ]
+  },
+  {
+    id: "7", name: "Frozen Chicken Nuggets", category: "Snack", price: 35000, stock: 95, unit: "pack", image_url: "/image/NUGGET PACKSHOT.PNG", display_image_url: [
+      "/image/display-product1.jpeg",
+      "/image/display-product2.jpeg",
+      "/image/display-product3.jpeg",
+      "/image/display-product4.jpeg",
+    ]
+  },
 ];
 
 export const mockTransactions: Transaction[] = [
