@@ -25,13 +25,13 @@ export default function Store() {
     const handleStorageChange = () => {
       setCartSummary(getCartSummary());
     };
-    
+
     // Listen for storage changes
     window.addEventListener('storage', handleStorageChange);
-    
+
     // Also update on interval for same-tab updates
     const interval = setInterval(handleStorageChange, 100);
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
@@ -105,21 +105,15 @@ export default function Store() {
       {/* Product Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {filtered.map((product, i) => (
-          <Link 
-            key={product.id}
-            to={`/commerce/product/${product.id}`}
-            className="block"
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            whileHover={{ y: -4, scale: 1.02 }}
+            className="glass-card-hover overflow-hidden cursor-pointer group"
           >
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              whileHover={{ y: -4, scale: 1.02 }}
-              className="glass-card-hover overflow-hidden cursor-pointer group"
-            >
-              <CardProduct product={product} handleAddToCart={handleAddToCart} />
-            </motion.div>
-          </Link>
+            <CardProduct product={product} handleAddToCart={handleAddToCart} />
+          </motion.div>
         ))}
       </div>
 

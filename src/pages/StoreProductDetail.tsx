@@ -217,14 +217,10 @@ export default function StoreProductDetail() {
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
           <Link to="/store" className="hover:text-foreground">
-            Store
+            Commerce
           </Link>
           <span>/</span>
-          <Link to={`/store/category/${product.category}`} className="hover:text-foreground">
-            {product.category}
-          </Link>
-          <span>/</span>
-          <span className="text-foreground">{product.name}</span>
+          <span className="text-foreground font-semibold">{product.name}</span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
