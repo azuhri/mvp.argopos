@@ -12,18 +12,18 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build app
 RUN npm run build
 
 
-# Stage 2: Serve with Nginx
+# Stage 2: Serve dengan Nginx
 FROM nginx:alpine
 
-# Copy build result ke nginx
+# copy config nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# copy hasil build ke nginx
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Expose port
 EXPOSE 80
 
-# Run nginx
 CMD ["nginx", "-g", "daemon off;"]
