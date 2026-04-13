@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Trash2 } from "lucide-react";
 import { 
   Minus, Plus, ShoppingCart, Star, Heart, Share2, 
   ChevronLeft, ChevronRight, Package, Truck, Shield,
@@ -168,6 +169,13 @@ export default function StoreProductDetail() {
     }, 1000);
   };
 
+  const handleClearCart = () => {
+    if (items.length > 0) {
+      items.forEach(item => removeFromCart(item.productId));
+      toast.success("Keranjang dikosongkan");
+    }
+  };
+
   const nextImage = () => {
     // Pause auto-play when user manually navigates
     setIsAutoPlaying(false);
@@ -216,7 +224,7 @@ export default function StoreProductDetail() {
       <div className="max-w-8xl mx-auto px-4 py-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-          <Link to="/store" className="hover:text-foreground">
+          <Link to="/commerce" className="hover:text-foreground">
             Commerce
           </Link>
           <span>/</span>
@@ -551,11 +559,21 @@ export default function StoreProductDetail() {
                   <span>Total ({totalItems} items)</span>
                   <span className="text-lg text-primary">{formatCurrency(total)}</span>
                 </div>
-                <Button asChild className="w-full btn-tap">
-                  <Link to="/store/checkout">
-                    Checkout
-                  </Link>
-                </Button>
+                <div className="space-y-3">
+                  <Button asChild className="w-full btn-tap">
+                    <Link to="/commerce/checkout">
+                      Checkout
+                    </Link>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={handleClearCart}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Kosongkan Keranjang
+                  </Button>
+                </div>
               </div>
             </GlassCard>
           )}

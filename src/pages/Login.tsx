@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
 
 const roleRedirectMap = {
   super_admin: "/dashboard",

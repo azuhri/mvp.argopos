@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { mockCustomers } from "@/lib/mockData";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import { TableSkeleton, LoadingSpinner, PageSkeleton } from "@/components/shared/SkeletonLoader";
 
 interface UploadedUser {
   name: string;
@@ -25,6 +26,7 @@ interface UploadedUser {
 
 export default function MasterUsers() {
   const { user: currentUser } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "internal" | "external">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -43,6 +45,15 @@ export default function MasterUsers() {
 
   // Responsive detection
   const [isDesktop, setIsDesktop] = useState(false);
+
+  // Simulate data loading
+  useEffect(() => {
+    const loadingTimer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1200);
+
+    return () => clearTimeout(loadingTimer);
+  }, []);
 
   useEffect(() => {
     const checkDevice = () => {
@@ -474,7 +485,36 @@ export default function MasterUsers() {
       </div>
 
       {/* Responsive Users Display */}
-      {isDesktop ? (
+      {isLoading ? (
+        // Loading: Skeleton View
+        isDesktop ? (
+          <GlassCard className="overflow-hidden">
+            <TableSkeleton rows={itemsPerPage} />
+          </GlassCard>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: itemsPerPage }).map((_, i) => (
+              <div key={i} className="glass-card-hover p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-muted/50 rounded-full animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="w-24 h-4 bg-muted/50 rounded animate-pulse" />
+                    <div className="w-32 h-3 bg-muted/50 rounded animate-pulse" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="w-full h-3 bg-muted/50 rounded animate-pulse" />
+                  <div className="w-20 h-3 bg-muted/50 rounded animate-pulse" />
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-16 h-6 bg-muted/50 rounded animate-pulse" />
+                  <div className="w-16 h-6 bg-muted/50 rounded animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : isDesktop ? (
         // Desktop: DataTable View
         <GlassCard className="overflow-hidden">
           <div className="overflow-x-auto">
