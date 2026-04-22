@@ -29,7 +29,7 @@ export function TopBar({ title }: TopBarProps) {
 
   const getUserInitial = () => {
     if (!user) return "U";
-    return user.name.charAt(0).toUpperCase();
+    return user.username.charAt(0).toUpperCase();
   };
 
   return (
@@ -60,7 +60,7 @@ export function TopBar({ title }: TopBarProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="glass-card">
             <div className="px-2 py-1.5">
-              <p className="text-sm font-medium text-foreground">{user?.name}</p>
+              <p className="text-sm font-medium text-foreground">{user?.username}</p>
               <p className="text-xs text-muted-foreground">{user?.email}</p>
               <p className="text-xs text-muted-foreground capitalize">{user?.role?.replace("_", " ")}</p>
             </div>

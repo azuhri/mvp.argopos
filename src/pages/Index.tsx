@@ -3,6 +3,7 @@ import { GlassCard } from "@/components/shared/GlassCard";
 import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { formatCurrency, revenueData, mockTransactions, categoryData } from "@/lib/mockData";
+import { useEffect, useState } from "react";
 import { TrendingUp, Users, ShoppingCart, DollarSign, ArrowUpRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { motion } from "framer-motion";
@@ -17,6 +18,37 @@ const stats = [
 const COLORS = ["hsl(234, 85%, 60%)", "hsl(142, 72%, 40%)", "hsl(38, 92%, 50%)", "hsl(0, 72%, 51%)", "hsl(280, 65%, 55%)"];
 
 export default function Dashboard() {
+  const [debug, setDebug] = useState({ loading: true, error: null as string | null });
+  
+  useEffect(() => {
+    console.log('Dashboard mounted');
+    console.log('Mock data:', { revenueData, mockTransactions, categoryData });
+    setDebug(prev => ({ ...prev, loading: false }));
+  }, []);
+
+  if (debug.loading) {
+    return (
+      <AppLayout title="Dashboard">
+        <div className="flex items-center justify-center h-64">
+          <p>Loading dashboard...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (debug.error) {
+    return (
+      <AppLayout title="Dashboard">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-red-500">Error: {debug.error}</p>
+            <p className="text-sm text-gray-500 mt-2">Check browser console for details</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout title="Dashboard">
       {/* Stats */}

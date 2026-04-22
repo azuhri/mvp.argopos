@@ -23,7 +23,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
   const visibleGroups = NAV_GROUPS_MENUS.map(group => ({
     ...group,
-    listMenus: group.listMenus.filter(item => canRead(item.key)),
+    listMenus: group.listMenus.filter(item => item.key)//canRead(item.key)),
   })).filter(group => group.listMenus.length > 0);
 
   return (
@@ -33,8 +33,9 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="hidden md:flex flex-col h-screen fixed left-0 top-0 z-40 glass-strong border-r border-border/40"
     >
+      
       {/* Logo */}
-      <div className="flex items-center h-16 px-4 border-b border-border/40">
+      <div className="flex items-center h-16 px-4 py-4 border-b border-border/40">
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
             <ShoppingBag className="h-5 w-5 text-primary-foreground" />

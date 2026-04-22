@@ -1,4 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient, type User, type AccessRole } from "./api";
+import { accessRoleService } from "./services/accessRoleService";
 
 export type PermissionMode = "hidden" | "read" | "write";
 
@@ -14,18 +17,19 @@ export type MenuKey =
   | "master_locations"
   | "master_roles"
   | "master_stock"
-  | "master_products";
+  | "master_products"
+  | "master_stores";
 
 export type RoleName = "super_admin" | "staff_internal" | "sales_external";
 
 export interface AuthUser {
   id: string;
-  name: string;
+  username: string;
   email: string;
-  phone: string;
   role: RoleName;
-  type: "internal" | "external";
-  employee_id?: string;
+  role_id: string;
+  created_at: string;
+  updated_at: string;
 }
 
 type PermissionMap = Record<MenuKey, PermissionMode>;
@@ -44,6 +48,7 @@ const ROLE_PERMISSIONS: Record<RoleName, PermissionMap> = {
     master_roles: "write",
     master_stock: "write",
     master_products: "write",
+    master_stores: "write",
   },
   staff_internal: {
     dashboard: "read",
@@ -58,6 +63,7 @@ const ROLE_PERMISSIONS: Record<RoleName, PermissionMap> = {
     master_roles: "hidden",
     master_stock: "write",
     master_products: "write",
+    master_stores: "read",
   },
   sales_external: {
     dashboard: "read",
@@ -72,37 +78,40 @@ const ROLE_PERMISSIONS: Record<RoleName, PermissionMap> = {
     master_roles: "hidden",
     master_stock: "hidden",
     master_products: "hidden",
+    master_stores: "hidden",
   },
 };
 
+// This is for demo purposes only - in production, this will be replaced with actual API calls
 const LOGIN_USERS: Array<AuthUser & { password: string }> = [
   {
     id: "u-1",
-    name: "Admin Argo",
+    username: "admin",
     email: "admin@argopos.id",
-    phone: "081111111111",
     role: "super_admin",
-    type: "internal",
-    employee_id: "EMP-000",
+    role_id: "role-1",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     password: "admin123",
   },
   {
     id: "u-2",
-    name: "Staff Koperasi",
+    username: "staff",
     email: "staff@argopos.id",
-    phone: "082222222222",
     role: "staff_internal",
-    type: "internal",
-    employee_id: "EMP-010",
+    role_id: "role-2",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     password: "staff123",
   },
   {
     id: "u-3",
-    name: "Sales External",
+    username: "sales",
     email: "sales@mitra.id",
-    phone: "083333333333",
     role: "sales_external",
-    type: "external",
+    role_id: "role-3",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     password: "sales123",
   },
 ];
@@ -110,11 +119,32 @@ const LOGIN_USERS: Array<AuthUser & { password: string }> = [
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  login: (identifier: string, password: string) => Promise<{ ok: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; message?: string; data?: any }>;
   logout: () => void;
   getPermission: (menuKey: MenuKey) => PermissionMode;
   canRead: (menuKey: MenuKey) => boolean;
   canWrite: (menuKey: MenuKey) => boolean;
+}
+
+// Hook to fetch permissions from API
+function usePermissions(roleId?: string) {
+  const { data: permissions = {}, isLoading } = useQuery({
+    queryKey: ['role-permissions', roleId],
+    queryFn: async () => {
+      if (!roleId) return {};
+      try {
+        return await accessRoleService.getRolePermissions(roleId as any);
+      } catch (error) {
+        console.error('Failed to fetch permissions:', error);
+        // Fallback to hardcoded permissions for demo
+        return {};
+      }
+    },
+    enabled: !!roleId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  return { permissions, loading: isLoading };
 }
 
 const STORAGE_KEY = "argopos.auth.user";
@@ -137,30 +167,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login: AuthContextValue["login"] = async (identifier, password) => {
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    const found = LOGIN_USERS.find(
-      (u) => (u.email === identifier || u.phone === identifier) && u.password === password
-    );
+  useEffect(() => {
+    const handleStorage = () => {
+      const token = localStorage.getItem('argopos.auth.token');
 
-    if (!found) {
-      return { ok: false, message: "Email/phone atau password tidak valid" };
+      if (!token) {
+        setUser(null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  const login: AuthContextValue["login"] = async (email, password) => {
+    try {
+      const response = await apiClient.login({ email, password });
+
+      if (response.success && response.data) {
+        const { token, user } = response.data;
+
+        // Safety check for user data
+        if (!user || !token) {
+          throw new Error("Invalid login response format");
+        }
+
+        // Store token
+        localStorage.setItem('argopos.auth.token', token);
+
+        // Transform user data to match AuthUser interface
+        const authUser: AuthUser = {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role?.role_name as RoleName || 'sales_external',
+          role_id: user.role_id,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+        };
+
+        setUser(authUser);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+        return { ok: true, data: response.data };
+      } else {
+        return { ok: false, message: response.message || "Login gagal" };
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      const errorMessage = (error?.message as string)?.toLowerCase() || "Terjadi kesalahan saat login";
+      if (errorMessage.includes('unauthorized')) {
+        return { ok: false, message: "email or password is incorrect" };
+      }
+      return { ok: false, message: errorMessage };
     }
-
-    const { password: _, ...safeUser } = found;
-    setUser(safeUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(safeUser));
-    return { ok: true };
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('argopos.auth.token');
   };
 
+  // Use dynamic permissions from API
+  const { permissions, loading: permissionsLoading } = usePermissions(user?.role_id);
+
   const getPermission = (menuKey: MenuKey): PermissionMode => {
-    if (!user) return "hidden";
-    return ROLE_PERMISSIONS[user.role][menuKey] ?? "hidden";
+    if (!user || permissionsLoading) return "hidden";
+    return permissions[menuKey] ?? "hidden";
   };
 
   const canRead = (menuKey: MenuKey) => {
@@ -168,11 +244,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return mode === "read" || mode === "write";
   };
 
-  const canWrite = (menuKey: MenuKey) => getPermission(menuKey) === "write";
+  const canWrite = (menuKey: MenuKey) => {
+    const mode = getPermission(menuKey);
+    return mode === "write";
+  };
+
+  const combinedLoading = loading || permissionsLoading;
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, getPermission, canRead, canWrite }),
-    [user, loading]
+    () => ({
+      user,
+      loading: combinedLoading,
+      login,
+      logout,
+      getPermission,
+      canRead,
+      canWrite
+    }),
+    [user, combinedLoading, permissions]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

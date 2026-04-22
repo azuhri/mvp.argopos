@@ -2,17 +2,17 @@ import { FormEvent, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, Lock, Mail, Phone, Snowflake } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@/lib/auth";
+import { RoleName, useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
 
-const roleRedirectMap = {
+const roleRedirectMap: Record<RoleName, string> = {
   super_admin: "/dashboard",
-  staff_internal: "/transactions",
+  staff_internal: "/transactions", 
   sales_external: "/store",
-} as const;
+};
 
 export default function Login() {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ export default function Login() {
 
   const errors = useMemo(() => {
     const next = { identifier: "", password: "" };
-    if (!identifier.trim()) next.identifier = "Email/phone wajib diisi";
+    if (!identifier.trim()) next.identifier = "Email/username wajib diisi";
     if (!password.trim()) next.password = "Password wajib diisi";
     if (password.trim() && password.length < 6) next.password = "Minimal 6 karakter";
     return next;
@@ -47,30 +47,32 @@ export default function Login() {
     if (errors.identifier || errors.password) return;
 
     setSubmitting(true);
-    const result = await login(identifier.trim(), password);
-    setSubmitting(false);
+    try {
+      const result = await login(identifier.trim(), password);
+      if (!result.ok) {
+        throw new Error(result.message || "Login gagal");
+      }
 
-    if (!result.ok) {
-      toast.error(result.message || "Login gagal");
-      return;
+      toast.success("Login berhasil");
+      
+      // Extract role from backend response
+      const role = result.data?.user?.role?.role_name as RoleName;
+      console.log('User role from backend:', role);
+
+      setSubmitting(false);
+
+      const targetPath = location.state?.from;
+      if (targetPath && targetPath !== "/auth/sign-in") {
+        navigate(targetPath, { replace: true });
+        return;
+      }
+
+      navigate(roleRedirectMap[role], { replace: true });
+    } catch (error) {
+      toast.error((error as Error).message || "Login gagal");
+      console.error(error);
+      setSubmitting(false);
     }
-
-    toast.success("Login berhasil");
-
-    const targetPath = location.state?.from;
-    if (targetPath && targetPath !== "/auth/sign-in") {
-      navigate(targetPath, { replace: true });
-      return;
-    }
-
-    const safeIdentifier = identifier.trim();
-    const role = safeIdentifier === "admin@argopos.id"
-      ? "super_admin"
-      : safeIdentifier === "staff@argopos.id"
-      ? "staff_internal"
-      : "sales_external";
-
-    navigate(roleRedirectMap[role], { replace: true });
   };
 
   return (
@@ -95,7 +97,7 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">Email / Phone</label>
+            <label className="text-sm font-medium text-foreground">Email / Username</label>
             <div className="relative">
               {identifier.includes("@") ? (
                 <Mail className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -106,7 +108,7 @@ export default function Login() {
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 onBlur={() => setTouched((p) => ({ ...p, identifier: true }))}
-                placeholder="admin@argopos.id / 081111111111"
+                placeholder="superadmin@argopos.id / admin"
                 className="pl-9 h-11 bg-card/70"
               />
             </div>
@@ -147,9 +149,9 @@ export default function Login() {
 
         <div className="mt-5 text-xs text-muted-foreground space-y-1">
           <p>Demo account:</p>
-          <p>- admin@argopos.id / admin123</p>
+          <p>- superadmin@argopos.id / admin123</p>
           <p>- staff@argopos.id / staff123</p>
-          <p>- sales@mitra.id / sales123</p>
+          <p>- sales@argopos.id / sales123</p>
         </div>
       </motion.div>
     </div>

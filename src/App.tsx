@@ -17,12 +17,15 @@ import Store from "./pages/Store";
 import StoreCart from "./pages/StoreCart";
 import StoreProductDetail from "./pages/StoreProductDetail";
 import MasterUsers from "./pages/master/Users";
+import MasterUserManagement from "./pages/master/UsersManagement";
 import MasterLocations from "./pages/master/Locations";
 import MasterRoles from "./pages/master/Roles";
 import MasterStocks from "./pages/master/Stocks";
 import MasterProducts from "./pages/master/Products";
 import CreateProduct from "./pages/master/CreateProduct";
 import MasterCategories from "./pages/master/Categories";
+import StoreManagement from "./pages/master/StoreManagement";
+import KoperasiDetailPage from "./pages/master/KoperasiDetailPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,110 +47,127 @@ const App = () => (
             
             <Route path="/dashboard" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="dashboard">
+                {/* <PermissionRoute menuKey="dashboard"> */}
                   <Index />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/customers" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="customers">
+                {/* <PermissionRoute menuKey="customers"> */}
                   <Customers />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/koperasi" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="koperasi">
+                {/* <PermissionRoute menuKey="koperasi"> */}
                   <KoperasiPage />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/master/koperasi/:locationId" element={
+              <ProtectedRoute>
+                {/* <PermissionRoute menuKey="koperasi"> */}
+                  <KoperasiDetailPage />
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/products" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="products">
+                {/* <PermissionRoute menuKey="products"> */}
                   <Products />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/transactions" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="transactions">
+                {/* <PermissionRoute menuKey="transactions"> */}
                   <Transactions />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/store" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="store">
+                {/* <PermissionRoute menuKey="store"> */}
                   <Store />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/store/cart" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="cart">
+                {/* <PermissionRoute menuKey="cart"> */}
                   <StoreCart />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/master/users" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="master_users">
-                  <MasterUsers />
-                </PermissionRoute>
+                {/* <PermissionRoute menuKey="master_users"> */}
+                  <MasterUserManagement />
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/master/locations" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="master_locations">
+                {/* <PermissionRoute menuKey="master_locations"> */}
                   <MasterLocations />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/master/roles" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="master_roles">
+                {/* <PermissionRoute menuKey="master_roles"> */}
                   <MasterRoles />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
             <Route path="/master/stocks" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="master_stock">
+                {/* <PermissionRoute menuKey="master_stock"> */}
                   <MasterStocks />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
+            
+            <Route path="/master/stores" element={
+              <ProtectedRoute>
+                {/* <PermissionRoute menuKey="master_stores"> */}
+                  <StoreManagement />
+                {/* </PermissionRoute> */}
+              </ProtectedRoute>
+            } />
+            
              <Route path="/master/products" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="master_products">
+                {/* <PermissionRoute menuKey="master_products"> */}
                   <MasterProducts />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             <Route path="/master/products/create" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="master_products">
+                {/* <PermissionRoute menuKey="master_products"> */}
                   <CreateProduct />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             <Route path="/master/categories" element={
               <ProtectedRoute>
-                <PermissionRoute menuKey="master_products">
+                {/* <PermissionRoute menuKey="master_products"> */}
                   <MasterCategories />
-                </PermissionRoute>
+                {/* </PermissionRoute> */}
               </ProtectedRoute>
             } />
             
