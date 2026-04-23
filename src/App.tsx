@@ -26,6 +26,7 @@ import CreateProduct from "./pages/master/CreateProduct";
 import MasterCategories from "./pages/master/Categories";
 import StoreManagement from "./pages/master/StoreManagement";
 import KoperasiDetailPage from "./pages/master/KoperasiDetailPage";
+import CommerceCatalog from "./pages/CommerceCatalog";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/commerce" element={<Store />} />
             <Route path="/commerce/cart" element={<StoreCart />} />
             <Route path="/commerce/product/:productId" element={<StoreProductDetail />} />
+            <Route path="/:locationCode/commerce" element={<CommerceCatalog />} />
             <Route path="/auth/sign-in" element={<Login />} />
             <Route path="/access-denied" element={<AccessDenied />} />
             
