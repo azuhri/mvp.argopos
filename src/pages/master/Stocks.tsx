@@ -627,16 +627,18 @@ export default function MasterStocks() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        asChild
-                        className="text-[10px] sm:text-xs px-2 py-1 h-6 sm:h-8"
-                      >
-                        <a href={`/${group.location_code}/commerce`} target="_blank" rel="noopener noreferrer">
-                          Commerce
-                        </a>
-                      </Button>
+                      {group.location_type === 'store' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="text-[10px] sm:text-xs px-2 py-1 h-6 sm:h-8"
+                        >
+                          <a href={`/${group.location_code}/commerce`} target="_blank" rel="noopener noreferrer">
+                            Commerce
+                          </a>
+                        </Button>
+                      )}
                       {group.total_products < totalMasterProducts && (
                         <Button
                           variant="outline"

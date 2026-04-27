@@ -42,7 +42,7 @@ export default function CommerceCatalog() {
   const { locationCode } = useParams<{ locationCode: string }>();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [cartSummary, setCartSummary] = useState(getCartSummary());
+  const [cartSummary, setCartSummary] = useState(() => getCartSummary([]));
   const [isLoading, setIsLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
 
@@ -56,11 +56,22 @@ export default function CommerceCatalog() {
         throw new Error('Failed to fetch store data');
       }
       const result = await response.json();
-      console.log("test:",result.data);
       return result.data as StoreData;
     },
     enabled: !!locationCode,
   });
+
+  // Update cart summary when storeData loads
+  useEffect(() => {
+    if (storeData) {
+      const products = storeData.product_stores.map(p => ({
+        id: p.master_product.id,
+        name: p.master_product.product_name,
+        price: p.base_price,
+      }));
+      setCartSummary(getCartSummary(products));
+    }
+  }, [storeData]);
 
   // Simulate initial loading
   useEffect(() => {
@@ -75,7 +86,12 @@ export default function CommerceCatalog() {
   // Update cart summary when localStorage changes
   useEffect(() => {
     const handleStorageChange = () => {
-      setCartSummary(getCartSummary());
+      const products = storeData?.product_stores.map(p => ({
+        id: p.master_product.id,
+        name: p.master_product.product_name,
+        price: p.base_price,
+      })) || [];
+      setCartSummary(getCartSummary(products));
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -85,10 +101,10 @@ export default function CommerceCatalog() {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [storeData]);
 
   // Extract categories from products
-  const products = storeData?.product_stores ?? [];  
+  const products = storeData?.product_stores ?? [];
 
   const filtered = products.filter((p) => {
     return (
@@ -100,14 +116,30 @@ export default function CommerceCatalog() {
 
   const { items, total, totalItems } = cartSummary;
 
-  console.log("filtered:", filtered);
-  
-
-  const handleAddToCart = (productId: string, productName: string) => {
-    addToCart(productId);
-    setCartSummary(getCartSummary());
+  const handleAddToCart = (
+    productId: string,
+    productName: string,
+    productPrice: number,
+    productImageUrl: string,
+  ) => {
+    addToCart(productId, 1, {
+      name: productName,
+      price: productPrice,
+      imageUrl: productImageUrl,
+    });
+    // Force state update by calling getCartSummary with store products
+    const products = storeData?.product_stores.map(p => ({
+      id: p.master_product.id,
+      name: p.master_product.product_name,
+      price: p.base_price,
+    })) || [];
+    setTimeout(() => {
+      setCartSummary(getCartSummary(products));
+    }, 0);
     toast.success(`${productName} ditambahkan ke keranjang`);
   };
+
+
 
   if (error || !storeData) {
     return (
@@ -189,12 +221,14 @@ export default function CommerceCatalog() {
             >
               <CardProduct
                 product={{
-                  id: product.id,
+                  id: product.master_product.id,
                   name: product.master_product.product_name,
                   price: product.base_price,
                   image_url: product.master_product.image_url,
                   stock: product.stock,
                   category: product.master_product.category || "",
+                  discount_price: product.discount_price,
+                  tax_percentage: product?.tax_percentage || 0,
                   unit: "",
                 }}
                 handleAddToCart={handleAddToCart}

@@ -24,7 +24,7 @@ interface TopBarCommerceProps {
 }
 
 export function TopBarCommerce({ title }: TopBarCommerceProps) {
-    const [cartSummary, setCartSummary] = useState(getCartSummary());
+    const [cartSummary, setCartSummary] = useState(() => getCartSummary());
     const { user, logout } = useAuth();
     const navigate = useNavigate();
 
@@ -44,12 +44,6 @@ export function TopBarCommerce({ title }: TopBarCommerceProps) {
     }, []);
 
     const { items, total, totalItems } = cartSummary;
-
-    const handleClearCart = () => {
-        clearCart();
-        setCartSummary(getCartSummary()); // Trigger re-render
-        toast.success("Keranjang dikosongkan");
-    };
 
     return (
         <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-border/40 glass-strong sticky top-0 z-30">

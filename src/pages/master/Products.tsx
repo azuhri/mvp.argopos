@@ -182,11 +182,11 @@ export default function Products() {
   const createMutation = useMutation({
     mutationFn: (product: CreateProductRequest) =>
       productService.createProduct(product, newImageFile || undefined, newImageCollectionFiles),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Product created successfully");
       setIsCreateOpen(false);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to create product");
@@ -197,11 +197,11 @@ export default function Products() {
   const updateMutation = useMutation({
     mutationFn: ({ id, product }: { id: string; product: UpdateProductRequest }) =>
       productService.updateProduct(id, product, newImageFile || undefined, newImageCollectionFiles),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Product updated successfully");
       setIsCreateOpen(false);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to update product");

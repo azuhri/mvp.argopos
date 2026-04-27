@@ -40,10 +40,13 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/" element={<Navigate to="/commerce" replace />} />
+            <Route path="/:locationCode/commerce" element={<CommerceCatalog />} />
+            <Route path="/:locationCode/commerce/cart" element={<StoreCart />} />
+            <Route path="/:locationCode/commerce/product/:productId" element={<StoreProductDetail />} />
+
             <Route path="/commerce" element={<Store />} />
             <Route path="/commerce/cart" element={<StoreCart />} />
             <Route path="/commerce/product/:productId" element={<StoreProductDetail />} />
-            <Route path="/:locationCode/commerce" element={<CommerceCatalog />} />
             <Route path="/auth/sign-in" element={<Login />} />
             <Route path="/access-denied" element={<AccessDenied />} />
             

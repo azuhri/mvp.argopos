@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Building2, User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, Save, X, Plus, Calendar, Package } from "lucide-react";
 import { toast } from "sonner";
 import { storeService } from "@/lib/services/storeService";
+import { stockService } from "@/lib/services/stockService";
 import { Store, StoreAssignedUser, Transaction, StorePaymentMethod, Stock } from "@/lib/api";
 
 export default function KoperasiDetailPage() {
@@ -58,7 +59,7 @@ export default function KoperasiDetailPage() {
   // Stock edit state
   const [stockEditOpen, setStockEditOpen] = useState(false);
   const [editingStock, setEditingStock] = useState<Stock | null>(null);
-  const [stockFormData, setStockFormData] = useState({ base_price: 0, discount_price: 0, tax_percentage: 0 });
+  const [stockFormData, setStockFormData] = useState({ base_price: 0, discount_price: 0, tax_percentage: 0, stock: 0 });
 
   // Payment method state
   const [paymentMethodOpen, setPaymentMethodOpen] = useState(false);
@@ -154,7 +155,7 @@ export default function KoperasiDetailPage() {
     const taxPercentage = stock.tax_percentage || 0;
     const price = discountPrice > 0 ? discountPrice : basePrice;
     const tax = price * (taxPercentage / 100);
-    return price - tax;
+    return price + tax;
   };
 
   const openStockEdit = (stock: Stock) => {
@@ -163,6 +164,7 @@ export default function KoperasiDetailPage() {
       base_price: stock.base_price,
       discount_price: stock.discount_price || 0,
       tax_percentage: stock.tax_percentage || 0,
+      stock: stock.stock,
     });
     setStockEditOpen(true);
   };
@@ -172,7 +174,14 @@ export default function KoperasiDetailPage() {
 
     try {
       // Call API to update stock
-      // For now, just update local state
+      await stockService.updateStock(editingStock.id, {
+        base_price: stockFormData.base_price,
+        discount_price: stockFormData.discount_price,
+        tax_percentage: stockFormData.tax_percentage,
+        stock: stockFormData.stock,
+      });
+
+      // Update local state
       setStore((prev) => {
         if (!prev) return prev;
         return {
@@ -335,6 +344,7 @@ export default function KoperasiDetailPage() {
                     <TableHead>Product</TableHead>
                     <TableHead>Stock</TableHead>
                     <TableHead>Base Price</TableHead>
+                    <TableHead>Store Price</TableHead>
                     <TableHead>Discount Price</TableHead>
                     <TableHead>Tax %</TableHead>
                     <TableHead>Final Price</TableHead>
@@ -360,6 +370,7 @@ export default function KoperasiDetailPage() {
                         </TableCell>
                         <TableCell>{stock.master_product?.product_name || '-'}</TableCell>
                         <TableCell>{stock.stock}</TableCell>
+                        <TableCell>{formatCurrency(stock.master_product?.base_price || 0)}</TableCell>
                         <TableCell>{formatCurrency(stock.base_price)}</TableCell>
                         <TableCell>{stock.discount_price ? formatCurrency(stock.discount_price) : '-'}</TableCell>
                         <TableCell>{stock.tax_percentage}%</TableCell>
@@ -625,6 +636,14 @@ export default function KoperasiDetailPage() {
             <DialogDescription>Update harga dan pajak untuk produk ini</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Stock</Label>
+              <Input
+                type="number"
+                value={stockFormData.stock}
+                onChange={(e) => setStockFormData({ ...stockFormData, stock: Number(e.target.value) })}
+              />
+            </div>
             <div className="space-y-1.5">
               <Label>Base Price</Label>
               <Input
