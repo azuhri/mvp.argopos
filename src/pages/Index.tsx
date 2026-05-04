@@ -1,4 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
+import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -51,8 +52,10 @@ export default function Dashboard() {
 
   return (
     <AppLayout title="Dashboard">
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <DashboardMobileNav />
+      <div>
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {stats.map((stat, i) => (
           <GlassCard key={stat.label} hover delay={i * 0.08}>
             <div className="flex items-start justify-between">
@@ -165,6 +168,7 @@ export default function Dashboard() {
           </table>
         </div>
       </GlassCard>
+      </div>
     </AppLayout>
   );
 }

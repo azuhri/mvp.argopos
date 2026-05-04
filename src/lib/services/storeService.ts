@@ -78,6 +78,7 @@ export class StoreService {
       start_date?: string;
       end_date?: string;
       payment_method?: string;
+      transaction_code?: string;
       sort_by?: string;
       sort_order?: string;
       page?: number;

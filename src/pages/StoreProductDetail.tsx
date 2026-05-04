@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trash2 } from "lucide-react";
-import { 
-  Minus, Plus, ShoppingCart, Star, Heart, Share2, 
+import {
+  Minus, Plus, ShoppingCart, Star, Heart, Share2,
   ChevronLeft, ChevronRight, Package, Truck, Shield,
   ArrowLeft, Check, Info
 } from "lucide-react";
@@ -11,24 +11,56 @@ import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { 
-  getCartSummary, 
-  addToCart, 
-  updateCartQty, 
-  removeFromCart 
+import {
+  getCartSummary,
+  addToCart,
+  updateCartQty,
+  removeFromCart
 } from "@/lib/storefront";
 import { formatCurrency } from "@/lib/mockData";
 import { config } from "@/lib/config";
 import { toast } from "sonner";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
-import { mockProducts } from "@/lib/mockData";
+import { useQuery } from "@tanstack/react-query";
+
+// Interfaces for API data
+interface MasterProduct {
+  id: string;
+  product_name: string;
+  product_code: string;
+  description?: string;
+  image_path: string;
+  image_url: string;
+  image_collection_url?: string[] | string; // Can be array or JSON string from backend
+  category?: string;
+}
+
+interface ProductStock {
+  id: string;
+  stock: number;
+  base_price: number;
+  discount_price: number;
+  final_price: number;
+  master_product: MasterProduct;
+}
+
+interface StoreData {
+  location_id: string;
+  location_name: string;
+  location_code: string;
+  total_stock: number;
+  product_stores: ProductStock[];
+}
 
 // Extended product interface for detail view
 interface ProductDetail {
   id: string;
   name: string;
+  product_code: string;
   category: string;
   price: number;
+  discount_price: number;
+  tax_percentage: number;
   image_url: string;
   description: string;
   stock: number;
@@ -41,73 +73,13 @@ interface ProductDetail {
     estimated: string;
   };
   warranty: string;
+  isOutOfStock: boolean;
 }
 
-// Mock product data with additional details
-const getProductById = (id: string): ProductDetail => {
-  const baseProduct = mockProducts.find(p => p.id === id);
-  
-  if (baseProduct) {
-    // Return existing product with additional details
-    return {
-      id: baseProduct.id,
-      name: baseProduct.name,
-      category: baseProduct.category,
-      price: baseProduct.price,
-      image_url: baseProduct.image_url || "/api/placeholder/400/400",
-      description: "High-quality coffee beans sourced from the best plantations in Indonesia. Perfect for espresso and manual brewing methods.",
-      stock: 15,
-      rating: 4.8,
-      sold: 234,
-      images: baseProduct.display_image_url || [],
-      features: [
-        "100% Arabica beans",
-        "Medium roast profile", 
-        "Freshly roasted",
-        "Vacuum sealed packaging"
-      ],
-      shipping: {
-        free: true,
-        estimated: "2-3 days"
-      },
-      warranty: "30-day money back guarantee"
-    };
-  }
-  
-  // Return default product
-  return {
-    id: "1",
-    name: "Premium Coffee Beans",
-    category: "Beverages",
-    price: 89000,
-    image_url: "/api/placeholder/400/400",
-    description: "High-quality coffee beans sourced from the best plantations in Indonesia. Perfect for espresso and manual brewing methods.",
-    stock: 15,
-    rating: 4.8,
-    sold: 234,
-    images: [
-      "/api/placeholder/400/400",
-      "/api/placeholder/400/400",
-      "/api/placeholder/400/400",
-      "/api/placeholder/400/400"
-    ],
-    features: [
-      "100% Arabica beans",
-      "Medium roast profile",
-      "Freshly roasted",
-      "Vacuum sealed packaging"
-    ],
-    shipping: {
-      free: true,
-      estimated: "2-3 days"
-    },
-    warranty: "30-day money back guarantee"
-  };
-};
-
 export default function StoreProductDetail() {
-  const { productId } = useParams<{ productId: string }>();
-  const product = getProductById(productId || "1");
+  const { locationCode, productId } = useParams<{ locationCode: string; productId: string }>();
+
+  // All state hooks must be called before any conditional logic
   const [quantity, setQuantity] = useState(1);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
@@ -116,24 +88,128 @@ export default function StoreProductDetail() {
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Fetch store data from backend API
+  const { data: storeData, error, isLoading } = useQuery({
+    queryKey: ['store', locationCode],
+    queryFn: async () => {
+      const endpoint = `${config.apiUrl}/api/v1/${locationCode}/store`;
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        throw new Error('Failed to fetch store data');
+      }
+      const result = await response.json();
+      return result.data as StoreData;
+    },
+    enabled: !!locationCode,
+  });
+
+  // Find product from store data
+  const productStock = storeData?.product_stores.find(p => p.id === productId);
+  // console.log(productStock);
+
+
+  // Build product detail from API data
+  const product: ProductDetail | null = productStock ? {
+    id: productStock.id,
+    name: productStock.master_product.product_name,
+    product_code: productStock.master_product.product_code,
+    category: productStock.master_product.category || "General",
+    price: productStock.base_price,
+    discount_price: productStock.discount_price || 0,
+    tax_percentage: productStock?.tax_percentage || 0,
+    // Build full image URL using backend base URL + image_path
+    image_url: productStock.master_product.image_url || `${config.apiUrl}/uploads/${productStock.master_product.image_path}`,
+    description: productStock.master_product.description || "High-quality product from our store.",
+    stock: productStock.stock,
+    rating: 4.8,
+    sold: 234,
+    // Build image collection URLs - handle if it's a string or array
+    images: (() => {
+      const collection = productStock.master_product.image_collection_url;
+      let imageArray: string[] = [];
+
+      if (Array.isArray(collection)) {
+        imageArray = collection;
+      } else if (typeof collection === 'string' && collection) {
+        // If backend sends JSON string, try to parse it
+        try {
+          const parsed = JSON.parse(collection);
+          imageArray = Array.isArray(parsed) ? parsed : [collection];
+        } catch {
+          imageArray = [collection];
+        }
+      }
+
+      if (imageArray.length > 0) {
+        return imageArray.map(img =>
+          img?.startsWith('http') ? img : `${config.apiUrl}/${img}`
+        );
+      }
+
+      // Fallback to main image
+      const mainImage = `${config.apiUrl}/${productStock.master_product.image_path}`;
+      return [mainImage];
+    })(),
+    features: [
+      "High quality",
+      "Fresh stock",
+      "Best price"
+    ],
+    shipping: {
+      free: true,
+      estimated: "2-3 days"
+    },
+    warranty: "30-day money back guarantee",
+    isOutOfStock: productStock.stock === 0
+  } : null;
+
   const { items, total, totalItems } = getCartSummary();
 
+  // All useEffect hooks must be called before any conditional returns
   // Auto-carousel effect
   useEffect(() => {
-    if (isAutoPlaying && product.images.length > 1) {
-      intervalRef.current = setInterval(() => {
-        setCurrentImageIndex((prev) => (prev + 1) % product.images.length);
-        setSelectedImage((prev) => (prev + 1) % product.images.length);
-      }, 4000); // Change every 4 seconds
-    }
+    if (!product || !isAutoPlaying || product.images.length <= 1) return;
+
+    intervalRef.current = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % product.images.length);
+      setSelectedImage((prev) => (prev + 1) % product.images.length);
+    }, 4000); // Change every 4 seconds
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isAutoPlaying, product.images.length]);
+  }, [isAutoPlaying, product?.images?.length]);
 
+  // Handle loading state - after all hooks
+  if (isLoading) {
+    return (
+      <AppLayoutCommerce title="Loading..." locationCode={locationCode || ''}>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      </AppLayoutCommerce>
+    );
+  }
+
+  // Handle error or product not found - after all hooks
+  if (error || !product) {
+    return (
+      <AppLayoutCommerce title="Product Not Found" locationCode={locationCode || ''}>
+        <div className="flex flex-col items-center justify-center min-h-screen text-center">
+          <Package className="h-16 w-16 text-muted-foreground mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Product Not Found</h2>
+          <p className="text-muted-foreground mb-6">Unable to load product data</p>
+          <Button asChild>
+            <Link to={`/${locationCode}/commerce`}>Back to Store</Link>
+          </Button>
+        </div>
+      </AppLayoutCommerce>
+    );
+  }
+
+  // Continue with the rest of the component...
   const handleQuantityChange = (delta: number) => {
     const newQuantity = quantity + delta;
     if (newQuantity >= 1 && newQuantity <= product.stock) {
@@ -142,30 +218,50 @@ export default function StoreProductDetail() {
   };
 
   const handleAddToCart = async () => {
+    if (product.isOutOfStock) {
+      toast.error("Produk tidak tersedia (stok habis)");
+      return;
+    }
+
     setIsAddingToCart(true);
     await new Promise(resolve => setTimeout(resolve, 500));
-    
-    addToCart(product.id, quantity);
-    
+
+    addToCart(product.id, quantity, {
+      name: product.name,
+      price: product.price,
+      imageUrl: product.image_url,
+      category: product.category,
+    });
+
     toast.success(`${quantity} ${product.name} ditambahkan ke keranjang`);
     setIsAddingToCart(false);
   };
 
-  const handleBuyNow = async () => {
+  const handle BuyNow = async () => {
+    if (product.isOutOfStock) {
+      toast.error("Produk tidak tersedia (stok habis)");
+      return;
+    }
+
     setIsBuyingNow(true);
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     // Clear cart first for buy now
     if (items.length > 0) {
       items.forEach(item => removeFromCart(item.productId));
     }
-    
-    // Add current product
-    addToCart(product.id, quantity);
-    
+
+    // Add current product with details
+    addToCart(product.id, quantity, {
+      name: product.name,
+      price: product.price,
+      imageUrl: product.image_url,
+      category: product.category,
+    });
+
     toast.success("Produk ditambahkan, mengalihkan ke checkout...");
     setTimeout(() => {
-      window.location.href = "/commerce/cart";
+      window.location.href = `/${locationCode}/commerce/cart`;
     }, 1000);
   };
 
@@ -181,7 +277,7 @@ export default function StoreProductDetail() {
     setIsAutoPlaying(false);
     setCurrentImageIndex((prev) => (prev + 1) % product.images.length);
     setSelectedImage((prev) => (prev + 1) % product.images.length);
-    
+
     // Resume auto-play after 10 seconds
     setTimeout(() => setIsAutoPlaying(true), 10000);
   };
@@ -191,7 +287,7 @@ export default function StoreProductDetail() {
     setIsAutoPlaying(false);
     setCurrentImageIndex((prev) => (prev - 1 + product.images.length) % product.images.length);
     setSelectedImage((prev) => (prev - 1 + product.images.length) % product.images.length);
-    
+
     // Resume auto-play after 10 seconds
     setTimeout(() => setIsAutoPlaying(true), 10000);
   };
@@ -201,7 +297,7 @@ export default function StoreProductDetail() {
     setIsAutoPlaying(false);
     setCurrentImageIndex(index);
     setSelectedImage(index);
-    
+
     // Resume auto-play after 10 seconds
     setTimeout(() => setIsAutoPlaying(true), 10000);
   };
@@ -210,21 +306,20 @@ export default function StoreProductDetail() {
     return Array.from({ length: 5 }, (_, i) => (
       <Star
         key={i}
-        className={`h-4 w-4 ${
-          i < Math.floor(rating) 
-            ? "fill-yellow-400 text-yellow-400" 
-            : "text-gray-300"
-        }`}
+        className={`h-4 w-4 ${i < Math.floor(rating)
+          ? "fill-yellow-400 text-yellow-400"
+          : "text-gray-300"
+          }`}
       />
     ));
   };
 
   return (
-    <AppLayoutCommerce title={product.name}>
-      <div className="max-w-8xl mx-auto px-4 py-6">
+    <AppLayoutCommerce title={`${storeData.location_name}`} locationCode={locationCode || ''}>
+      <div className={`max-w-8xl mx-auto px-4 py-6 ${product.isOutOfStock ? 'grayscale' : ''}`}>
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-          <Link to="/commerce" className="hover:text-foreground">
+          <Link to={`/${locationCode}/commerce`} className="hover:text-foreground">
             Commerce
           </Link>
           <span>/</span>
@@ -245,13 +340,13 @@ export default function StoreProductDetail() {
                   initial={{ opacity: 0, scale: 0.95, x: 50 }}
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 1.05, x: -50 }}
-                  transition={{ 
+                  transition={{
                     duration: 0.6,
                     ease: [0.25, 0.46, 0.45, 0.94]
                   }}
                 />
               </AnimatePresence>
-              
+
               {/* Progress Indicator */}
               {isAutoPlaying && product.images.length > 1 && (
                 <div className="absolute bottom-4 left-4 right-4 flex gap-1">
@@ -263,10 +358,10 @@ export default function StoreProductDetail() {
                       <motion.div
                         className="h-full bg-white rounded-full"
                         initial={{ width: "0%" }}
-                        animate={{ 
-                          width: index === currentImageIndex ? "100%" : "0%" 
+                        animate={{
+                          width: index === currentImageIndex ? "100%" : "0%"
                         }}
-                        transition={{ 
+                        transition={{
                           duration: 4,
                           ease: "linear"
                         }}
@@ -275,7 +370,7 @@ export default function StoreProductDetail() {
                   ))}
                 </div>
               )}
-              
+
               {/* Image Navigation */}
               <motion.div
                 className="absolute left-2 top-1/2 -translate-y-1/2 flex gap-2"
@@ -297,7 +392,7 @@ export default function StoreProductDetail() {
                   </Button>
                 </motion.div>
               </motion.div>
-              
+
               <motion.div
                 className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-2"
                 initial={{ opacity: 0, x: 20 }}
@@ -326,9 +421,9 @@ export default function StoreProductDetail() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <Badge 
+                <Badge
                   variant={product.stock > 5 ? "default" : "destructive"}
-                  className="bg-white/90 backdrop-blur"
+                  className="bg-white/40 backdrop-blur"
                 >
                   {product.stock > 5 ? `Stok: ${product.stock}` : "Habis"}
                 </Badge>
@@ -362,11 +457,10 @@ export default function StoreProductDetail() {
                 <motion.button
                   key={index}
                   onClick={() => handleThumbnailClick(index)}
-                  className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
-                    selectedImage === index 
-                      ? "border-primary scale-105" 
-                      : "border-transparent hover:border-muted hover:scale-105"
-                  }`}
+                  className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${selectedImage === index
+                    ? "border-primary scale-105"
+                    : "border-transparent hover:border-muted hover:scale-105"
+                    }`}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -392,7 +486,13 @@ export default function StoreProductDetail() {
           <div className="space-y-6">
             {/* Product Title and Rating */}
             <div>
-              <h1 className="text-2xl font-bold mb-2">{product.name}</h1>
+              <div className="flex flex-col gap-1 mb-2">
+                <h1 className="text-2xl font-bold">{product.name}</h1>
+                <div>
+                  <span className="text-sm text-muted-foreground">code: </span>
+                  <Badge variant="secondary">{product.product_code}</Badge>
+                </div>
+              </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1">
                   {renderStars(product.rating)}
@@ -401,24 +501,40 @@ export default function StoreProductDetail() {
                 <span className="text-sm text-muted-foreground">
                   ({product.sold} terjual)
                 </span>
-                <Badge variant="secondary">{product.category}</Badge>
               </div>
             </div>
 
             {/* Price */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-primary">
+                <div className="flex md:flex-row flex-col gap-1">
+                  <p className={`font-semibold line-through text-xl ${product.discount_price > 0 ? 'text-xl text-destructive' : 'no-underline text-primary'}`}>
+                    Rp {(product.price).toLocaleString("id-ID")}
+                  </p>
+                  {product.discount_price > 0 && (
+                    <p className={`font-bold text-md text-success text-3xl font-bold text-primary`}>
+                      Rp {(product.discount_price).toLocaleString("id-ID")}
+                    </p>
+                  )}
+
+                </div>
+                {/* <span className="text-3xl font-bold text-primary">
                   {formatCurrency(product.price)}
-                </span>
+                </span> */}
                 <span className="text-sm text-muted-foreground">/pcs</span>
               </div>
-              {product.shipping.free && (
+              <GlassCard className="p-4">
+                <h2 className="text-xl font-semibold mb-4">Deskripsi Produk</h2>
+                <p className="text-muted-foreground leading-relaxed">
+                  {product.description}
+                </p>
+              </GlassCard>
+              {/* {product.shipping.free && (
                 <div className="flex items-center gap-1 text-sm text-green-600">
                   <Truck className="h-4 w-4" />
                   <span>Gratis ongkir</span>
                 </div>
-              )}
+              )} */}
             </div>
 
             {/* Quantity Selector */}
@@ -453,6 +569,7 @@ export default function StoreProductDetail() {
             {/* Action Buttons */}
             <div className="space-y-3">
               <Button
+                size="lg"
                 className="w-full btn-tap"
                 onClick={handleAddToCart}
                 disabled={isAddingToCart || product.stock === 0}
@@ -464,15 +581,16 @@ export default function StoreProductDetail() {
                   </>
                 ) : (
                   <>
-                    <ShoppingCart className="h-4 w-4 mr-2" />
+                    <ShoppingCart size={50} strokeWidth={2.5} />
                     Tambah ke Keranjang
                   </>
                 )}
               </Button>
-              
+
               <Button
                 variant="outline"
-                className="w-full btn-tap"
+                size="lg"
+                className="w-full btn-tap border-gray-900"
                 onClick={handleBuyNow}
                 disabled={isBuyingNow || product.stock === 0}
               >
@@ -483,7 +601,7 @@ export default function StoreProductDetail() {
                   </>
                 ) : (
                   <>
-                    <Package className="h-4 w-4 mr-2" />
+                    <Package size={50} strokeWidth={2.5} />
                     Beli Langsung
                   </>
                 )}
@@ -504,7 +622,7 @@ export default function StoreProductDetail() {
             </div>
 
             {/* Shipping Info */}
-            <div className="space-y-3">
+            {/* <div className="space-y-3">
               <h3 className="font-medium">Pengiriman</h3>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
@@ -516,19 +634,12 @@ export default function StoreProductDetail() {
                   <span>{product.warranty}</span>
                 </div>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
 
         {/* Product Description */}
         <div className="space-y-6">
-          <GlassCard className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Deskripsi Produk</h2>
-            <p className="text-muted-foreground leading-relaxed">
-              {product.description}
-            </p>
-          </GlassCard>
-
           {/* Cart Summary */}
           {items.length > 0 && (
             <GlassCard className="p-6">
@@ -561,12 +672,12 @@ export default function StoreProductDetail() {
                 </div>
                 <div className="space-y-3">
                   <Button asChild className="w-full btn-tap">
-                    <Link to="/commerce/checkout">
+                    <Link to={`/${locationCode}/commerce/checkout`}>
                       Checkout
                     </Link>
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full"
                     onClick={handleClearCart}
                   >

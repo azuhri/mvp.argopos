@@ -9,8 +9,10 @@ import {
 } from "lucide-react";
 import { config } from "@/lib/config";
 import { useAuth } from "@/lib/auth";
-import { NAV_GROUPS_MENUS, type NavItemConfig } from "@/lib/navigation";
+import { NAV_GROUPS_MENUS, getFilteredNavigation, type NavItemConfig } from "@/lib/navigation";
 import { Separator } from "../ui/separator";
+import { useQuery } from "@tanstack/react-query";
+import { userService } from "@/lib/services/userService";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -20,8 +22,15 @@ interface SidebarProps {
 export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const { canRead } = useAuth();
+  
+  // Fetch full user data to get assigned_stores
+  const { data: fullUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: () => userService.getCurrentUser(),
+  });
 
-  const visibleGroups = NAV_GROUPS_MENUS.map(group => ({
+  const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
+  const visibleGroups = getFilteredNavigation(assignedStoresCount).map(group => ({
     ...group,
     listMenus: group.listMenus.filter(item => item.key)//canRead(item.key)),
   })).filter(group => group.listMenus.length > 0);

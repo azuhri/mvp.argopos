@@ -4,14 +4,24 @@ import { Button } from "../ui/button";
 import { Star } from "lucide-react";
 import { Link } from "react-router-dom";
 
-export default function CardProduct({ product, handleAddToCart }: { product: Product, handleAddToCart: (id: string, name: string, price: number, imageUrl: string, category: string) => void }) {
+export default function CardProduct({ product, handleAddToCart, urlDetail }: {
+  product: Product & { product_stock_id?: string },
+  urlDetail: string,
+  handleAddToCart: (
+    id: string,
+    name: string,
+    price: number,
+    imageUrl: string,
+    category: string,
+    productStockId: string
+  ) => void
+}) {
 
-  const price = product.discount_price || product.price;
-
+  
   return <React.Fragment>
     <Link
       key={product.id}
-      to={`/commerce/product/${product.id}`}
+      to={urlDetail}
       className="block"
     >
       <div className="aspect-square bg-gradient-to-br from-primary/5 to-accent/5 rounded-lg mb-3 flex items-center justify-center">
@@ -29,13 +39,13 @@ export default function CardProduct({ product, handleAddToCart }: { product: Pro
 
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex md:flex-row flex-col gap-1">
+          <div className="flex md:flex-row items-center flex-col gap-1">
             <p className={`font-semibold line-through text-md ${product.discount_price > 0 ? 'text-xs text-destructive' : 'no-underline text-primary'}`}>
-              Rp {(product.price * (1 + (product.tax_percentage || 0) / 100)).toLocaleString("id-ID")}
+              Rp {(product.price).toLocaleString("id-ID")}
             </p>
             {product.discount_price > 0 && (
               <p className={`font-bold text-md text-success`}>
-                Rp {(product.discount_price * (1 + (product.tax_percentage || 0) / 100)).toLocaleString("id-ID")}
+                Rp {(product.discount_price).toLocaleString("id-ID")}
               </p>
             )}
 
@@ -54,7 +64,7 @@ export default function CardProduct({ product, handleAddToCart }: { product: Pro
         <Button
           size="sm"
           className="w-full btn-tap"
-          onClick={() => handleAddToCart(product.id, product.name, product.price, product.image_url || '', product.category)}
+          onClick={() => handleAddToCart(product.id, product.name, product.price, product.image_url || '', product.category, product.product_stock_id || product.id)}
         >
           + Keranjang
         </Button>

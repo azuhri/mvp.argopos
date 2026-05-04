@@ -7,6 +7,9 @@ import { AuthProvider } from "@/lib/auth";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PermissionRoute } from "@/components/auth/PermissionRoute";
 import Index from "./pages/Index";
+import ProductPage from "./pages/dashboard/ProductPage";
+import TransactionPage from "./pages/dashboard/TransactionPage";
+import TransactionApproval from "./pages/TransactionApproval";
 import Login from "./pages/Login";
 import AccessDenied from "./pages/AccessDenied";
 import Customers from "./pages/Customers";
@@ -27,6 +30,8 @@ import MasterCategories from "./pages/master/Categories";
 import StoreManagement from "./pages/master/StoreManagement";
 import KoperasiDetailPage from "./pages/master/KoperasiDetailPage";
 import CommerceCatalog from "./pages/CommerceCatalog";
+import PaymentDetail from "./pages/PaymentDetail";
+import PaymentSuccess from "./pages/PaymentSuccess";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,143 +44,136 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
+            {/* Public Commerce Routes */}
             <Route path="/" element={<Navigate to="/commerce" replace />} />
             <Route path="/:locationCode/commerce" element={<CommerceCatalog />} />
             <Route path="/:locationCode/commerce/cart" element={<StoreCart />} />
             <Route path="/:locationCode/commerce/product/:productId" element={<StoreProductDetail />} />
+            <Route path="/:locationCode/commerce/payment/:transactionId" element={<PaymentDetail />} />
+            <Route path="/:locationCode/commerce/payment-success/:transactionId" element={<PaymentSuccess />} />
 
+            {/* Legacy Commerce Routes */}
             <Route path="/commerce" element={<Store />} />
             <Route path="/commerce/cart" element={<StoreCart />} />
             <Route path="/commerce/product/:productId" element={<StoreProductDetail />} />
+
+            {/* Public Transaction Approval Route */}
+            <Route path="/transactions/:transactionId/approve-payment" element={<TransactionApproval />} />
+
+            {/* Auth Routes */}
             <Route path="/auth/sign-in" element={<Login />} />
             <Route path="/access-denied" element={<AccessDenied />} />
-            
+
+            {/* Protected Dashboard Routes */}
             <Route path="/dashboard" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="dashboard"> */}
-                  <Index />
-                {/* </PermissionRoute> */}
+                <Index />
               </ProtectedRoute>
             } />
-            
+
+            <Route path="/dashboard/products" element={
+              <ProtectedRoute>
+                <ProductPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/dashboard/transactions" element={
+              <ProtectedRoute>
+                <TransactionPage />
+              </ProtectedRoute>
+            } />
+
             <Route path="/customers" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="customers"> */}
-                  <Customers />
-                {/* </PermissionRoute> */}
+                <Customers />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/koperasi" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="koperasi"> */}
-                  <KoperasiPage />
-                {/* </PermissionRoute> */}
+                <KoperasiPage />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/master/koperasi/:locationId" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="koperasi"> */}
-                  <KoperasiDetailPage />
-                {/* </PermissionRoute> */}
+                <KoperasiDetailPage />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/products" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="products"> */}
-                  <Products />
-                {/* </PermissionRoute> */}
+                <Products />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/transactions" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="transactions"> */}
-                  <Transactions />
-                {/* </PermissionRoute> */}
+                <Transactions />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/store" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="store"> */}
-                  <Store />
-                {/* </PermissionRoute> */}
+                <Store />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/store/cart" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="cart"> */}
-                  <StoreCart />
-                {/* </PermissionRoute> */}
+                <StoreCart />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/master/users" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="master_users"> */}
-                  <MasterUserManagement />
-                {/* </PermissionRoute> */}
+                <MasterUserManagement />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/master/locations" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="master_locations"> */}
-                  <MasterLocations />
-                {/* </PermissionRoute> */}
+                <MasterLocations />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/master/roles" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="master_roles"> */}
-                  <MasterRoles />
-                {/* </PermissionRoute> */}
+                <MasterRoles />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/master/stocks" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="master_stock"> */}
-                  <MasterStocks />
-                {/* </PermissionRoute> */}
+                <MasterStocks />
               </ProtectedRoute>
             } />
-            
+
             <Route path="/master/stores" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="master_stores"> */}
-                  <StoreManagement />
-                {/* </PermissionRoute> */}
+                <StoreManagement />
               </ProtectedRoute>
             } />
-            
-             <Route path="/master/products" element={
+
+            <Route path="/master/products" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="master_products"> */}
-                  <MasterProducts />
-                {/* </PermissionRoute> */}
+                <MasterProducts />
               </ProtectedRoute>
             } />
+
             <Route path="/master/products/create" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="master_products"> */}
-                  <CreateProduct />
-                {/* </PermissionRoute> */}
+                <CreateProduct />
               </ProtectedRoute>
             } />
+
             <Route path="/master/categories" element={
               <ProtectedRoute>
-                {/* <PermissionRoute menuKey="master_products"> */}
-                  <MasterCategories />
-                {/* </PermissionRoute> */}
+                <MasterCategories />
               </ProtectedRoute>
             } />
-            
+
+            {/* 404 Not Found - must be last */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

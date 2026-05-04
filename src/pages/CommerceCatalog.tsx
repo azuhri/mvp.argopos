@@ -86,12 +86,8 @@ export default function CommerceCatalog() {
   // Update cart summary when localStorage changes
   useEffect(() => {
     const handleStorageChange = () => {
-      const products = storeData?.product_stores.map(p => ({
-        id: p.master_product.id,
-        name: p.master_product.product_name,
-        price: p.base_price,
-      })) || [];
-      setCartSummary(getCartSummary(products));
+      // Call getCartSummary without products parameter to use stored product details
+      setCartSummary(getCartSummary());
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -121,21 +117,18 @@ export default function CommerceCatalog() {
     productName: string,
     productPrice: number,
     productImageUrl: string,
+    productStockId: string,
   ) => {
     addToCart(productId, 1, {
       name: productName,
       price: productPrice,
       imageUrl: productImageUrl,
     });
-    // Force state update by calling getCartSummary with store products
-    const products = storeData?.product_stores.map(p => ({
-      id: p.master_product.id,
-      name: p.master_product.product_name,
-      price: p.base_price,
-    })) || [];
     setTimeout(() => {
-      setCartSummary(getCartSummary(products));
+      setCartSummary(getCartSummary());
     }, 0);
+    console.log('cart',getCartSummary());
+    
     toast.success(`${productName} ditambahkan ke keranjang`);
   };
 
@@ -143,7 +136,7 @@ export default function CommerceCatalog() {
 
   if (error || !storeData) {
     return (
-      <AppLayoutCommerce title="Store Not Found">
+      <AppLayoutCommerce title="Store Not Found" locationCode={locationCode}>
         <div className="flex flex-col items-center justify-center min-h-screen text-center">
           <Package className="h-16 w-16 text-muted-foreground mb-4" />
           <h2 className="text-2xl font-semibold mb-2">Store Not Found</h2>
@@ -162,7 +155,7 @@ export default function CommerceCatalog() {
   }
 
   return (
-    <AppLayoutCommerce title={`${storeData.location_name} - ${config.appNameCommerce}`}>
+    <AppLayoutCommerce title={storeData.location_name} locationCode={locationCode}>
       {/* Search & Filter */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
@@ -221,16 +214,17 @@ export default function CommerceCatalog() {
             >
               <CardProduct
                 product={{
-                  id: product.master_product.id,
+                  id: product.id,
                   name: product.master_product.product_name,
                   price: product.base_price,
                   image_url: product.master_product.image_url,
                   stock: product.stock,
                   category: product.master_product.category || "",
                   discount_price: product.discount_price,
-                  tax_percentage: product?.tax_percentage || 0,
-                  unit: "",
+                  unit: "pack",
+                  product_stock_id: product.id
                 }}
+                urlDetail={`/${locationCode}/commerce/product/${product.id}`}
                 handleAddToCart={handleAddToCart}
               />
             </motion.div>

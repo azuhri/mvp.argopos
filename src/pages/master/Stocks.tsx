@@ -52,8 +52,7 @@ export default function MasterStocks() {
   const [distributeStockForm, setDistributeStockForm] = useState({
     from_location_id: "",
     to_location_id: "",
-    product_id: "",
-    quantity: 0,
+    products: [] as Array<{ product_stock_id: string; master_product_id: string; product_name: string; available_stock: number; quantity: number }>,
   });
 
   const [transferStockForm, setTransferStockForm] = useState({
@@ -172,15 +171,25 @@ export default function MasterStocks() {
 
   // Distribute stock mutation
   const distributeMutation = useMutation({
-    mutationFn: (request: any) => stockService.distributeStock(request),
+    mutationFn: async (distributionData: Array<{ from_location_id: string; to_location_id: string; master_product_id: string; quantity: number }>) => {
+      console.log("Distribution Data:", distributionData);
+      for (const item of distributionData) {
+        console.log("Distributing:", item);
+        await stockService.distributeStock({
+          from_location_id: item.from_location_id,
+          to_location_id: item.to_location_id,
+          product_id: item.master_product_id,
+          quantity: item.quantity,
+        });
+      }
+    },
     onSuccess: () => {
       toast.success("Stock distributed successfully");
       setIsDistributeStockOpen(false);
       setDistributeStockForm({
         from_location_id: "",
         to_location_id: "",
-        product_id: "",
-        quantity: 0,
+        products: [],
       });
       queryClient.invalidateQueries({ queryKey: ['stocks'] });
       refetch();
@@ -409,7 +418,17 @@ export default function MasterStocks() {
                 <div className="space-y-4">
                   <div>
                     <Label>From Warehouse</Label>
-                    <Select value={distributeStockForm.from_location_id} onValueChange={(value) => setDistributeStockForm({ ...distributeStockForm, from_location_id: value })}>
+                    <Select value={distributeStockForm.from_location_id} onValueChange={(value) => {
+                      const warehouse = locationGroups.find(g => g.location_id === value);
+                      const products = warehouse?.product_stocks.filter(stock => stock.stock > 0).map(stock => ({
+                        product_stock_id: stock.id,
+                        master_product_id: stock.master_product?.id || '',
+                        product_name: stock.master_product?.product_name || '',
+                        available_stock: stock.stock,
+                        quantity: 0,
+                      })) || [];
+                      setDistributeStockForm({ ...distributeStockForm, from_location_id: value, products });
+                    }}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select warehouse" />
                       </SelectTrigger>
@@ -437,43 +456,61 @@ export default function MasterStocks() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label>Product</Label>
-                    <Select value={distributeStockForm.product_id} onValueChange={(value) => setDistributeStockForm({ ...distributeStockForm, product_id: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from(new Set(locationGroups.flatMap(g => g.product_stocks.map(s => s.master_product?.id))))
-                          .filter(id => id)
-                          .map(productId => {
-                            const product = locationGroups.flatMap(g => g.product_stocks).find(s => s.master_product?.id === productId);
-                            return product ? (
-                              <SelectItem key={productId} value={productId}>
-                                {product.master_product?.product_name}
-                              </SelectItem>
-                            ) : null;
-                          })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Quantity</Label>
-                    <Input
-                      type="number"
-                      value={distributeStockForm.quantity}
-                      onChange={(e) => setDistributeStockForm({ ...distributeStockForm, quantity: parseInt(e.target.value) || 0 })}
-                    />
-                  </div>
+                  {distributeStockForm.from_location_id && distributeStockForm.products.length > 0 && (
+                    <div className="space-y-3">
+                      <Label>Products to Distribute</Label>
+                      <div className="max-h-60 overflow-y-auto space-y-2 border rounded-md p-3">
+                        {distributeStockForm.products.map((product, index) => (
+                          <div key={product.product_stock_id} className="flex items-center gap-3 p-2 border rounded-md bg-muted/30">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{product.product_name}</p>
+                              <p className="text-xs text-muted-foreground">Available: {product.available_stock}</p>
+                            </div>
+                            <div className="w-24">
+                              <Input
+                                type="number"
+                                min="0"
+                                max={product.available_stock}
+                                value={product.quantity}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value) || 0;
+                                  const newProducts = [...distributeStockForm.products];
+                                  newProducts[index].quantity = Math.min(value, product.available_stock);
+                                  setDistributeStockForm({ ...distributeStockForm, products: newProducts });
+                                }}
+                                placeholder="Qty"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {distributeStockForm.from_location_id && distributeStockForm.products.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No products available in this warehouse</p>
+                  )}
                   <div className="flex gap-2 pt-2">
                     <Button
                       onClick={() => {
                         console.log("Distribute Stock Form:", distributeStockForm);
-                        if (!distributeStockForm.from_location_id || !distributeStockForm.to_location_id || !distributeStockForm.product_id || distributeStockForm.quantity <= 0) {
-                          toast.error("Please fill in all required fields");
+                        if (!distributeStockForm.from_location_id || !distributeStockForm.to_location_id) {
+                          toast.error("Please select warehouse and store");
                           return;
                         }
-                        distributeMutation.mutate(distributeStockForm);
+                        const hasProductsToDistribute = distributeStockForm.products.some(p => p.quantity > 0);
+                        if (!hasProductsToDistribute) {
+                          toast.error("Please enter quantity for at least one product");
+                          return;
+                        }
+                        const distributionData = distributeStockForm.products
+                          .filter(p => p.quantity > 0)
+                          .map(p => ({
+                            from_location_id: distributeStockForm.from_location_id,
+                            to_location_id: distributeStockForm.to_location_id,
+                            master_product_id: p.master_product_id,
+                            quantity: p.quantity,
+                          }));
+                        distributeMutation.mutate(distributionData);
                       }}
                       disabled={distributeMutation.isPending}
                     >

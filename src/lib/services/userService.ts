@@ -4,7 +4,7 @@ import { apiClient, User, Role } from '@/lib/api';
 export type { User, Role };
 
 export interface UserListResponse {
-  data: User[];
+  users: User[];
   meta: {
     page: number;
     page_size: number;
@@ -18,6 +18,9 @@ export interface CreateUserRequest {
   password: string;
   role_id: string;
   assigned_stores?: string[];
+  employee_code?: string;
+  nowa?: string;
+  nik?: string;
 }
 
 export interface UpdateUserRequest {
@@ -26,6 +29,9 @@ export interface UpdateUserRequest {
   password?: string;
   role_id?: string;
   assigned_stores?: string[];
+  employee_code?: string;
+  nowa?: string;
+  nik?: string;
 }
 
 class UserService {
@@ -44,7 +50,7 @@ class UserService {
     if (!response.success || !response.data) {
       throw new Error(response.message || 'Failed to get users list');
     }
-    return response.data;
+    return response.data as UserListResponse;
   }
 
   // Get user by ID
@@ -88,7 +94,9 @@ class UserService {
     if (!response.success || !response.data) {
       throw new Error(response.message || 'Failed to get roles');
     }
-    return response.data.data;
+    // Handle nested response structure: {success: true, data: [...], meta: {...}}
+    const responseData = response.data as any;
+    return responseData?.data || responseData || [];
   }
 }
 

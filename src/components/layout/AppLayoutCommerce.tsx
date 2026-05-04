@@ -6,9 +6,10 @@ import { motion } from "framer-motion";
 interface AppLayoutProps {
   children: ReactNode;
   title: string;
+  locationCode: string;
 }
 
-export function AppLayoutCommerce({ children, title }: AppLayoutProps) {
+export function AppLayoutCommerce({ children, title, locationCode }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <motion.div
@@ -18,7 +19,7 @@ export function AppLayoutCommerce({ children, title }: AppLayoutProps) {
         className="flex flex-col min-h-screen hidden md:block"
         style={{ marginLeft: undefined }} // overridden by motion
       >
-        <TopBarCommerce title={title} />
+        <TopBarCommerce title={title} locationCode={locationCode} />
         <main className="flex-1 p-5 md:p-6">
           {children}
         </main>
@@ -26,7 +27,7 @@ export function AppLayoutCommerce({ children, title }: AppLayoutProps) {
 
       {/* Mobile layout without sidebar margin */}
       <div className="flex flex-col min-h-screen md:hidden">
-        <TopBarCommerce title={title} />
+        <TopBarCommerce title={title} locationCode={locationCode} />
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6">
           {children}
         </main>

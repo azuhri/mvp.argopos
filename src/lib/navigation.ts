@@ -52,14 +52,20 @@ export const NAV_GROUPS_MENUS: NavGroupConfig[] = [
       { key: "master_roles", path: "/master/roles", label: "Role Management", icon: ShieldCheck },
     ],
   },
-  // { key: "koperasi", path: "/koperasi", label: "Koperasi", icon: Building2, group: "main", mobile: true },
-  // { key: "koperasi", path: "/koperasi", label: "Koperasi", icon: Building2, group: "main", mobile: true },
-
-  // { key: "master_roles", path: "/master/roles", label: "Role Management", icon: ShieldCheck, group: "master" },
-  // { key: "master_stock", path: "/master/stocks", label: "Stock Management", icon: Warehouse, group: "master" },
-  // { key: "master_roles", path: "/master/roles", label: "Role Management", icon: ShieldCheck, group: "master" },
-  // { key: "master_stock", path: "/master/stocks", label: "Stock Management", icon: Warehouse, group: "master" },
 
   // { key: "store", path: "/store", label: "Store", icon: ShoppingBag, group: "commerce", mobile: true },
   // { key: "cart", path: "/store/cart", label: "Cart", icon: ReceiptText, group: "commerce" },
 ];
+
+export function getFilteredNavigation(assignedStoresCount: number): NavGroupConfig[] {
+  return NAV_GROUPS_MENUS.map(group => ({
+    ...group,
+    listMenus: group.listMenus.filter(menu => {
+      // Hide products and customers if user has more than 2 assigned stores (admin)
+      if ((menu.key === "products" || menu.key === "customers") && assignedStoresCount > 2) {
+        return false;
+      }
+      return true;
+    }),
+  })).filter(group => group.listMenus.length > 0);
+}

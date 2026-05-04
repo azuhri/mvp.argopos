@@ -126,15 +126,21 @@ export interface StorePaymentMethod {
 
 export interface Transaction {
   id: string;
-  location_id: string;
-  customer_id: string;
+  transaction_code?: string;
+  master_location_id?: string;
+  customer_id?: string;
   status: string; // WAITING_TO_PAYMENT, PAID, PREPARING_PRODUCT, READY_TO_PICKUP, COMPLETED
-  paid_at: string;
+  paid_at?: string;
+  payment_code?: string;
+  payment_method_id?: string;
+  nominal_code?: string;
+  base_amount?: number;
   total_amount: number;
   total_item: number;
-  created_by: string;
+  created_by?: string;
   created_at: string;
   customer_name?: string;
+  payment_type?: string;
 }
 
 export interface Store {
@@ -434,20 +440,29 @@ class ApiClient {
         if (responseData && typeof responseData === 'object' && 'success' in responseData) {
           return responseData;
         }
-
-        return {
-          success: true,
-          data: responseData,
-          message: 'Success'
-        };
+        return response.data;
       },
       (error) => {
         if (error.response?.status === 401) {
           localStorage.removeItem('argopos.auth.token');
           localStorage.removeItem('argopos.auth.user');
 
-          // Only redirect if not already on login page
-          if (window.location.pathname !== '/auth/sign-in') {
+          // Check if current route is a public commerce route - don't redirect
+          const publicRoutePatterns = [
+            /^\/[\w-]+\/commerce$/,
+            /^\/[\w-]+\/commerce\/cart$/,
+            /^\/[\w-]+\/commerce\/product\/[\w-]+$/,
+            /^\/[\w-]+\/commerce\/payment\/[\w-]+$/,
+            /^\/[\w-]+\/commerce\/payment-success$/,
+            /^\/commerce$/,
+            /^\/commerce\/cart$/,
+            /^\/commerce\/product\/[\w-]+$/,
+          ];
+
+          const isPublicRoute = publicRoutePatterns.some(pattern => pattern.test(window.location.pathname));
+
+          // Only redirect if not on public route and not already on login page
+          if (!isPublicRoute && window.location.pathname !== '/auth/sign-in') {
             window.location.href = "/auth/sign-in";
           }
         }
@@ -494,7 +509,7 @@ class ApiClient {
   }
 
   // User endpoints
-  async getUsers(page = 1, pageSize = 20, search = ''): Promise<ApiResponse<{ data: User[] } & { meta: any }>> {
+  async getUsers(page = 1, pageSize = 20, search = ''): Promise<ApiResponse<{ users: User[] } & { meta: any }>> {
     const params = new URLSearchParams({
       page: page.toString(),
       page_size: pageSize.toString(),
@@ -528,7 +543,7 @@ class ApiClient {
   }
 
   // Role endpoints
-  async getRoles(page = 1, pageSize = 20, search = ''): Promise<ApiResponse<{ data: Role[] } & { meta: any }>> {
+  async getRoles(page = 1, pageSize = 20, search = ''): Promise<ApiResponse<{ roles: Role[] } & { meta: any }>> {
     const params = new URLSearchParams({
       page: page.toString(),
       page_size: pageSize.toString(),
@@ -538,27 +553,31 @@ class ApiClient {
   }
 
   async getRole(id: string): Promise<ApiResponse<Role>> {
-    return this.request<Role>(`/roles/${id}`);
+    return this.request<Role>(`/access-roles/role/${id}`);
   }
 
   async createRole(role: Partial<Role>): Promise<ApiResponse<Role>> {
-    return this.request<Role>('/roles/', {
+    return this.request<Role>('/access-roles/role', {
       method: 'POST',
       data: role,
     });
   }
 
   async updateRole(id: string, role: Partial<Role>): Promise<ApiResponse<Role>> {
-    return this.request<Role>(`/roles/${id}`, {
+    return this.request<Role>(`/access-roles/role/${id}`, {
       method: 'PUT',
       data: role,
     });
   }
 
   async deleteRole(id: string): Promise<ApiResponse<void>> {
-    return this.request<void>(`/roles/${id}`, {
+    return this.request<void>(`/access-roles/role/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  async getAllRoles(): Promise<ApiResponse<Role[]>> {
+    return this.request<Role[]>('/access-roles/roles');
   }
 
   // Access Role endpoints
@@ -626,11 +645,6 @@ class ApiClient {
 
   async getMenuWithAccess(menuId: string): Promise<ApiResponse<Menu>> {
     return this.request<Menu>(`/access-roles/menu/${menuId}/with-access`);
-  }
-
-  
-  async getAllRoles(): Promise<ApiResponse<Role[]>> {
-    return this.request<Role[]>('/roles/list');
   }
 
   async getAllMenus(): Promise<ApiResponse<Menu[]>> {
@@ -872,6 +886,7 @@ class ApiClient {
       start_date?: string;
       end_date?: string;
       payment_method?: string;
+      transaction_code?: string;
       sort_by?: string;
       sort_order?: string;
       page?: number;
@@ -884,6 +899,7 @@ class ApiClient {
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     if (params?.payment_method) queryParams.append('payment_method', params.payment_method);
+    if (params?.transaction_code) queryParams.append('transaction_code', params.transaction_code);
     if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
     if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
     if (params?.page) queryParams.append('page', params.page.toString());

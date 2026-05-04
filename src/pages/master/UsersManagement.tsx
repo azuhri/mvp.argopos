@@ -15,6 +15,7 @@ import { LoadingSpinner, PageSkeleton } from "@/components/shared/SkeletonLoader
 import { userService, UserListResponse, CreateUserRequest, UpdateUserRequest, User, Role } from "@/lib/services/userService";
 import { locationService } from "@/lib/services/locationService";
 import { Location } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface UserFormData {
   username: string;
@@ -23,6 +24,9 @@ interface UserFormData {
   role_id: string;
   assigned_stores: string[];
   showPassword: boolean;
+  employee_code?: string;
+  nowa?: string;
+  nik?: string;
 }
 
 interface UserFormErrors {
@@ -30,6 +34,9 @@ interface UserFormErrors {
   email?: string;
   password?: string;
   role_id?: string;
+  employee_code?: string;
+  nowa?: string;
+  nik?: string;
 }
 
 export default function UsersManagement() {
@@ -64,6 +71,9 @@ export default function UsersManagement() {
     role_id: "",
     assigned_stores: [],
     showPassword: false,
+    employee_code: "",
+    nowa: "",
+    nik: "",
   });
   const [formErrors, setFormErrors] = useState<UserFormErrors>({});
 
@@ -110,10 +120,11 @@ export default function UsersManagement() {
   const loadRoles = async () => {
     try {
       const response = await userService.getRoles();
+      console.log('Roles loaded:', response);
       setRoles(response);
     } catch (error) {
       toast.error("Failed to load roles");
-      console.error(error);
+      console.error('Error loading roles:', error);
     }
   };
 
@@ -158,6 +169,9 @@ export default function UsersManagement() {
       role_id: "",
       assigned_stores: [],
       showPassword: false,
+      employee_code: "",
+      nowa: "",
+      nik: "",
     });
     setFormErrors({});
   };
@@ -174,6 +188,9 @@ export default function UsersManagement() {
         password: formData.password,
         role_id: formData.role_id,
         assigned_stores: formData.assigned_stores,
+        employee_code: formData.employee_code?.trim(),
+        nowa: formData.nowa?.trim(),
+        nik: formData.nik?.trim(),
       };
 
       await userService.createUser(userData);
@@ -199,6 +216,9 @@ export default function UsersManagement() {
         email: formData.email.trim(),
         role_id: formData.role_id,
         assigned_stores: formData.assigned_stores,
+        employee_code: formData.employee_code?.trim(),
+        nowa: formData.nowa?.trim(),
+        nik: formData.nik?.trim(),
       };
 
       // Include password only if it's provided (not empty)
@@ -251,6 +271,9 @@ export default function UsersManagement() {
       role_id: user.role_id,
       assigned_stores: assignedStores,
       showPassword: false,
+      employee_code: (user as any).employee_code || "",
+      nowa: (user as any).nowa || "",
+      nik: (user as any).nik || "",
     });
     setFormErrors({});
     setIsEditOpen(true);
@@ -325,7 +348,7 @@ export default function UsersManagement() {
                 <Plus size={16} className="mr-2" /> Add User
               </Button>
             </DialogTrigger>
-            <DialogContent className="glass-card max-w-md">
+            <DialogContent className="glass-card max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New User</DialogTitle>
               </DialogHeader>
@@ -381,21 +404,51 @@ export default function UsersManagement() {
                     <p className="text-xs text-red-500 mt-1">{formErrors.password}</p>
                   )}
                 </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Employee Code (Optional)</label>
+                  <Input
+                    placeholder="Enter employee code"
+                    value={formData.employee_code}
+                    onChange={(e) => setFormData({ ...formData, employee_code: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">No. WA (Optional)</label>
+                  <Input
+                    placeholder="Enter WhatsApp number"
+                    value={formData.nowa}
+                    onChange={(e) => setFormData({ ...formData, nowa: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">NIK (Optional)</label>
+                  <Input
+                    placeholder="Enter NIK"
+                    value={formData.nik}
+                    onChange={(e) => setFormData({ ...formData, nik: e.target.value })}
+                  />
+                </div>
                 
                 <div>
                   <label className="text-sm font-medium mb-2 block">Role</label>
-                  <Select value={formData.role_id} onValueChange={(value) => setFormData({ ...formData, role_id: value })}>
-                    <SelectTrigger className={formErrors.role_id ? "border-red-500" : ""}>
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id}>
-                          {role.role_name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    value={formData.role_id}
+                    onChange={(e) => setFormData({ ...formData, role_id: e.target.value })}
+                    className={cn(
+                      "w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      formErrors.role_id ? "border-red-500" : ""
+                    )}
+                  >
+                    <option value="">Select role</option>
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.role_name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </option>
+                    ))}
+                  </select>
                   {formErrors.role_id && (
                     <p className="text-xs text-red-500 mt-1">{formErrors.role_id}</p>
                   )}
@@ -559,8 +612,8 @@ export default function UsersManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users?.data.length ? (
-                  users.data.map((user, index) => (
+                {users?.users.length ? (
+                  users.users.map((user, index) => (
                     <motion.tr
                       key={user.id}
                       initial={{ opacity: 0, y: 10 }}
@@ -644,7 +697,7 @@ export default function UsersManagement() {
         // Mobile/Tablet: Grid View
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {users?.data.map((user, i) => (
+            {users?.users.map((user, i) => (
               <motion.div
                 key={user.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -771,7 +824,7 @@ export default function UsersManagement() {
         </>
       )}
 
-      {users && users.data.length === 0 && !isLoading && (
+      {users && users.users.length === 0 && !isLoading && (
         <div className="text-center py-12">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground">No users found</p>
@@ -857,7 +910,7 @@ export default function UsersManagement() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="glass-card max-w-md">
+        <DialogContent className="glass-card max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
@@ -910,21 +963,51 @@ export default function UsersManagement() {
                 </Button>
               </div>
             </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Employee Code (Optional)</label>
+              <Input
+                placeholder="Enter employee code"
+                value={formData.employee_code}
+                onChange={(e) => setFormData({ ...formData, employee_code: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">No. WA (Optional)</label>
+              <Input
+                placeholder="Enter WhatsApp number"
+                value={formData.nowa}
+                onChange={(e) => setFormData({ ...formData, nowa: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">NIK (Optional)</label>
+              <Input
+                placeholder="Enter NIK"
+                value={formData.nik}
+                onChange={(e) => setFormData({ ...formData, nik: e.target.value })}
+              />
+            </div>
             
             <div>
               <label className="text-sm font-medium mb-2 block">Role</label>
-              <Select value={formData.role_id} onValueChange={(value) => setFormData({ ...formData, role_id: value })}>
-                <SelectTrigger className={formErrors.role_id ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id}>
-                      {role.role_name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={formData.role_id}
+                onChange={(e) => setFormData({ ...formData, role_id: e.target.value })}
+                className={cn(
+                  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  formErrors.role_id ? "border-red-500" : ""
+                )}
+              >
+                <option value="">Select role</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.role_name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  </option>
+                ))}
+              </select>
               {formErrors.role_id && (
                 <p className="text-xs text-red-500 mt-1">{formErrors.role_id}</p>
               )}

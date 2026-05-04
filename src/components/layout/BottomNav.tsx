@@ -2,14 +2,25 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
-import { NAV_GROUPS_MENUS } from "@/lib/navigation";
+import { NAV_GROUPS_MENUS, getFilteredNavigation } from "@/lib/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { userService } from "@/lib/services/userService";
 
 export function BottomNav() {
   const location = useLocation();
   const { canRead } = useAuth();
 
+  // Fetch full user data to get assigned_stores
+  const { data: fullUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: () => userService.getCurrentUser(),
+  });
+
+  const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
+  const filteredNav = getFilteredNavigation(assignedStoresCount);
+
   // Filter mobile navigation items based on user permissions
-  const visibleNavItems = NAV_GROUPS_MENUS.flatMap(group => 
+  const visibleNavItems = filteredNav.flatMap(group => 
     group.listMenus.filter(item => item.mobile && canRead(item.key))
   );
 

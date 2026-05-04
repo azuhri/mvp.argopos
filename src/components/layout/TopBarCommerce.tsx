@@ -1,11 +1,8 @@
-import { Search, Bell, LogOut, ShoppingBag } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/lib/auth";
 import { Link, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -18,14 +15,16 @@ import { AnimatePresence, motion } from "framer-motion";
 import { formatCurrency } from "@/lib/mockData";
 import { getCartSummary, clearCart } from "@/lib/storefront";
 import { useState, useEffect } from "react";
+import config from "../../lib/config";
 
 interface TopBarCommerceProps {
     title: string;
+    locationCode: string;
+    productName?: string;
 }
 
-export function TopBarCommerce({ title }: TopBarCommerceProps) {
+export function TopBarCommerce({ title, locationCode, productName }: TopBarCommerceProps) {
     const [cartSummary, setCartSummary] = useState(() => getCartSummary());
-    const { user, logout } = useAuth();
     const navigate = useNavigate();
 
     // Update cart summary when localStorage changes
@@ -48,11 +47,19 @@ export function TopBarCommerce({ title }: TopBarCommerceProps) {
     return (
         <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-border/40 glass-strong sticky top-0 z-30">
             <div className="flex gap-2 items-center">
-                <Link to="/commerce" className="flex items-center gap-2">
+                <Link to={`/${locationCode}/commerce`} className="flex items-center gap-2">
                     <div className="p-2 px-2 rounded-sm bg-primary flex items-center justify-center">
-                        <ShoppingBag className="h-5 w-5 text-primary-foreground" />
+                        <ShoppingBag className="h-7 w-7 text-primary-foreground" />
                     </div>
-                    <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+                    <h1 className="text-lg font-medium text-foreground">
+                        <div className="flex flex-col">
+                            <span className="text-secondary-foreground font-extrabold">{config.appNameCommerce}</span>
+                            <Badge variant="secondary" size="sm" className="text-primary text-[10px] sm:text-xs px-1.5 py-0">
+                                {title}
+                            </Badge>
+
+                        </div>
+                    </h1>
                 </Link>
             </div>
 
@@ -80,7 +87,7 @@ export function TopBarCommerce({ title }: TopBarCommerceProps) {
                                         </div>
                                         ) : (<div className="flex items-center justify-between mb-3">
                                             <h2 className="text-sm font-semibold">Keranjang ({totalItems})</h2>
-                                            <Link to="/commerce/cart" className="text-xs text-primary hover:underline whitespace-nowrap">
+                                            <Link to={`/${locationCode}/commerce/cart`} className="text-xs text-primary hover:underline whitespace-nowrap">
                                                 Lihat Keranjang
                                             </Link>
                                         </div>)}
