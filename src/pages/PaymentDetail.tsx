@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { formatCurrency } from "@/lib/mockData";
 import { useAuth } from "@/lib/auth";
 import { userService } from "@/lib/services/userService";
+import { FaWhatsapp } from "react-icons/fa";
 
 interface StoreData {
   location_id: string;
@@ -458,7 +459,7 @@ export default function PaymentDetail() {
                 </div>
               )}
 
-              {/* Admin Info for QRIS and Transfer Rekening */}
+              {/* Admin Info for QRIS and Transfer Rekening
               {(selectedPaymentMethod.payment_type === 'qris' || selectedPaymentMethod.payment_type === 'transfer_rekening') && (
                 <div className="space-y-3 mt-4 pt-4 border-t">
                   <p className="text-sm font-medium">Hubungi Admin untuk Konfirmasi Pembayaran:</p>
@@ -491,7 +492,7 @@ export default function PaymentDetail() {
                     <p className="text-sm text-muted-foreground">Tidak ada admin tersedia</p>
                   )}
                 </div>
-              )}
+              )} */}
 
               {selectedPaymentMethod.payment_type === 'cutoff_hutang' && (
                 <div className="space-y-2 text-sm">
@@ -508,7 +509,7 @@ export default function PaymentDetail() {
             <GlassCard className="p-6">
               <h2 className="text-lg font-semibold mb-4">Kontak Admin</h2>
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Hubungi admin untuk bantuan:</p>
+                <p className="text-sm text-muted-foreground">Hubungi admin untuk konfirmasi pembayaran atau bantuan:</p>
                 {storeAssignedUsers.map((user) => (
                   <div key={user.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                     <div className="flex items-center gap-3">
@@ -520,7 +521,7 @@ export default function PaymentDetail() {
                         <p className="text-xs text-muted-foreground">{user.email}</p>
                         {user.no_wa && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                            <Phone className="h-3 w-3" />
+                            <FaWhatsapp className="h-3 w-3" />
                             <span>{user.no_wa}</span>
                           </div>
                         )}
@@ -532,8 +533,8 @@ export default function PaymentDetail() {
                       onClick={() => handleSendToWA(user)}
                       disabled={!user.no_wa}
                     >
-                      <MessageCircle className="h-4 w-4 mr-2" />
-                      WA
+                      <FaWhatsapp color="green" className="h-4 w-4" />
+                      <span className="text-xs text-green-900">Whatsapp</span>
                     </Button>
                   </div>
                 ))}

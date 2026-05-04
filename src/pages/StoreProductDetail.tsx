@@ -237,7 +237,7 @@ export default function StoreProductDetail() {
     setIsAddingToCart(false);
   };
 
-  const handle BuyNow = async () => {
+  const handleBuyNow = async () => {
     if (product.isOutOfStock) {
       toast.error("Produk tidak tersedia (stok habis)");
       return;
