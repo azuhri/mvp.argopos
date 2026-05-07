@@ -417,7 +417,7 @@ export default function PaymentDetail() {
                     {selectedPaymentMethod.payment_type === 'cutoff_hutang' && 'Cutoff/Hutang'}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Status: <Badge variant="secondary">Menunggu Pembayaran</Badge>
+                    Status: {transactionData.status === 'PAID' ? <Badge variant="secondary" className="text-green-700 font-bold">Dibayar</Badge> : <Badge variant="secondary">Menunggu Pembayaran</Badge>}
                   </p>
                 </div>
               </div>
@@ -511,7 +511,7 @@ export default function PaymentDetail() {
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">Hubungi admin untuk konfirmasi pembayaran atau bantuan:</p>
                 {storeAssignedUsers.map((user) => (
-                  <div key={user.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div key={user.id} className="flex flex-row items-center justify-between p-3 bg-muted rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-medium">
                         {user.username.charAt(0).toUpperCase()}
@@ -534,7 +534,7 @@ export default function PaymentDetail() {
                       disabled={!user.no_wa}
                     >
                       <FaWhatsapp color="green" className="h-4 w-4" />
-                      <span className="text-xs text-green-900">Whatsapp</span>
+                      <span className="text-xs text-green-900">WA</span>
                     </Button>
                   </div>
                 ))}

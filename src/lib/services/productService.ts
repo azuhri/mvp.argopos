@@ -114,6 +114,19 @@ export class ProductService {
     };
   }
 
+  async getProductStore(locationCode: string): Promise<Product[]> {
+    const response = await apiClient.getProductsByLocation(locationCode);
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to get product store');
+    }
+    
+    // Handle nested response structure
+    const responseData = response.data as any;
+    const products = responseData?.products || responseData || [];
+    
+    return Array.isArray(products) ? products : [];
+  }
+
   // Get all products (without pagination)
   async getAllProducts(): Promise<Product[]> {
     const response = await apiClient.getProducts(1, 1000); // Get all with large page size

@@ -202,7 +202,7 @@ export default function StoreProductDetail() {
           <h2 className="text-xl font-semibold mb-2">Product Not Found</h2>
           <p className="text-muted-foreground mb-6">Unable to load product data</p>
           <Button asChild>
-            <Link to={`/${locationCode}/commerce`}>Back to Store</Link>
+            <Link to={`/commerce`}>Back to Store</Link>
           </Button>
         </div>
       </AppLayoutCommerce>
@@ -261,7 +261,7 @@ export default function StoreProductDetail() {
 
     toast.success("Produk ditambahkan, mengalihkan ke checkout...");
     setTimeout(() => {
-      window.location.href = `/${locationCode}/commerce/cart`;
+      window.location.href = `/commerce/cart`;
     }, 1000);
   };
 
@@ -319,7 +319,7 @@ export default function StoreProductDetail() {
       <div className={`max-w-8xl mx-auto px-4 py-6 ${product.isOutOfStock ? 'grayscale' : ''}`}>
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-          <Link to={`/${locationCode}/commerce`} className="hover:text-foreground">
+          <Link to={`/commerce`} className="hover:text-foreground">
             Commerce
           </Link>
           <span>/</span>
@@ -672,7 +672,7 @@ export default function StoreProductDetail() {
                 </div>
                 <div className="space-y-3">
                   <Button asChild className="w-full btn-tap">
-                    <Link to={`/${locationCode}/commerce/checkout`}>
+                    <Link to={`/commerce/checkout`}>
                       Checkout
                     </Link>
                   </Button>

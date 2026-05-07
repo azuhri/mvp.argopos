@@ -31,7 +31,7 @@ export default function CardProduct({ product, handleAddToCart, urlDetail }: {
 
     <div className="space-y-2 p-3">
       <div>
-        <h3 className="font-medium text-lg line-clamp-2 group-hover:text-primary transition-colors">
+        <h3 className="font-medium text-sm sm:text-lg line-clamp-2 group-hover:text-primary transition-colors">
           {product.name}
         </h3>
         <p className="text-xs text-muted-foreground">{product.category}</p>

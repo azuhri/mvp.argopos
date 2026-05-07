@@ -148,17 +148,17 @@ export default function PaymentSuccess() {
             {/* Action Buttons */}
             <div className="space-y-3">
               <Button className="w-full" size="lg" asChild>
-                <Link to={`/${locationCode}/commerce`}>
+                <Link to={`/commerce`}>
                   <ShoppingBag className="h-4 w-4 mr-2" />
                   Belanja Lagi
                 </Link>
               </Button>
-              <Button variant="outline" className="w-full" size="lg" asChild>
+              {/* <Button variant="outline" className="w-full" size="lg" asChild>
                 <Link to={`/${locationCode}/commerce/cart`}>
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Lihat Pesanan Lain
                 </Link>
-              </Button>
+              </Button> */}
             </div>
           </GlassCard>
 

@@ -447,7 +447,7 @@ export default function StoreCart() {
           <h2 className="text-xl font-semibold mb-2">Keranjang Kosong</h2>
           <p className="text-muted-foreground mb-6">Belum ada produk di keranjang kamu</p>
           <Button asChild>
-            <Link to={`/${locationCode}/commerce`}>Belanja Sekarang</Link>
+            <Link to={`${locationCode}/commerce`}>Belanja Sekarang</Link>
           </Button>
         </div>
       </AppLayoutCommerce>
@@ -460,7 +460,7 @@ export default function StoreCart() {
         {/* Header */}
         <div className="flex flex-col items-start gap-6 mb-4">
           <Button variant="outline" size="sm" asChild>
-            <Link to={`/${locationCode}/commerce`}>
+            <Link to={`${locationCode}/commerce`}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Kembali Belanja
             </Link>

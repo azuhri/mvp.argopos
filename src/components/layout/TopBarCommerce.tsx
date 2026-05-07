@@ -45,19 +45,20 @@ export function TopBarCommerce({ title, locationCode, productName }: TopBarComme
     const { items, total, totalItems } = cartSummary;
 
     return (
-        <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-border/40 glass-strong sticky top-0 z-30">
+        <header className="h-20 flex items-center justify-between px-4 md:px-6 border-b border-border/40 glass-strong sticky top-0 z-30">
             <div className="flex gap-2 items-center">
                 <Link to={`/${locationCode}/commerce`} className="flex items-center gap-2">
                     <div className="p-2 px-2 rounded-sm bg-primary flex items-center justify-center">
-                        <ShoppingBag className="h-7 w-7 text-primary-foreground" />
+                        <ShoppingBag className="h-10 w-10 text-primary-foreground" />
                     </div>
                     <h1 className="text-lg font-medium text-foreground">
                         <div className="flex flex-col">
                             <span className="text-secondary-foreground font-extrabold">{config.appNameCommerce}</span>
-                            <Badge variant="secondary" size="sm" className="text-primary text-[10px] sm:text-xs px-1.5 py-0">
-                                {title}
-                            </Badge>
-
+                            <div className="flex">
+                                <Badge variant="secondary" size="sm" className="text-primary font-bold uppercase px-2 py-1 rounded-sm">
+                                    {title}
+                                </Badge>
+                            </div>
                         </div>
                     </h1>
                 </Link>

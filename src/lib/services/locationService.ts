@@ -36,6 +36,14 @@ export class LocationService {
     }
   }
 
+  async getListStore(): Promise<Location[]> {
+    const response = await apiClient.getListStore();
+    if (response.data.length < 1) {
+      throw new Error('Failed to get list store');
+    }
+    return response.data;
+  }
+
   // Get locations with pagination and filtering
   async getLocations(
     page = 1,

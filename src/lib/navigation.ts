@@ -35,9 +35,9 @@ export const NAV_GROUPS_MENUS: NavGroupConfig[] = [
     group: "basic",
     listMenus: [
       { key: "dashboard", path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, mobile: true },
-      { key: "transactions", path: "/transactions", label: "POS", icon: ShoppingCart, mobile: true },
-      { key: "products", path: "/products", label: "Products", icon: Package, mobile: true },
-      { key: "customers", path: "/customers", label: "Customers", icon: Users },
+      // { key: "transactions", path: "/transactions", label: "POS", icon: ShoppingCart, mobile: true },
+      // { key: "products", path: "/products", label: "Products", icon: Package, mobile: true },
+      // { key: "customers", path: "/customers", label: "Customers", icon: Users },
       { key: "koperasi", path: "/koperasi", label: "Koperasi", icon: Building2, mobile: true },
     ],
   },

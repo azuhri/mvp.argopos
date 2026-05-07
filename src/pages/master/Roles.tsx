@@ -53,54 +53,49 @@ export default function MasterRoles() {
   const [isCreating, setIsCreating] = useState(false);
 
   // Query for roles with access
-  const { data: rolesData, isLoading, refetch, error } = useQuery({
-    queryKey: ['roles-with-access'],
-    queryFn: async () => {
-      try {
-        console.log('Fetching roles...');
-        const roles = await accessRoleService.getAllRoles();
-        console.log('Roles fetched:', roles);
-        
-        if (!roles || roles.length === 0) {
-          console.log('No roles found');
-          return [];
+    const { data: rolesData, isLoading, refetch, error } = useQuery({
+      queryKey: ['roles-with-access'],
+      queryFn: async () => {
+        try {
+          const data = await accessRoleService.getAllRoles();
+          
+          if (!data || data.roles.length === 0) {
+            console.log('No roles found');
+            return [];
+          }
+          
+          const rolesWithPermissions = await Promise.all(
+            data?.roles.map(async (role) => {
+              try {
+                const permissions = await accessRoleService.getRolePermissions(role.id);                
+                return {
+                  id: role.id,
+                  name: role.role_name,
+                  description: `Role ${role.role_name}`,
+                  permissions,
+                  userCount: 0 // TODO: Implement user count query
+                } as Role;
+              } catch (permError) {
+                console.error('Error fetching permissions for role:', role.id, permError);
+                return {
+                  id: role.id,
+                  name: role.role_name,
+                  description: `Role ${role.role_name}`,
+                  permissions: {},
+                  userCount: 0
+                } as Role;
+              }
+            })
+          );
+          
+          console.log('Final roles data:', rolesWithPermissions);
+          return rolesWithPermissions;
+        } catch (error) {
+          console.error('Error in roles query:', error);
+          throw error;
         }
-        
-        const rolesWithPermissions = await Promise.all(
-          roles.map(async (role) => {
-            try {
-              console.log('Fetching permissions for role:', role.id);
-              const permissions = await accessRoleService.getRolePermissions(role.id);
-              console.log('Permissions for role:', role.id, permissions);
-              
-              return {
-                id: role.id,
-                name: role.role_name,
-                description: `Role ${role.role_name}`,
-                permissions,
-                userCount: 0 // TODO: Implement user count query
-              } as Role;
-            } catch (permError) {
-              console.error('Error fetching permissions for role:', role.id, permError);
-              return {
-                id: role.id,
-                name: role.role_name,
-                description: `Role ${role.role_name}`,
-                permissions: {},
-                userCount: 0
-              } as Role;
-            }
-          })
-        );
-        
-        console.log('Final roles data:', rolesWithPermissions);
-        return rolesWithPermissions;
-      } catch (error) {
-        console.error('Error in roles query:', error);
-        throw error;
       }
-    }
-  });
+    });
 
   // Query for menus
   const { data: menus } = useQuery({
@@ -575,12 +570,12 @@ export default function MasterRoles() {
         </div>
       )}
 
-      {filtered.length === 0 && (
+      {/* {filtered.length === 0 && (
         <div className="text-center py-12">
           <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground">Role tidak ditemukan</p>
         </div>
-      )}
+      )} */}
     </AppLayout>
   );
 }

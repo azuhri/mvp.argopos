@@ -768,6 +768,11 @@ class ApiClient {
     });
   }
 
+
+   async getListStore(): Promise<ApiResponse<Location[]>> {
+    return this.request<Location[]>('/location/stores');
+  }
+
   async getLocation(id: string): Promise<ApiResponse<Location>> {
     return this.request<Location>(`/locations/${id}`);
   }
@@ -984,6 +989,10 @@ class ApiClient {
     return this.request<void>(`/access/role/${roleId}/menu/${menuId}`, {
       method: 'DELETE',
     });
+  }
+
+  async getProductsByLocation(locationCode: string): Promise<ApiResponse<{ products: Product[] } & { meta: any }>> {
+    return this.request(`/${locationCode}/store`);
   }
 }
 
