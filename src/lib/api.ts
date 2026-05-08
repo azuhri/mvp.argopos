@@ -128,6 +128,8 @@ export interface Transaction {
   id: string;
   transaction_code?: string;
   master_location_id?: string;
+  location_name?: string;
+  location_code?: string;
   customer_id?: string;
   status: string; // WAITING_TO_PAYMENT, PAID, PREPARING_PRODUCT, READY_TO_PICKUP, COMPLETED
   paid_at?: string;
@@ -141,6 +143,61 @@ export interface Transaction {
   created_at: string;
   customer_name?: string;
   payment_type?: string;
+}
+
+export interface TransactionListParams {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  user_id?: string;
+  payment_method?: string;
+  transaction_code?: string;
+  start_date?: string;
+  end_date?: string;
+  sort_by?: string;
+  sort_order?: string;
+  location_id?: string;
+  location_ids?: string[];
+  search?: string;
+}
+
+export interface DashboardAnalyticsSummary {
+  total_revenue: number;
+  total_transactions: number;
+  unique_customers: number;
+  revenue_growth: number;
+  previous_revenue: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface DashboardRevenuePoint {
+  label: string;
+  month: string;
+  revenue: number;
+}
+
+export interface DashboardCategoryShare {
+  name: string;
+  value: number;
+  raw_value: number;
+}
+
+export interface DashboardRecentTransaction {
+  id: string;
+  invoice_number: string;
+  customer_name: string;
+  store_name: string;
+  total: number;
+  status: string;
+  created_at: string;
+}
+
+export interface DashboardAnalyticsResponse {
+  summary: DashboardAnalyticsSummary;
+  revenue_trend: DashboardRevenuePoint[];
+  category_distribution: DashboardCategoryShare[];
+  recent_transactions: DashboardRecentTransaction[];
 }
 
 export interface Store {
@@ -380,10 +437,10 @@ class ApiClient {
         if (config.data instanceof FormData) {
           // Let browser set the boundary automatically
           config.headers['Content-Type'] = 'multipart/form-data';
-          console.log('Request interceptor: Set Content-Type to multipart/form-data');
-          console.log('FormData entries being sent:');
+          // console.log('Request interceptor: Set Content-Type to multipart/form-data');
+          // console.log('FormData entries being sent:');
           for (let [key, value] of config.data.entries()) {
-            console.log(`  ${key}:`, value instanceof File ? `File(${value.name}, ${value.size} bytes)` : value);
+            // console.log(`  ${key}:`, value instanceof File ? `File(${value.name}, ${value.size} bytes)` : value);
           }
         } else {
           // Ensure JSON Content-Type for non-FormData requests
@@ -392,7 +449,7 @@ class ApiClient {
           }
         }
 
-        console.log('Final request headers:', config.headers);
+        // console.log('Final request headers:', config.headers);
         return config;
       },
       (error) => {
@@ -483,7 +540,7 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     const { method = 'GET', data, params } = options;
 
-    console.log('Request config:', { method, endpoint, dataType: data?.constructor?.name, isFormData: data instanceof FormData });
+    // console.log('Request config:', { method, endpoint, dataType: data?.constructor?.name, isFormData: data instanceof FormData });
 
     const config: any = {
       method,
@@ -661,8 +718,8 @@ class ApiClient {
 
   // Product endpoints
   async createProduct(product: CreateProductRequest, imageFile?: File, imageCollectionFiles?: File[]): Promise<ApiResponse<Product>> {
-    console.log('=== CREATE PRODUCT DEBUG ===');
-    console.log('createProduct called with:', { product, imageFile, imageCollectionFiles });
+    // console.log('=== CREATE PRODUCT DEBUG ===');
+    // console.log('createProduct called with:', { product, imageFile, imageCollectionFiles });
     
     const formData = new FormData();
     
@@ -674,32 +731,32 @@ class ApiClient {
     
     if (imageFile) {
       formData.append('image_path', imageFile);
-      console.log('Added image_path file:', imageFile.name, imageFile.size, 'bytes');
+      // console.log('Added image_path file:', imageFile.name, imageFile.size, 'bytes');
     }
     
     if (imageCollectionFiles && imageCollectionFiles.length > 0) {
       imageCollectionFiles.forEach((file, index) => {
         formData.append(`image_collection_url`, file);
-        console.log(`Added image_collection_url file ${index}:`, file.name, file.size, 'bytes');
+        // console.log(`Added image_collection_url file ${index}:`, file.name, file.size, 'bytes');
       });
     }
 
     // Debug FormData contents
-    console.log('FormData entries before sending:');
+    // console.log('FormData entries before sending:');
     for (let [key, value] of formData.entries()) {
-      console.log(`  ${key}:`, value instanceof File ? `File(${value.name}, ${value.size} bytes)` : value);
+      // console.log(`  ${key}:`, value instanceof File ? `File(${value.name}, ${value.size} bytes)` : value);
     }
     
     // Log FormData type and size
-    console.log('FormData type:', formData.constructor.name);
-    console.log('FormData is FormData instance:', formData instanceof FormData);
+    // console.log('FormData type:', formData.constructor.name);
+    // console.log('FormData is FormData instance:', formData instanceof FormData);
 
     try {
       const response = await this.request<Product>('/products', {
         method: 'POST',
         data: formData,
       });
-      console.log('createProduct response:', response);
+      // console.log('createProduct response:', response);
       return response;
     } catch (error) {
       console.error('createProduct error:', error);
@@ -838,7 +895,7 @@ class ApiClient {
   }
 
   async distributeStock(request: DistributeStockRequest): Promise<ApiResponse<void>> {
-    console.log("API distributeStock called with:", request);
+    // console.log("API distributeStock called with:", request);
     return this.request<void>(`/stocks/distribute`, {
       method: 'POST',
       data: request,
@@ -930,6 +987,64 @@ class ApiClient {
     return this.request(`/stores/payment-methods/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  // Transaction endpoints
+  async listTransactions(params: TransactionListParams = {}): Promise<ApiResponse<{ transactions: Transaction[] }>> {
+    const queryParams = new URLSearchParams();
+
+    const mapping: Record<string, string | undefined> = {
+      page: params.page?.toString(),
+      page_size: params.page_size?.toString(),
+      status: params.status,
+      user_id: params.user_id,
+      payment_method: params.payment_method,
+      transaction_code: params.transaction_code,
+      start_date: params.start_date,
+      end_date: params.end_date,
+      sort_by: params.sort_by,
+      sort_order: params.sort_order,
+      location_id: params.location_id,
+      search: params.search,
+    };
+
+    Object.entries(mapping).forEach(([key, value]) => {
+      if (value) {
+        queryParams.append(key, value);
+      }
+    });
+
+    if (params.location_ids && params.location_ids.length > 0) {
+      queryParams.append('location_ids', params.location_ids.join(','));
+    }
+
+    const queryString = queryParams.toString();
+    const url = queryString ? `/transactions/required?${queryString}` : '/transactions/required';
+    return this.request(url);
+  }
+
+  async approveTransactionPayment(transactionId: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`/transactions/required/${transactionId}/approve-payment`, {
+      method: 'POST',
+    });
+  }
+
+  async approveTransactionDelivery(transactionId: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`/transactions/required/${transactionId}/approve-delivery`, {
+      method: 'POST',
+    });
+  }
+
+  async getDashboardAnalytics(params?: { range_days?: number; store_id?: string }): Promise<ApiResponse<DashboardAnalyticsResponse>> {
+    const query = new URLSearchParams();
+    if (params?.range_days) {
+      query.append('range_days', params.range_days.toString());
+    }
+    if (params?.store_id) {
+      query.append('store_id', params.store_id);
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request<DashboardAnalyticsResponse>(`/dashboard/analytics/overview${suffix}`);
   }
 
   // Menu endpoints

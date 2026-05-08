@@ -51,6 +51,7 @@ export default function MasterRoles() {
   const [copyTargetRole, setCopyTargetRole] = useState<string>("");
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [deleteRole, setDeleteRole] = useState<{ id: string; name: string } | null>(null);
 
   // Query for roles with access
     const { data: rolesData, isLoading, refetch, error } = useQuery({
@@ -122,7 +123,6 @@ export default function MasterRoles() {
   };
 
   const handleSaveRole = async () => {
-    try {
       if (!newRoleName.trim()) {
         toast.error("Role name is required");
         return;
@@ -131,9 +131,16 @@ export default function MasterRoles() {
       setIsCreating(true);
 
       if (editingRole) {
-        // Update existing role permissions
-        await accessRoleService.setRolePermissions(editingRole.id, selectedPermissions);
-        toast.success("Role permissions updated successfully");
+        // Update existing role name/description first
+        await apiClient.updateRole(editingRole.id, {
+          role_name: newRoleName,
+          description: newRoleDescription
+        });
+        // Then update permissions
+        const setRole = await accessRoleService.setRolePermissions(editingRole.id, selectedPermissions);
+        console.log(setRole);
+        
+        toast.success("Role updated successfully");
       } else {
         // Create new role using accessRoleService
         console.log('Creating new role:', { role_name: newRoleName, description: newRoleDescription });
@@ -184,6 +191,8 @@ export default function MasterRoles() {
       setNewRoleDescription("");
       setSelectedPermissions({} as Record<MenuKey, "hidden" | "read" | "write">);
       refetch();
+    try {
+
     } catch (error) {
       console.error('Error saving role:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save role');
@@ -192,22 +201,26 @@ export default function MasterRoles() {
     }
   };
 
-  const handleDeleteRole = async (roleId: string, roleName: string) => {
+  const handleDeleteRole = (roleId: string, roleName: string) => {
     if (roleName === "Super Admin") {
       toast.error("Cannot delete Super Admin role");
       return;
     }
+    setDeleteRole({ id: roleId, name: roleName });
+  };
+
+  const confirmDeleteRole = async () => {
+    if (!deleteRole) return;
 
     try {
-      const confirmed = window.confirm(`Are you sure you want to delete role "${roleName}"? This will also delete all associated permissions.`);
-      if (!confirmed) return;
-
-      await apiClient.deleteRole(roleId);
+      await apiClient.deleteRole(deleteRole.id);
       toast.success("Role deleted successfully");
-      refetch();
+      await refetch();
+      setDeleteRole(null);
     } catch (error) {
       console.error('Delete role error:', error);
       toast.error("Failed to delete role");
+      setDeleteRole(null);
     }
   };
 
@@ -431,6 +444,44 @@ export default function MasterRoles() {
                     Copy
                   </Button>
                   <Button variant="outline" onClick={() => setShowCopyDialog(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Confirmation Modal */}
+          <Dialog open={!!deleteRole} onOpenChange={() => setDeleteRole(null)}>
+            <DialogContent className="glass-card max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <Trash2 className="h-5 w-5" />
+                  Delete Role
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Are you sure you want to delete role <strong>"{deleteRole?.name}"</strong>?
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    This action cannot be undone and will also delete all associated permissions.
+                  </p>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    className="flex-1"
+                    variant="destructive"
+                    onClick={confirmDeleteRole}
+                  >
+                    Delete Role
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setDeleteRole(null)}
+                    className="flex-1"
+                  >
                     Cancel
                   </Button>
                 </div>

@@ -41,7 +41,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter basename="/app-commerce">
+      <BrowserRouter basename="/celestia">
         <AuthProvider>
           <Routes>
             {/* Public Commerce Routes */}

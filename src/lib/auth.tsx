@@ -34,54 +34,6 @@ export interface AuthUser {
 
 type PermissionMap = Record<MenuKey, PermissionMode>;
 
-const ROLE_PERMISSIONS: Record<RoleName, PermissionMap> = {
-  super_admin: {
-    dashboard: "write",
-    transactions: "write",
-    products: "write",
-    customers: "write",
-    koperasi: "write",
-    store: "write",
-    cart: "write",
-    master_users: "write",
-    master_locations: "write",
-    master_roles: "write",
-    master_stock: "write",
-    master_products: "write",
-    master_stores: "write",
-  },
-  staff_internal: {
-    dashboard: "read",
-    transactions: "write",
-    products: "write",
-    customers: "write",
-    koperasi: "read",
-    store: "read",
-    cart: "write",
-    master_users: "hidden",
-    master_locations: "read",
-    master_roles: "hidden",
-    master_stock: "write",
-    master_products: "write",
-    master_stores: "read",
-  },
-  sales_external: {
-    dashboard: "read",
-    transactions: "read",
-    products: "read",
-    customers: "hidden",
-    koperasi: "hidden",
-    store: "write",
-    cart: "write",
-    master_users: "hidden",
-    master_locations: "hidden",
-    master_roles: "hidden",
-    master_stock: "hidden",
-    master_products: "hidden",
-    master_stores: "hidden",
-  },
-};
-
 // This is for demo purposes only - in production, this will be replaced with actual API calls
 const LOGIN_USERS: Array<AuthUser & { password: string }> = [
   {

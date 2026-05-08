@@ -10,7 +10,7 @@ import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
 
 const roleRedirectMap: Record<RoleName, string> = {
   super_admin: "/dashboard",
-  staff_internal: "/transactions", 
+  staff_internal: "/dashboard", 
   sales_external: "/store",
 };
 

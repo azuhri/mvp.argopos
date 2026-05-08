@@ -21,7 +21,7 @@ interface SidebarProps {
 
 export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
-  const { canRead } = useAuth();
+  const { canRead, user } = useAuth();
   
   // Fetch full user data to get assigned_stores
   const { data: fullUser } = useQuery({
@@ -32,7 +32,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
   const visibleGroups = getFilteredNavigation(assignedStoresCount).map(group => ({
     ...group,
-    listMenus: group.listMenus.filter(item => item.key)//canRead(item.key)),
+    listMenus: group.listMenus.filter(() => group.role !== 'super_admin' || user?.role === 'super_admin'),
   })).filter(group => group.listMenus.length > 0);
 
   return (
