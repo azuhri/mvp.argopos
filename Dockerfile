@@ -17,8 +17,8 @@ FROM nginx:alpine
 # copy config nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# copy hasil build ke nginx
-COPY --from=builder /app/dist /usr/share/nginx/html
+# copy hasil build ke subfolder celestia
+COPY --from=builder /app/dist /usr/share/nginx/html/celestia
 
 EXPOSE 80
 
