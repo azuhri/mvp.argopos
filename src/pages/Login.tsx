@@ -62,7 +62,7 @@ export default function Login() {
       setSubmitting(false);
 
       const targetPath = location.state?.from;
-      if (targetPath && targetPath !== "/auth/sign-in") {
+      if (targetPath && targetPath !== "/celestia/auth/sign-in") {
         navigate(targetPath, { replace: true });
         return;
       }
