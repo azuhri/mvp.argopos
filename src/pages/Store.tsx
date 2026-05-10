@@ -245,7 +245,7 @@ export default function Store() {
                   id: product.id,
                   name: product.master_product.product_name,
                   price: product.base_price,
-                  image_url: product.master_product.image_url,
+                  image_url: config.apiUrl + "/" + product.master_product.image_path,
                   stock: product.stock,
                   category: product.master_product.category || "",
                   discount_price: product.discount_price,
