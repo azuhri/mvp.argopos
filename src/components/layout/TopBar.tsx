@@ -37,13 +37,13 @@ export function TopBar({ title }: TopBarProps) {
       <h1 className="text-lg font-semibold text-foreground">{title}</h1>
 
       <div className="flex items-center gap-3">
-        <div className="hidden sm:flex relative">
+        {/* <div className="hidden sm:flex relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search..."
             className="pl-9 w-56 h-9 bg-secondary/50 border-border/50 focus:bg-card"
           />
-        </div>
+        </div> */}
 
         <button className="relative h-9 w-9 rounded-lg flex items-center justify-center bg-secondary hover:bg-accent transition-colors btn-tap">
           <Bell className="h-4 w-4" />

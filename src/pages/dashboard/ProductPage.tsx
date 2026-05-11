@@ -64,7 +64,7 @@ export default function ProductPage() {
 
   return (
     <AppLayout title="Products">
-      <DashboardMobileNav />
+      {/* <DashboardMobileNav /> */}
       <div>
         {/* Filters */}
         <GlassCard className="mb-4">

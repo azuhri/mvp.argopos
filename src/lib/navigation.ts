@@ -40,7 +40,7 @@ export const NAV_GROUPS_MENUS: NavGroupConfig[] = [
     listMenus: [
       { key: "dashboard", path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, mobile: true },
       { key: "transactions", path: "/dashboard/transactions", label: "Transactions", icon: BadgeDollarSign, mobile: true },
-      { key: "customers", path: "/customers", label: "Customers", icon: Users },
+      { key: "customers", path: "/customers", label: "Customers", icon: Users, mobile: true },
       // { key: "products", path: "/products", label: "Products", icon: Package, mobile: true },
       { key: "koperasi", path: "/koperasi", label: "Koperasi", icon: Building2, mobile: true },
     ],

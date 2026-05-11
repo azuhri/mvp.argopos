@@ -87,12 +87,18 @@ export class StoreService {
   ): Promise<{ transactions: Transaction[]; total: number }> {
     const response = await apiClient.getStoreTransactions(locationId, params);
 
-    if (!response.success || !response.data) {
+    console.log('StoreService getStoreTransactions response:', JSON.stringify(response, null, 2));
+
+    if (!response.success) {
+      console.error('Response success is false:', response);
       throw new Error(response.message || "Failed to get transactions");
     }
 
+    const transactions = response.data || [];
+    console.log('Returning transactions:', transactions);
+
     return {
-      transactions: response.data,
+      transactions,
       total: response.meta?.total || 0,
     };
   }

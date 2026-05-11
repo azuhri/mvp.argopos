@@ -124,6 +124,17 @@ export interface StorePaymentMethod {
   updated_at: string;
 }
 
+export interface TransactionCart {
+  id: string;
+  product_stock_id: string;
+  amount: number;
+  qty: number;
+  product_details?: {
+    product_name?: string;
+    image_path?: string;
+  };
+}
+
 export interface Transaction {
   id: string;
   transaction_code?: string;
@@ -143,6 +154,10 @@ export interface Transaction {
   created_at: string;
   customer_name?: string;
   payment_type?: string;
+  customer_email?: string;
+  customer_no_wa?: string;
+  customer_employee_code?: string;
+  transaction_carts?: TransactionCart[];
 }
 
 export interface DashboardAnalyticsSummary {
@@ -1072,6 +1087,10 @@ class ApiClient {
     const queryString = queryParams.toString();
     const url = queryString ? `/transactions/required?${queryString}` : '/transactions/required';
     return this.request(url);
+  }
+
+  async getTransaction(transactionId: string): Promise<ApiResponse<Transaction>> {
+    return this.request<Transaction>(`/transactions/${transactionId}`);
   }
 
   async approveTransactionPayment(transactionId: string): Promise<ApiResponse<void>> {

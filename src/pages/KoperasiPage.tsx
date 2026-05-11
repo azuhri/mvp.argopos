@@ -6,7 +6,7 @@ import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Building2, User, Eye, Search } from "lucide-react";
+import { Building2, User, Eye, Search, ShoppingBasket, Building2Icon, Users2 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { storeService } from "@/lib/services/storeService";
@@ -137,16 +137,26 @@ export default function KoperasiPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                   <div className="flex items-center gap-1 min-w-0">
-                    <User className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{store.assigned_users?.length || 0} User</span>
+                    <Users2 className="h-3 w-3 shrink-0" />
+                    <span className="truncate font-semibold my-2">{store.assigned_users?.length || 0} Assigned User</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 pt-3 border-t border-border/30">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={() => openDetail(store)}>
-                    <Eye className="h-3 w-3 mr-1" /> Detail
+                <div className="flex flex-col w-full sm:flex-row items-center gap-2 border-t border-border/30">
+                  <Button variant="outline" size="lg" className="h-7 w-full bg-primary text-sm text-primary-foreground py-2 sm:py-4 flex-1" onClick={() => openDetail(store)}>
+                    <Building2Icon size={25} />
+                    Setting Store
+                  </Button>
+                  <Button variant="outline" size="lg" className="h-7 w-full bg-secondary text-sm text-primary py-2 sm:py-4 flex-1"
+                    onClick={() => {
+                      localStorage.setItem('selectedLocationCode', store.location_code);
+                      window.location.href = `/celestia/commerce`
+                    }}
+                  >
+                    <ShoppingBasket size={25} />
+                    Catalog Product
                   </Button>
                 </div>
               </GlassCard>

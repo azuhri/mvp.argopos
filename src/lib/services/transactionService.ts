@@ -45,6 +45,14 @@ class TransactionService {
       throw new Error(response.message || 'Failed to approve delivery');
     }
   }
+
+  async getTransactionDetail(transactionId: string): Promise<Transaction> {
+    const response = await apiClient.getTransaction(transactionId);
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to fetch transaction detail');
+    }
+    return response.data;
+  }
 }
 
 export const transactionService = new TransactionService();

@@ -1,12 +1,13 @@
 import { FormEvent, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, Lock, Mail, Phone, Snowflake } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Mail, Phone, ShoppingBag, Snowflake } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { RoleName, useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
+import { config } from "@/lib/config";
 
 const roleRedirectMap: Record<RoleName, string> = {
   super_admin: "/dashboard",
@@ -87,11 +88,11 @@ export default function Login() {
       >
         <div className="flex items-center gap-3 mb-6">
           <div className="h-11 w-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
-            <Snowflake className="h-5 w-5" />
+            <ShoppingBag className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground">ArgoPOS</h1>
-            <p className="text-xs text-muted-foreground">CMS + CRM + POS + E-commerce</p>
+            <h1 className="text-xl font-bold text-foreground">{config.appName}</h1>
+            <p className="text-xs text-muted-foreground">CMS + E-commerce Celestia</p>
           </div>
         </div>
 
@@ -146,13 +147,6 @@ export default function Login() {
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Masuk"}
           </Button>
         </form>
-
-        <div className="mt-5 text-xs text-muted-foreground space-y-1">
-          <p>Demo account:</p>
-          <p>- superadmin@argopos.id / admin123</p>
-          <p>- staff@argopos.id / staff123</p>
-          <p>- sales@argopos.id / sales123</p>
-        </div>
       </motion.div>
     </div>
   );

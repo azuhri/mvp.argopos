@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Calendar, CheckCircle, Package, Search, Store, ArrowUpDown } from "lucide-react";
+import { Calendar, CheckCircle, Eye, Package, Search, Store, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -23,10 +23,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { transactionService, type TransactionListResult } from "@/lib/services/transactionService";
 import { userService } from "@/lib/services/userService";
-import type { Transaction } from "@/lib/api";
+import { config } from "@/lib/config";
+import type { Transaction, TransactionCart } from "@/lib/api";
 
 const PAYMENT_OPTIONS = [
   { label: "All Methods", value: "all" },
@@ -64,6 +66,27 @@ const getStatusBadgeKey = (status: string) => {
   return map[status] || "inactive";
 };
 
+const paymentMethodLabel = (paymentType: string) => {
+  let value;
+  switch (paymentType) {
+    case 'qris':
+      value = 'QRIS';
+      break;
+    case 'cash':
+      value = 'Tunai';
+      break;
+    case 'transfer_rekening':
+      value = 'Transfer Bank';
+      break;
+    default:
+      value = paymentType;
+  }
+  return <Badge variant="secondary">{value}</Badge>;
+};
+
+
+
+
 export default function TransactionPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -78,6 +101,10 @@ export default function TransactionPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [approvalTarget, setApprovalTarget] = useState<{ transaction: Transaction; action: "payment" | "delivery" } | null>(null);
+  const [cartModalOpen, setCartModalOpen] = useState(false);
+  const [cartModalLoading, setCartModalLoading] = useState(false);
+  const [cartModalTransaction, setCartModalTransaction] = useState<Transaction | null>(null);
+  const [cartModalItems, setCartModalItems] = useState<TransactionCart[]>([]);
 
   const { data: currentUser } = useQuery({
     queryKey: ["current-user"],
@@ -97,6 +124,27 @@ export default function TransactionPage() {
   );
 
   const assignedStoreIds = useMemo(() => storeOptions.map((store) => store.id), [storeOptions]);
+
+  const closeCartModal = () => {
+    setCartModalOpen(false);
+    setCartModalTransaction(null);
+    setCartModalItems([]);
+  };
+
+  const handleViewCartItems = async (transactionId: string) => {
+    setCartModalOpen(true);
+    setCartModalLoading(true);
+    setCartModalItems([]);
+    try {
+      const detail = await transactionService.getTransactionDetail(transactionId);
+      setCartModalTransaction(detail);
+      setCartModalItems(detail.transaction_carts || []);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to load transaction items");
+    } finally {
+      setCartModalLoading(false);
+    }
+  };
 
   const locationScope = useMemo(() => {
     if (isSuperAdmin) {
@@ -179,33 +227,35 @@ export default function TransactionPage() {
 
   return (
     <AppLayout title="Transactions">
-      <DashboardMobileNav />
+      {/* <DashboardMobileNav /> */}
       <div className="space-y-4">
-        <GlassCard>
+        <GlassCard className="p-4">
           <div className="p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <Store className="h-5 w-5 text-primary" />
+            <div className="flex items-start gap-3">
+              <div className="hidden md:block">
+                <Store className="h-10 w-10 text-primary" />
+              </div>
               <div>
                 <h2 className="text-lg font-semibold">Transaction Overview</h2>
-                <p className="text-sm text-muted-foreground">
+                {/* <p className="text-md text-muted-foreground">
                   Monitor cooperative transactions with role-aware access and responsive controls.
-                </p>
-              </div>
-            </div>
-            {!isSuperAdmin && (
-              <div className="flex flex-wrap gap-2 text-sm">
-                <span className="text-muted-foreground">Assigned Stores:</span>
-                {storeOptions.length > 0 ? (
-                  storeOptions.map((store) => (
-                    <Badge key={store.id} variant="outline">
-                      {store.name}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge variant="secondary">No store assignment</Badge>
+                </p> */}
+                {!isSuperAdmin && (
+                  <div className="flex flex-wrap gap-2 text-sm mt-1">
+                    <span className="text-muted-foreground">Assigned Stores:</span>
+                    {storeOptions.length > 0 ? (
+                      storeOptions.map((store) => (
+                        <Badge key={store.id} variant="outline">
+                          {store.name}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge variant="secondary">No store assignment</Badge>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         </GlassCard>
 
@@ -218,20 +268,9 @@ export default function TransactionPage() {
         ) : (
           <>
             <GlassCard>
-              <div className="p-4 space-y-4">
+              <div className="space-y-4">
                 <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                  <div className="flex items-center gap-2">
-                    <Search className="h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by code, customer, or payment code"
-                      value={search}
-                      onChange={(e) => {
-                        setSearch(e.target.value);
-                        setPage(1);
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-start gap-2">
                     <Label className="text-sm">Store</Label>
                     <Select value={storeFilter} onValueChange={handleFilterChange(setStoreFilter)}>
                       <SelectTrigger className="w-full">
@@ -247,7 +286,7 @@ export default function TransactionPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-start gap-2">
                     <Label className="text-sm">Status</Label>
                     <Select value={statusFilter} onValueChange={handleFilterChange(setStatusFilter)}>
                       <SelectTrigger>
@@ -262,7 +301,7 @@ export default function TransactionPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-start gap-2">
                     <Label className="text-sm">Payment</Label>
                     <Select value={paymentFilter} onValueChange={handleFilterChange(setPaymentFilter)}>
                       <SelectTrigger>
@@ -277,9 +316,10 @@ export default function TransactionPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-start gap-2">
                     <Label className="text-sm">Transaction Code</Label>
                     <Input
+                      className="placeholder:text-xs"
                       placeholder="TRX-XXXXX"
                       value={transactionCode}
                       onChange={(e) => {
@@ -288,21 +328,25 @@ export default function TransactionPage() {
                       }}
                     />
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Label className="text-sm">Date</Label>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex flex-col sm:flex-row gap-2 justify-between items-center">
+                    <div className="w-full flex flex-col items-start gap-2">
+                      <Label className="text-sm">Start Date</Label>
                       <Input
                         type="date"
+                        className="w-full flex justify-between"
                         value={startDate}
                         onChange={(e) => {
                           setStartDate(e.target.value);
                           setPage(1);
                         }}
                       />
-                      <span className="text-muted-foreground">-</span>
+
+                    </div>
+                    <div className="w-full flex flex-col items-start gap-2">
+                      <Label className="text-sm">End Date</Label>
                       <Input
                         type="date"
+                        className="w-full flex justify-between"
                         value={endDate}
                         onChange={(e) => {
                           setEndDate(e.target.value);
@@ -311,25 +355,27 @@ export default function TransactionPage() {
                       />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-start gap-2">
                     <Label className="text-sm">Sort by</Label>
-                    <Select value={sortBy} onValueChange={handleFilterChange(setSortBy)}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="created_at">Created At</SelectItem>
-                        <SelectItem value="status">Status</SelectItem>
-                        <SelectItem value="total_amount">Total Amount</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
-                    >
-                      <ArrowUpDown className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Select value={sortBy} onValueChange={handleFilterChange(setSortBy)}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="created_at">Created At</SelectItem>
+                          <SelectItem value="status">Status</SelectItem>
+                          <SelectItem value="total_amount">Total Amount</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
+                      >
+                        <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -337,6 +383,18 @@ export default function TransactionPage() {
 
             <GlassCard className="hidden md:block">
               <div className="p-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 z-10" />
+                  <Input
+                    className="pl-9 bg-card/70 backdrop-blur border-2 border-border/50"
+                    placeholder="Search by code, customer, or payment code"
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </div>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -366,11 +424,14 @@ export default function TransactionPage() {
                           <TableCell>
                             <StatusBadge status={getStatusBadgeKey(tx.status)} />
                           </TableCell>
-                          <TableCell className="capitalize">{tx.payment_type || "-"}</TableCell>
+                          <TableCell className="capitalize">{paymentMethodLabel(tx.payment_type) || "-"}</TableCell>
                           <TableCell>{formatCurrency(tx.total_amount)}</TableCell>
                           <TableCell>{new Date(tx.created_at).toLocaleString("id-ID")}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
+                              <Button size="sm" variant="outline" onClick={() => handleViewCartItems(tx.id)}>
+                                <Eye className="h-3 w-3 mr-1" /> Items
+                              </Button>
                               {tx.status === "WAITING_TO_PAYMENT" && (
                                 <Button size="sm" variant="outline" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
                                   <CheckCircle className="h-3 w-3 mr-1" />
@@ -404,7 +465,7 @@ export default function TransactionPage() {
                 <div className="text-center text-muted-foreground py-8">Loading transactions...</div>
               ) : transactions.length > 0 ? (
                 transactions.map((tx) => (
-                  <GlassCard key={tx.id}>
+                  <GlassCard className="p-2" key={tx.id}>
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-4 space-y-3">
                       <div className="flex items-start justify-between">
                         <div>
@@ -419,26 +480,31 @@ export default function TransactionPage() {
                           <span className="text-muted-foreground">Total:</span> {formatCurrency(tx.total_amount)}
                         </div>
                         <div>
-                          <span className="text-muted-foreground">Payment:</span> {tx.payment_type || "-"}
+                          <span className="text-muted-foreground">Payment:</span> {paymentMethodLabel(tx.payment_type)}
                         </div>
                         <div>
-                          <span className="text-muted-foreground">Items:</span> {tx.total_item}
+                          <span className="text-muted-foreground">Items:</span> {tx.transaction_carts?.length || 0}
                         </div>
                         <div>
                           <span className="text-muted-foreground">Created:</span> {new Date(tx.created_at).toLocaleDateString("id-ID")}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        {tx.status === "WAITING_TO_PAYMENT" && (
-                          <Button className="flex-1" variant="outline" size="sm" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
-                            <CheckCircle className="h-3 w-3 mr-1" /> Approve Payment
-                          </Button>
-                        )}
-                        {tx.status === "PAID" && (
-                          <Button className="flex-1" variant="outline" size="sm" onClick={() => setApprovalTarget({ transaction: tx, action: "delivery" })}>
-                            <Package className="h-3 w-3 mr-1" /> Prepare
-                          </Button>
-                        )}
+                      <div className="flex flex-col gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleViewCartItems(tx.id)}>
+                          <Eye className="h-3 w-3 mr-1" /> View Items
+                        </Button>
+                        <div className="flex gap-2">
+                          {tx.status === "WAITING_TO_PAYMENT" && (
+                            <Button className="flex-1" variant="outline" size="sm" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
+                              <CheckCircle className="h-3 w-3 mr-1" /> Approve Payment
+                            </Button>
+                          )}
+                          {tx.status === "PAID" && (
+                            <Button className="flex-1" variant="outline" size="sm" onClick={() => setApprovalTarget({ transaction: tx, action: "delivery" })}>
+                              <Package className="h-3 w-3 mr-1" /> Prepare
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </motion.div>
                   </GlassCard>
@@ -449,12 +515,12 @@ export default function TransactionPage() {
             </div>
 
             <GlassCard>
-              <div className="p-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-sm text-muted-foreground">
                   Showing {transactions.length} of {total} transactions
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <div className="flex flex-row items-center gap-2">
                     <span className="text-sm">Rows:</span>
                     <Select
                       value={pageSize.toString()}
@@ -475,7 +541,7 @@ export default function TransactionPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-row items-center gap-2">
                     <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
                       Previous
                     </Button>
@@ -492,6 +558,51 @@ export default function TransactionPage() {
           </>
         )}
       </div>
+
+      <Dialog open={cartModalOpen} onOpenChange={(open) => {
+        if (!open) closeCartModal();
+        else setCartModalOpen(true);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Transaction Items</DialogTitle>
+            <DialogDescription>
+              {cartModalTransaction ? `Transaction ${cartModalTransaction.transaction_code || cartModalTransaction.id}` : 'Detail produk dalam transaksi'}
+            </DialogDescription>
+          </DialogHeader>
+          {cartModalLoading ? (
+            <div className="py-8 text-center text-muted-foreground">Loading items...</div>
+          ) : cartModalItems.length > 0 ? (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+              {cartModalItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-4 rounded-lg border p-3">
+                  {item.product_details?.image_path ? (
+                    <img
+                      src={`${config.apiUrl}/${item.product_details.image_path}`}
+                      alt={item.product_details?.product_name || 'Product'}
+                      className="w-16 h-16 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                      No Image
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">{item.product_details?.product_name || 'Product'}</p>
+                    <p className="text-sm text-muted-foreground">{formatCurrency(item.amount || 0)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Qty</p>
+                    <p className="font-semibold">x{item.qty}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">No items available</div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!approvalTarget} onOpenChange={(open) => !open && !approveMutation.isPending && setApprovalTarget(null)}>
         <AlertDialogContent>

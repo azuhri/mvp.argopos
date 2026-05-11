@@ -19,11 +19,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, Save, X, Plus, Calendar, Package } from "lucide-react";
+import { Building2, User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, Save, X, Plus, Calendar, Package, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { storeService } from "@/lib/services/storeService";
 import { stockService } from "@/lib/services/stockService";
-import { Store, StoreAssignedUser, Transaction, StorePaymentMethod, Stock } from "@/lib/api";
+import { transactionService } from "@/lib/services/transactionService";
+import { Store, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, TransactionCart } from "@/lib/api";
 import { config } from "@/lib/config";
 
 export default function KoperasiDetailPage() {
@@ -44,6 +45,7 @@ export default function KoperasiDetailPage() {
     return now.toISOString().split('T')[0];
   });
   const [summaryData, setSummaryData] = useState({ total_transactions: 0, total_revenue: 0, total_stock: 0 });
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Transaction filters
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -59,8 +61,13 @@ export default function KoperasiDetailPage() {
   const [transactionSortBy, setTransactionSortBy] = useState('created_at');
   const [transactionSortOrder, setTransactionSortOrder] = useState<'asc' | 'desc'>('desc');
   const [transactionTotal, setTransactionTotal] = useState(0);
+  const [transactionSearch, setTransactionSearch] = useState("");
   const [approvePaymentOpen, setApprovePaymentOpen] = useState(false);
   const [approvingTransactionId, setApprovingTransactionId] = useState<string | null>(null);
+  const [cartModalOpen, setCartModalOpen] = useState(false);
+  const [cartModalLoading, setCartModalLoading] = useState(false);
+  const [cartModalTransaction, setCartModalTransaction] = useState<Transaction | null>(null);
+  const [cartModalItems, setCartModalItems] = useState<TransactionCart[]>([]);
 
   // Stock edit state
   const [stockEditOpen, setStockEditOpen] = useState(false);
@@ -89,7 +96,7 @@ export default function KoperasiDetailPage() {
       loadStoreDetail();
       loadSummaryData();
     }
-  }, [locationId, summaryStartDate, summaryEndDate]);
+  }, [locationId]);
 
   useEffect(() => {
     if (locationId && activeTab === 'transaction') {
@@ -107,7 +114,7 @@ export default function KoperasiDetailPage() {
         image_url: payment.image_url ? config.apiUrl + "/public/" + payment.image_url : '',
       }));
       console.log(data.payment_methods);
-      
+
       setStore(data);
     } catch (error) {
       toast.error("Failed to load store detail");
@@ -118,7 +125,7 @@ export default function KoperasiDetailPage() {
   };
 
   const paymentMethodLabel = (paymentType: string) => {
-    let value; 
+    let value;
     switch (paymentType) {
       case 'qris':
         value = 'QRIS';
@@ -127,7 +134,7 @@ export default function KoperasiDetailPage() {
         value = 'Tunai';
         break;
       case 'transfer_rekening':
-        value = 'Transfer Rekening';
+        value = 'Transfer Bank';
         break;
       default:
         value = paymentType;
@@ -137,18 +144,33 @@ export default function KoperasiDetailPage() {
 
   const loadSummaryData = async () => {
     try {
-      // TODO: Call API to get filtered summary data
-      // For now, use the store data
-      if (store) {
-        setSummaryData({
-          total_transactions: store.total_transactions,
-          total_revenue: store.total_revenue,
-          total_stock: store.total_stock,
-        });
-      }
+      setSummaryLoading(true);
+      // Fetch transactions for the date range to calculate summary metrics
+      const response = await storeService.getStoreTransactions(locationId!, {
+        start_date: summaryStartDate,
+        end_date: summaryEndDate,
+        page: 1,
+        page_size: 1000, // Get all transactions for accurate calculation
+      });
+
+      // Handle case where data is null (no transactions found)
+      const transactions = response.transactions || [];
+
+      // Calculate summary metrics from filtered transactions
+      const total_transactions = transactions.length;
+      const total_revenue = transactions.reduce((sum, tx) => sum + (tx.total_amount || 0), 0);
+      const total_stock = store?.total_stock || 0; // Stock is not transaction-dependent
+
+      setSummaryData({
+        total_transactions,
+        total_revenue,
+        total_stock,
+      });
     } catch (error) {
       toast.error("Failed to load summary data");
       console.error(error);
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -177,6 +199,18 @@ export default function KoperasiDetailPage() {
     }
   };
 
+  const filteredTransactions = transactions.filter((tx) => {
+    if (!transactionSearch) return true;
+    const query = transactionSearch.toLowerCase();
+    return (
+      (tx.transaction_code || '').toLowerCase().includes(query) ||
+      (tx.customer_name || '').toLowerCase().includes(query) ||
+      (tx.payment_code || '').toLowerCase().includes(query)
+    );
+  });
+
+  const totalTransactionPages = Math.max(1, Math.ceil(transactionTotal / transactionPageSize));
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -194,6 +228,32 @@ export default function KoperasiDetailPage() {
       'COMPLETED': 'completed',
     };
     return statusMap[status] || 'inactive';
+  };
+
+  const handleTransactionFilterChange = <T extends string>(setter: (value: T) => void) => (value: T) => {
+    setter(value);
+    setTransactionPage(1);
+  };
+
+  const closeCartModal = () => {
+    setCartModalOpen(false);
+    setCartModalTransaction(null);
+    setCartModalItems([]);
+  };
+
+  const handleViewTransactionItems = async (transactionId: string) => {
+    setCartModalOpen(true);
+    setCartModalLoading(true);
+    setCartModalItems([]);
+    try {
+      const detail = await transactionService.getTransactionDetail(transactionId);
+      setCartModalTransaction(detail);
+      setCartModalItems(detail.transaction_carts || []);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to load transaction items");
+    } finally {
+      setCartModalLoading(false);
+    }
   };
 
   const calculateFinalPrice = (stock: Stock) => {
@@ -499,54 +559,112 @@ export default function KoperasiDetailPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="users">User Assigned</TabsTrigger>
-          <TabsTrigger value="transaction">Transaction</TabsTrigger>
-          <TabsTrigger value="payment">Payment Method</TabsTrigger>
-        </TabsList>
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+          <Button
+            variant={activeTab === 'summary' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('summary')}
+            className="whitespace-nowrap"
+          >
+            Summary
+          </Button>
+          <Button
+            variant={activeTab === 'users' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('users')}
+            className="whitespace-nowrap"
+          >
+            User Assigned
+          </Button>
+          <Button
+            variant={activeTab === 'transaction' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('transaction')}
+            className="whitespace-nowrap"
+          >
+            Transaction
+          </Button>
+          <Button
+            variant={activeTab === 'payment' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('payment')}
+            className="whitespace-nowrap"
+          >
+            Payment Method
+          </Button>
+        </div>
 
         {/* Summary Tab */}
         <TabsContent value="summary" className="space-y-4">
           <GlassCard>
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold">Filter by Date Range</h4>
-                <div className="flex gap-2">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
+            <div className="p-6">
+              <div className="mb-6">
+                <h3 className="text-xl font-semibold mb-4">Summary Metrics</h3>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-sm">Start Date</Label>
                     <Input
                       type="date"
                       value={summaryStartDate}
                       onChange={(e) => setSummaryStartDate(e.target.value)}
-                      className="w-auto"
+                      className="w-full"
                     />
-                    <span className="text-muted-foreground">-</span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-sm">End Date</Label>
                     <Input
                       type="date"
                       value={summaryEndDate}
                       onChange={(e) => setSummaryEndDate(e.target.value)}
-                      className="w-auto"
+                      className="w-full"
                     />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={loadSummaryData}
+                      disabled={summaryLoading}
+                      className="w-full"
+                    >
+                      <Calendar className="h-4 w-4 mr-2" />
+                      {summaryLoading ? 'Loading...' : 'Apply Filter'}
+                    </Button>
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground mb-1">Total Transaksi</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    <AnimatedCounter end={summaryData.total_transactions} />
-                  </p>
+
+              {summaryLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center text-muted-foreground">Loading summary data...</div>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground mb-1">Revenue</p>
-                  <p className="text-2xl font-bold text-foreground">{formatCurrency(summaryData.total_revenue)}</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="p-6 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-200/30 hover:shadow-lg transition-shadow">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 rounded-lg bg-blue-500/20">
+                        <CreditCard className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <p className="text-sm text-muted-foreground font-medium">Total Transaksi</p>
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">
+                      <AnimatedCounter end={summaryData.total_transactions} />
+                    </p>
+                  </div>
+                  <div className="p-6 rounded-xl bg-gradient-to-br from-green-500/10 to-green-600/10 border border-green-200/30 hover:shadow-lg transition-shadow">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 rounded-lg bg-green-500/20">
+                        <Building2 className="h-5 w-5 text-green-600" />
+                      </div>
+                      <p className="text-sm text-muted-foreground font-medium">Revenue</p>
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">{formatCurrency(summaryData.total_revenue)}</p>
+                  </div>
+                  <div className="p-6 rounded-xl bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-200/30 hover:shadow-lg transition-shadow">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 rounded-lg bg-purple-500/20">
+                        <Package className="h-5 w-5 text-purple-600" />
+                      </div>
+                      <p className="text-sm text-muted-foreground font-medium">Total Stock</p>
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">{summaryData.total_stock}</p>
+                  </div>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground mb-1">Total Stock</p>
-                  <p className="text-2xl font-bold text-foreground">{summaryData.total_stock}</p>
-                </div>
-              </div>
+              )}
             </div>
           </GlassCard>
 
@@ -715,102 +833,132 @@ export default function KoperasiDetailPage() {
 
         {/* Transaction Tab */}
         <TabsContent value="transaction">
-          <GlassCard>
-            <div className="p-4">
-              <div className="flex flex-wrap gap-4 mb-4">
-                <div className="flex items-center gap-2">
-                  <Label>Status:</Label>
-                  <Select value={transactionStatus} onValueChange={setTransactionStatus}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="All" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="COMPLETED">Completed</SelectItem>
-                      <SelectItem value="PAID">Paid</SelectItem>
-                      <SelectItem value="PREPARING_PRODUCT">Preparing</SelectItem>
-                      <SelectItem value="READY_TO_PICKUP">Ready</SelectItem>
-                      <SelectItem value="WAITING_TO_PAYMENT">Waiting Payment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label>User:</Label>
-                  <Select value={transactionUser} onValueChange={setTransactionUser}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="All" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      {store?.assigned_users?.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>{user.username}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label>Payment Method:</Label>
-                  <Select value={transactionPaymentMethod} onValueChange={setTransactionPaymentMethod}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="All" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="qris">QRIS</SelectItem>
-                      <SelectItem value="transfer_rekening">Transfer</SelectItem>
-                      <SelectItem value="cutoff_hutang">Cutoff/Hutang</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label>Transaction Code:</Label>
-                  <Input
-                    placeholder="Search by code"
-                    value={transactionCode}
-                    onChange={(e) => setTransactionCode(e.target.value)}
-                    className="w-40"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="date"
-                    value={transactionStartDate}
-                    onChange={(e) => setTransactionStartDate(e.target.value)}
-                    className="w-auto"
-                  />
-                  <span className="text-muted-foreground">-</span>
-                  <Input
-                    type="date"
-                    value={transactionEndDate}
-                    onChange={(e) => setTransactionEndDate(e.target.value)}
-                    className="w-auto"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label>Sort By:</Label>
-                  <Select value={transactionSortBy} onValueChange={setTransactionSortBy}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="created_at">Created At</SelectItem>
-                      <SelectItem value="status">Status</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={transactionSortOrder} onValueChange={(v) => setTransactionSortOrder(v as 'asc' | 'desc')}>
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="desc">Desc</SelectItem>
-                      <SelectItem value="asc">Asc</SelectItem>
-                    </SelectContent>
-                  </Select>
+          <div className="space-y-4">
+            <GlassCard>
+              <div className="p-4 space-y-4">
+                <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                  <div className="flex flex-col items-start gap-2">
+                    <Label className="text-sm">Status</Label>
+                    <Select value={transactionStatus} onValueChange={handleTransactionFilterChange(setTransactionStatus)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="COMPLETED">Completed</SelectItem>
+                        <SelectItem value="PAID">Paid</SelectItem>
+                        <SelectItem value="PREPARING_PRODUCT">Preparing</SelectItem>
+                        <SelectItem value="READY_TO_PICKUP">Ready</SelectItem>
+                        <SelectItem value="WAITING_TO_PAYMENT">Waiting Payment</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col items-start gap-2">
+                    <Label className="text-sm">User</Label>
+                    <Select value={transactionUser} onValueChange={handleTransactionFilterChange(setTransactionUser)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {store?.assigned_users?.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>{user.username}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col items-start gap-2">
+                    <Label className="text-sm">Payment Method</Label>
+                    <Select value={transactionPaymentMethod} onValueChange={handleTransactionFilterChange(setTransactionPaymentMethod)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="qris">QRIS</SelectItem>
+                        <SelectItem value="transfer_rekening">Transfer</SelectItem>
+                        <SelectItem value="cutoff_hutang">Cutoff/Hutang</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col items-start gap-2">
+                    <Label className="text-sm">Transaction Code</Label>
+                    <Input
+                      className="placeholder:text-xs"
+                      placeholder="TRX-XXXXX"
+                      value={transactionCode}
+                      onChange={(e) => {
+                        setTransactionCode(e.target.value);
+                        setTransactionPage(1);
+                      }}
+                    />
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2 justify-between items-center">
+                    <div className="w-full flex flex-col items-start gap-2">
+                      <Label className="text-sm">Start Date</Label>
+                      <Input
+                        type="date"
+                        className="w-full"
+                        value={transactionStartDate}
+                        onChange={(e) => {
+                          setTransactionStartDate(e.target.value);
+                          setTransactionPage(1);
+                        }}
+                      />
+                    </div>
+                    <div className="w-full flex flex-col items-start gap-2">
+                      <Label className="text-sm">End Date</Label>
+                      <Input
+                        type="date"
+                        className="w-full"
+                        value={transactionEndDate}
+                        onChange={(e) => {
+                          setTransactionEndDate(e.target.value);
+                          setTransactionPage(1);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-start gap-2">
+                    <Label className="text-sm">Sort by</Label>
+                    <div className="flex gap-2">
+                      <Select value={transactionSortBy} onValueChange={handleTransactionFilterChange(setTransactionSortBy)}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="created_at">Created At</SelectItem>
+                          <SelectItem value="status">Status</SelectItem>
+                          <SelectItem value="total_amount">Total Amount</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setTransactionSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                      >
+                        <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              {/* Desktop/Tablet: Table View */}
-              <div className="hidden md:block">
+            </GlassCard>
+
+            <GlassCard className="hidden md:block">
+              <div className="p-4 space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 z-10" />
+                  <Input
+                    className="pl-9 bg-card/70 backdrop-blur border-2 border-border/50"
+                    placeholder="Search by code, customer, or payment code"
+                    value={transactionSearch}
+                    onChange={(e) => {
+                      setTransactionSearch(e.target.value);
+                      setTransactionPage(1);
+                    }}
+                  />
+                </div>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -830,8 +978,8 @@ export default function KoperasiDetailPage() {
                           Loading...
                         </TableCell>
                       </TableRow>
-                    ) : transactions.length > 0 ? (
-                      transactions.map((tx) => (
+                    ) : filteredTransactions.length > 0 ? (
+                      filteredTransactions.map((tx) => (
                         <TableRow key={tx.id}>
                           <TableCell className="font-mono text-xs">{tx.transaction_code || '-'}</TableCell>
                           <TableCell>{tx.customer_name || '-'}</TableCell>
@@ -842,16 +990,25 @@ export default function KoperasiDetailPage() {
                           <TableCell>{formatCurrency(tx.total_amount)}</TableCell>
                           <TableCell>{new Date(tx.created_at).toLocaleDateString()}</TableCell>
                           <TableCell>
-                            {tx.status === 'WAITING_TO_PAYMENT' && (
+                            <div className="flex flex-wrap gap-2">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleApprovePayment(tx.id)}
+                                onClick={() => handleViewTransactionItems(tx.id)}
                               >
-                                <CreditCard className="h-3 w-3 mr-1" />
-                                Confirm
+                                <Eye className="h-3 w-3 mr-1" /> Items
                               </Button>
-                            )}
+                              {tx.status === 'WAITING_TO_PAYMENT' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleApprovePayment(tx.id)}
+                                >
+                                  <CreditCard className="h-3 w-3 mr-1" />
+                                  Confirm
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -865,39 +1022,50 @@ export default function KoperasiDetailPage() {
                   </TableBody>
                 </Table>
               </div>
-              {/* Mobile: Card View */}
-              <div className="md:hidden space-y-3">
-                {transactionsLoading ? (
-                  <div className="text-center text-muted-foreground py-4">Loading...</div>
-                ) : transactions.length > 0 ? (
-                  transactions.map((tx) => (
-                    <motion.div
-                      key={tx.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="glass-card p-3"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <p className="font-mono text-xs text-primary">{tx.transaction_code || '-'}</p>
-                          <h4 className="font-semibold text-sm">{tx.customer_name || 'Guest'}</h4>
-                        </div>
-                        <StatusBadge status={getTransactionStatusBadge(tx.status)} />
+            </GlassCard>
+
+            {/* Mobile: Card View */}
+            <div className="md:hidden space-y-3">
+              {transactionsLoading ? (
+                <div className="text-center text-muted-foreground py-4">Loading...</div>
+              ) : filteredTransactions.length > 0 ? (
+                filteredTransactions.map((tx) => (
+                  <motion.div
+                    key={tx.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="glass-card p-3"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-mono text-xs text-primary">{tx.transaction_code || '-'}</p>
+                        <h4 className="font-semibold text-sm">{tx.customer_name || 'Guest'}</h4>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                        <div>
-                          <span className="text-muted-foreground">Payment:</span>{" "}
-                          <span className="font-medium capitalize">{paymentMethodLabel(tx.payment_type)}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Total:</span>{" "}
-                          <span className="font-medium">{formatCurrency(tx.total_amount)}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Date:</span>{" "}
-                          <span className="font-medium">{new Date(tx.created_at).toLocaleDateString()}</span>
-                        </div>
+                      <StatusBadge status={getTransactionStatusBadge(tx.status)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                      <div>
+                        <span className="text-muted-foreground">Payment:</span>{" "}
+                        <span className="font-medium capitalize">{paymentMethodLabel(tx.payment_type)}</span>
                       </div>
+                      <div>
+                        <span className="text-muted-foreground">Total:</span>{" "}
+                        <span className="font-medium">{formatCurrency(tx.total_amount)}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Date:</span>{" "}
+                        <span className="font-medium">{new Date(tx.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => handleViewTransactionItems(tx.id)}
+                      >
+                        <Eye className="h-3 w-3 mr-1" /> View Items
+                      </Button>
                       {tx.status === 'WAITING_TO_PAYMENT' && (
                         <Button
                           variant="outline"
@@ -909,100 +1077,113 @@ export default function KoperasiDetailPage() {
                           Confirm Payment
                         </Button>
                       )}
-                    </motion.div>
-                  ))
-                ) : (
-                  <div className="text-center text-muted-foreground py-4">Tidak ada transaction</div>
-                )}
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-4">
-                  <p className="text-sm text-muted-foreground">
-                    Total: {transactionTotal} transactions
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm">Rows per page:</Label>
-                    <Select value={transactionPageSize.toString()} onValueChange={(value) => setTransactionPageSize(value === 'all' ? transactionTotal : parseInt(value))}>
-                      <SelectTrigger className="w-20 h-8">
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="text-center text-muted-foreground py-4">Tidak ada transaction</div>
+              )}
+            </div>
+
+            <GlassCard>
+              <div className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {filteredTransactions.length} of {transactionTotal} transactions
+                </div>
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <div className="flex flex-row items-center gap-2">
+                    <span className="text-sm">Rows:</span>
+                    <Select
+                      value={transactionPageSize.toString()}
+                      onValueChange={(value) => {
+                        setTransactionPageSize(Number(value));
+                        setTransactionPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-24">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="25">25</SelectItem>
-                        <SelectItem value="50">50</SelectItem>
-                        <SelectItem value="all">All</SelectItem>
+                        {[10, 20, 50].map((size) => (
+                          <SelectItem key={size} value={size.toString()}>
+                            {size}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setTransactionPage((prev) => Math.max(1, prev - 1))}
-                    disabled={transactionPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <span className="flex items-center px-2">Page {transactionPage}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setTransactionPage((prev) => prev + 1)}
-                    disabled={transactions.length < transactionPageSize}
-                  >
-                    Next
-                  </Button>
+                  <div className="flex flex-row items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={transactionPage <= 1}
+                      onClick={() => setTransactionPage((prev) => Math.max(1, prev - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-sm">
+                      Page {transactionPage} / {totalTransactionPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={transactionPage >= totalTransactionPages}
+                      onClick={() => setTransactionPage((prev) => prev + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </GlassCard>
+            </GlassCard>
+          </div>
         </TabsContent>
 
         {/* Payment Method Tab */}
         <TabsContent value="payment">
           <GlassCard>
-            <div className="p-4">
-              <div className="flex items-center flex-col sm:flex gap-2 justify-between mb-3">
-                <h4 className="font-semibold flex items-center gap-2">
-                  <Upload className="h-4 w-4" />
+            <div className="p-4 md:p-6">
+              {/* Header Section */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <h4 className="font-semibold flex items-center gap-2 text-lg">
+                  <Upload className="h-5 w-5" />
                   Payment Methods
                 </h4>
-                <div className="flex-col md:flex gap-4">
-                  {/* QRIS Button - Show Edit if exists, otherwise Create */}
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                  {/* QRIS Button */}
                   {existingQris ? (
-                    <Button size="sm" className="w-full my-1" variant="outline" onClick={handleOpenQris}>
+                    <Button size="sm" variant="outline" onClick={handleOpenQris} className="w-full sm:w-auto">
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit QRIS
                     </Button>
                   ) : (
-                    <Button size="sm" className="w-full my-1" variant="outline" onClick={handleOpenQris}>
+                    <Button size="sm" variant="outline" onClick={handleOpenQris} className="w-full sm:w-auto">
                       <Plus className="h-4 w-4 mr-2" />
                       Tambah QRIS
                     </Button>
                   )}
 
-                  {/* Transfer Button - Always Create (can be multiple) */}
+                  {/* Transfer Button */}
                   {existingTransfer ? (
-                    <Button size="sm" className="w-full my-1" variant="outline" onClick={handleOpenTransfer}>
+                    <Button size="sm" variant="outline" onClick={handleOpenTransfer} className="w-full sm:w-auto">
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit Transfer
                     </Button>
                   ) : (
-                    <Button size="sm" className="w-full my-1" variant="outline" onClick={handleOpenTransfer}>
+                    <Button size="sm" variant="outline" onClick={handleOpenTransfer} className="w-full sm:w-auto">
                       <Plus className="h-4 w-4 mr-2" />
                       Tambah Transfer
                     </Button>
                   )}
 
-                  {/* Cutoff Button - Show Edit if exists, otherwise Create */}
+                  {/* Cutoff Button */}
                   {existingCutoff ? (
-                    <Button size="sm" className="w-full my-1" variant="outline" onClick={handleOpenCutoff}>
+                    <Button size="sm" variant="outline" onClick={handleOpenCutoff} className="w-full sm:w-auto">
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit Cutoff
                     </Button>
                   ) : (
-                    <Button size="sm" className="w-full my-1" variant="outline" onClick={handleOpenCutoff}>
+                    <Button size="sm" variant="outline" onClick={handleOpenCutoff} className="w-full sm:w-auto">
                       <Plus className="h-4 w-4 mr-2" />
                       Tambah Cutoff
                     </Button>
@@ -1011,14 +1192,14 @@ export default function KoperasiDetailPage() {
               </div>
 
               {/* Desktop Table View */}
-              <div className="hidden md:block">
+              <div className="hidden lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tipe</TableHead>
+                      <TableHead className="w-[200px]">Tipe</TableHead>
                       <TableHead>Detail</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Aksi</TableHead>
+                      <TableHead className="w-[100px]">Status</TableHead>
+                      <TableHead className="w-[120px] text-right">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1029,10 +1210,10 @@ export default function KoperasiDetailPage() {
                         </TableCell>
                         <TableCell>
                           {pm.image_url && (
-                            <img src={pm.image_url} alt={pm.payment_type} className="w-16 h-16 object-cover rounded mb-2" />
+                            <img src={pm.image_url} alt={pm.payment_type} className="w-20 h-20 object-cover rounded-lg mb-2 border" />
                           )}
                           {pm.payment_type === 'transfer_rekening' && pm.bank_name && (
-                            <div className="text-sm">
+                            <div className="text-sm space-y-1">
                               <p className="font-medium">{pm.bank_name}</p>
                               <p className="text-muted-foreground">{pm.account_number}</p>
                               <p className="text-muted-foreground">a.n. {pm.account_name}</p>
@@ -1047,9 +1228,9 @@ export default function KoperasiDetailPage() {
                         </TableCell>
                         <TableCell>
                           {pm.is_active ? (
-                            <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">Active</span>
+                            <Badge className="bg-green-100 text-green-700 hover:bg-green-200">Active</Badge>
                           ) : (
-                            <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">Inactive</span>
+                            <Badge variant="secondary">Inactive</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
@@ -1067,36 +1248,36 @@ export default function KoperasiDetailPage() {
                   </TableBody>
                 </Table>
                 {store.payment_methods.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    Tidak ada payment method
-                  </p>
+                  <div className="text-center py-12">
+                    <p className="text-sm text-muted-foreground">Tidak ada payment method</p>
+                  </div>
                 )}
               </div>
 
-              {/* Mobile/Tablet Card View */}
-              <div className="md:hidden grid grid-cols-1 gap-4">
+              {/* Tablet Grid View */}
+              <div className="hidden md:block lg:hidden grid grid-cols-1 md:grid-cols-2 gap-4">
                 {store.payment_methods.map((pm) => (
-                  <div key={pm.id} className="p-4 rounded-lg border">
-                    <div className="flex items-start justify-between mb-2">
+                  <div key={pm.id} className="p-4 rounded-lg border bg-card">
+                    <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <p className="font-medium capitalize">{pm.payment_type.replace('_', ' ')}</p>
                         {pm.is_active ? (
-                          <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full">Active</span>
+                          <Badge className="bg-green-100 text-green-700 hover:bg-green-200">Active</Badge>
                         ) : (
-                          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full">Inactive</span>
+                          <Badge variant="secondary">Inactive</Badge>
                         )}
                       </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="sm" onClick={() => handleEditPayment(pm)}>
-                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                          <Pencil className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => openDeletePayment(pm)}>
-                          <Trash2 className="h-3 w-3 text-destructive" />
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </div>
                     {pm.image_url && (
-                      <img src={pm.image_url} alt={pm.payment_type} className="w-full h-32 object-cover rounded mb-2" />
+                      <img src={pm.image_url} alt={pm.payment_type} className="w-24 h-24 object-cover rounded-lg mb-3 border" />
                     )}
                     {pm.payment_type === 'transfer_rekening' && pm.bank_name && (
                       <div className="text-sm text-muted-foreground space-y-1">
@@ -1106,22 +1287,110 @@ export default function KoperasiDetailPage() {
                       </div>
                     )}
                     {pm.payment_type === 'qris' && pm.account_name && (
-                      <p className="text-sm text-muted-foreground">
-                        a.n. {pm.account_name}
-                      </p>
+                      <p className="text-sm text-muted-foreground">a.n. {pm.account_name}</p>
                     )}
                   </div>
                 ))}
                 {store.payment_methods.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Tidak ada payment method
-                  </p>
+                  <div className="col-span-full text-center py-12">
+                    <p className="text-sm text-muted-foreground">Tidak ada payment method</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="hidden sm:block md:hidden lg:hidden grid grid-cols-1 gap-4">
+                {store.payment_methods.map((pm) => (
+                  <div key={pm.id} className="p-4 rounded-lg border bg-card">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium capitalize">{pm.payment_type.replace('_', ' ')}</p>
+                        {pm.is_active ? (
+                          <Badge className="bg-green-100 text-green-700 hover:bg-green-200">Active</Badge>
+                        ) : (
+                          <Badge variant="secondary">Inactive</Badge>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => handleEditPayment(pm)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openDeletePayment(pm)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                    {pm.image_url && (
+                      <img src={pm.image_url} alt={pm.payment_type} className="w-full h-32 object-cover rounded-lg mb-3 border" />
+                    )}
+                    {pm.payment_type === 'transfer_rekening' && pm.bank_name && (
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <p className="font-medium text-foreground">{pm.bank_name}</p>
+                        <p>{pm.account_number}</p>
+                        <p>a.n. {pm.account_name}</p>
+                      </div>
+                    )}
+                    {pm.payment_type === 'qris' && pm.account_name && (
+                      <p className="text-sm text-muted-foreground">a.n. {pm.account_name}</p>
+                    )}
+                  </div>
+                ))}
+                {store.payment_methods.length === 0 && (
+                  <div className="text-center py-12">
+                    <p className="text-sm text-muted-foreground">Tidak ada payment method</p>
+                  </div>
                 )}
               </div>
             </div>
           </GlassCard>
         </TabsContent>
       </Tabs>
+
+      {/* Transaction Items Modal */}
+      <Dialog open={cartModalOpen} onOpenChange={(open) => {
+        if (!open) closeCartModal();
+        else setCartModalOpen(true);
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Transaction Items</DialogTitle>
+            <DialogDescription>
+              {cartModalTransaction ? `Transaction ${cartModalTransaction.transaction_code || cartModalTransaction.id}` : 'Detail produk dalam transaksi'}
+            </DialogDescription>
+          </DialogHeader>
+          {cartModalLoading ? (
+            <div className="py-8 text-center text-muted-foreground">Loading items...</div>
+          ) : cartModalItems.length > 0 ? (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+              {cartModalItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-4 rounded-lg border p-3">
+                  {item.product_details?.image_path ? (
+                    <img
+                      src={`${config.apiUrl}/${item.product_details.image_path}`}
+                      alt={item.product_details?.product_name || 'Product'}
+                      className="w-16 h-16 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                      No Image
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">{item.product_details?.product_name || 'Product'}</p>
+                    <p className="text-sm text-muted-foreground">{formatCurrency(item.amount || 0)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Qty</p>
+                    <p className="font-semibold">x{item.qty}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">No items available</div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Stock Edit Dialog */}
       <Dialog open={stockEditOpen} onOpenChange={setStockEditOpen}>

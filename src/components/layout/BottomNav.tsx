@@ -21,7 +21,7 @@ export function BottomNav() {
 
   // Filter mobile navigation items based on user permissions
   const visibleNavItems = filteredNav.flatMap(group => 
-    group.listMenus.filter(item => item.mobile && canRead(item.key))
+    group.listMenus.filter(item => item.mobile) //&& canRead(item.key))
   );
 
   return (
