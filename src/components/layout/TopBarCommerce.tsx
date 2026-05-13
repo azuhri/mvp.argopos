@@ -47,7 +47,7 @@ export function TopBarCommerce({ title, locationCode, productName }: TopBarComme
     return (
         <header className="h-20 flex items-center justify-between px-4 md:px-6 border-b border-border/40 glass-strong sticky top-0 z-30">
             <div className="flex gap-2 items-center">
-                <Link to={`/${locationCode}/commerce`} className="flex items-center gap-2">
+                <Link to={`/commerce`} className="flex items-center gap-2">
                     <div className="p-2 px-2 rounded-sm bg-primary flex items-center justify-center">
                         <ShoppingBag className="h-10 w-10 text-primary-foreground" />
                     </div>

@@ -360,7 +360,6 @@ export default function StoreCart() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('argopos.auth.token')}`
         },
         body: JSON.stringify(transactionRequest)
       });
@@ -447,7 +446,7 @@ export default function StoreCart() {
           <h2 className="text-xl font-semibold mb-2">Keranjang Kosong</h2>
           <p className="text-muted-foreground mb-6">Belum ada produk di keranjang kamu</p>
           <Button asChild>
-            <Link to={`${locationCode}/commerce`}>Belanja Sekarang</Link>
+            <Link to={`/commerce`}>Belanja Sekarang</Link>
           </Button>
         </div>
       </AppLayoutCommerce>
@@ -456,7 +455,7 @@ export default function StoreCart() {
 
   return (
     <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-      <div className="max-w-6xl mx-auto px-4 py-2">
+      <div className="max-w-7xl mx-auto px-4 py-2">
         {/* Header */}
         <div className="flex flex-col items-start gap-6 mb-4">
           <Button variant="outline" size="sm" asChild>
@@ -479,96 +478,96 @@ export default function StoreCart() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
-            <AnimatePresence>
-              {items.map((item) => (
-                <motion.div
-                  key={item.productId}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <GlassCard className="p-4">
-                    <div className="flex items-center gap-4">
-                      {/* Product Image */}
-                      <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                        <img
-                          src={item.product.image_url}
-                          alt={item.product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+            <div className="">
+              <AnimatePresence>
+                {items.map((item) => (
+                  <motion.div
+                    key={item.productId}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <GlassCard className="p-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                        {/* Product Image */}
+                        <div className="flex gap-2">
+                          <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                            <img
+                              src={item.product.image_url}
+                              alt={item.product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
 
-                      {/* Product Info */}
-                      <div className="flex-1">
-                        <h3 className="font-semibold mb-1">{item.product.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {formatCurrency(item.product.price)}
-                        </p>
-                      </div>
+                          {/* Product Info */}
+                          <div className="flex-1">
+                            <h3 className="font-semibold mb-1">{item.product.name}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {formatCurrency(item.product.price)}
+                            </p>
+                          </div>
+                        </div>
 
-                      {/* Quantity Controls */}
-                      <div className="flex items-center gap-2">
+                        {/* Quantity Controls */}
+                        <div className="flex flex-row items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUpdateQty(item.productId, item.qty - 1)}
+                            disabled={updating === item.productId || item.qty <= 1}
+                          >
+                            {updating === item.productId ? (
+                              <LoadingSpinner size="sm" />
+                            ) : (
+                              <Minus className="h-3 w-3" />
+                            )}
+                          </Button>
+                          <span className="w-8 text-center font-medium">
+                            {item.qty}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUpdateQty(item.productId, item.qty + 1)}
+                            disabled={updating === item.productId}
+                          >
+                            {updating === item.productId ? (
+                              <LoadingSpinner size="sm" />
+                            ) : (
+                              <Plus className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+
+                        {/* Item Total */}
+                        <div className="text-right">
+                          <p className="font-semibold">
+                            <span className="text-gray-500">Subtotal: </span> {formatCurrency(item.product.price * item.qty)}
+                          </p>
+                        </div>
+
+                        {/* Remove Button */}
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleUpdateQty(item.productId, item.qty - 1)}
-                          disabled={updating === item.productId || item.qty <= 1}
-                        >
-                          {updating === item.productId ? (
-                            <LoadingSpinner size="sm" />
-                          ) : (
-                            <Minus className="h-3 w-3" />
-                          )}
-                        </Button>
-                        <span className="w-8 text-center font-medium">
-                          {item.qty}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUpdateQty(item.productId, item.qty + 1)}
+                          onClick={() => handleUpdateQty(item.productId, 0)}
                           disabled={updating === item.productId}
+                          className="text-red-500 hover:text-red-600"
                         >
                           {updating === item.productId ? (
                             <LoadingSpinner size="sm" />
                           ) : (
-                            <Plus className="h-3 w-3" />
+                            <Trash2 className="h-4 w-4" />
                           )}
                         </Button>
                       </div>
-
-                      {/* Item Total */}
-                      <div className="text-right">
-                        <p className="font-semibold">
-                          {formatCurrency(item.product.price * item.qty)}
-                        </p>
-                      </div>
-
-                      {/* Remove Button */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUpdateQty(item.productId, 0)}
-                        disabled={updating === item.productId}
-                        className="text-red-500 hover:text-red-600"
-                      >
-                        {updating === item.productId ? (
-                          <LoadingSpinner size="sm" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </GlassCard>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-
-          {/* Cart Summary */}
-          <div className="lg:col-span-1">
-            <GlassCard className="p-6 sticky top-4">
+                    </GlassCard>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+            <GlassCard>
               <h2 className="text-lg font-semibold mb-4">Ringkasan Belanja</h2>
 
               <div className="space-y-3 mb-4">
@@ -581,13 +580,19 @@ export default function StoreCart() {
                   <span className="text-green-600">Rp0</span>
                 </div>
               </div>
+            </GlassCard>
+          </div>
 
-              <Separator className="my-4" />
+
+          {/* Cart Summary */}
+          <div className="lg:col-span-1">
+            <GlassCard className="p-6 sticky top-4">
+              {/* <Separator className="my-4" /> */}
 
               {/* Customer Information Form */}
               <div className="mb-4">
                 <h3 className="font-medium mb-3">Informasi Customer</h3>
-                
+
                 {/* Customer Type Toggle */}
                 <div className="flex items-center space-x-2 mb-4">
                   <Checkbox
@@ -712,49 +717,48 @@ export default function StoreCart() {
                   >
                     <div className="space-y-2">
                       {filteredPaymentMethods.map((pm) => (
-                          <div
-                            key={pm.id}
-                            className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${
-                              selectedPaymentMethod === pm.id
-                                ? 'border-primary bg-primary/5'
-                                : 'border-muted hover:border-muted-foreground/50'
+                        <div
+                          key={pm.id}
+                          className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${selectedPaymentMethod === pm.id
+                            ? 'border-primary bg-primary/5'
+                            : 'border-muted hover:border-muted-foreground/50'
                             }`}
-                            onClick={() => setSelectedPaymentMethod(pm.id)}
-                          >
-                            <RadioGroupItem value={pm.id} id={pm.id} className="sr-only" />
-                            <div className="flex items-center gap-3 flex-1">
-                              {pm.payment_type === 'qris' && (
-                                <QrCode className="h-5 w-5 text-primary" />
+                          onClick={() => setSelectedPaymentMethod(pm.id)}
+                        >
+                          <RadioGroupItem value={pm.id} id={pm.id} className="sr-only" />
+                          <div className="flex items-center gap-3 flex-1">
+                            {pm.payment_type === 'qris' && (
+                              <QrCode className="h-5 w-5 text-primary" />
+                            )}
+                            {pm.payment_type === 'transfer_rekening' && (
+                              <CreditCard className="h-5 w-5 text-primary" />
+                            )}
+                            {pm.payment_type === 'cutoff_hutang' && (
+                              <Wallet className="h-5 w-5 text-primary" />
+                            )}
+                            <div className="flex-1">
+                              <Label
+                                htmlFor={pm.id}
+                                className="font-medium cursor-pointer"
+                              >
+                                {pm.payment_type === 'qris' && 'QRIS'}
+                                {pm.payment_type === 'transfer_rekening' && 'Transfer Rekening'}
+                                {pm.payment_type === 'cutoff_hutang' && 'Cutoff/Hutang'}
+                              </Label>
+                              {pm.payment_type === 'transfer_rekening' && pm.bank_name && (
+                                <p className="text-xs text-muted-foreground">
+                                  {pm.bank_name} - {pm.account_number}
+                                </p>
                               )}
-                              {pm.payment_type === 'transfer_rekening' && (
-                                <CreditCard className="h-5 w-5 text-primary" />
+                              {pm.payment_type === 'qris' && pm.account_name && (
+                                <p className="text-xs text-muted-foreground">
+                                  a.n. {pm.account_name}
+                                </p>
                               )}
-                              {pm.payment_type === 'cutoff_hutang' && (
-                                <Wallet className="h-5 w-5 text-primary" />
-                              )}
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor={pm.id}
-                                  className="font-medium cursor-pointer"
-                                >
-                                  {pm.payment_type === 'qris' && 'QRIS'}
-                                  {pm.payment_type === 'transfer_rekening' && 'Transfer Rekening'}
-                                  {pm.payment_type === 'cutoff_hutang' && 'Cutoff/Hutang'}
-                                </Label>
-                                {pm.payment_type === 'transfer_rekening' && pm.bank_name && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {pm.bank_name} - {pm.account_number}
-                                  </p>
-                                )}
-                                {pm.payment_type === 'qris' && pm.account_name && (
-                                  <p className="text-xs text-muted-foreground">
-                                    a.n. {pm.account_name}
-                                  </p>
-                                )}
-                              </div>
                             </div>
                           </div>
-                        ))}
+                        </div>
+                      ))}
                     </div>
                   </RadioGroup>
                 ) : (

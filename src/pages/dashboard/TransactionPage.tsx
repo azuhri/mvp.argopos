@@ -435,7 +435,7 @@ export default function TransactionPage() {
                               {tx.status === "WAITING_TO_PAYMENT" && (
                                 <Button size="sm" variant="outline" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
                                   <CheckCircle className="h-3 w-3 mr-1" />
-                                  Approve
+                                  Approve Payment
                                 </Button>
                               )}
                               {tx.status === "PAID" && (

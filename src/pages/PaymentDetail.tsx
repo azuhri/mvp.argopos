@@ -79,15 +79,6 @@ export default function PaymentDetail() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [copied, setCopied] = useState<Record<string, boolean>>({});
 
-  // Fetch full user data to get assigned_stores
-  const { data: fullUser } = useQuery({
-    queryKey: ['current-user'],
-    queryFn: () => userService.getCurrentUser(),
-  });
-
-  // Check if user has <=1 assigned store (staff user)
-  const isStaffUser = (fullUser?.assigned_stores?.length || 0) <= 1;
-
   // Fetch store data
   const { data: storeData, isLoading } = useQuery({
     queryKey: ['store', locationCode],
@@ -505,7 +496,7 @@ export default function PaymentDetail() {
           </GlassCard>
 
           {/* Admin Contact - Show for staff users (<=1 assigned store) */}
-          {isStaffUser && storeAssignedUsers && storeAssignedUsers.length > 0 && (
+          {storeAssignedUsers && storeAssignedUsers.length > 0 && (
             <GlassCard className="p-6">
               <h2 className="text-lg font-semibold mb-4">Kontak Admin</h2>
               <div className="space-y-3">
