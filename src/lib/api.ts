@@ -254,6 +254,45 @@ export interface DashboardAnalyticsResponse {
   recent_transactions: DashboardRecentTransaction[];
 }
 
+export interface DashboardAnalyticsSummary {
+  total_revenue: number;
+  total_transactions: number;
+  unique_customers: number;
+  revenue_growth: number;
+  previous_revenue: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface DashboardRevenuePoint {
+  label: string;
+  month: string;
+  revenue: number;
+}
+
+export interface DashboardCategoryShare {
+  name: string;
+  value: number;
+  raw_value: number;
+}
+
+export interface DashboardRecentTransaction {
+  id: string;
+  invoice_number: string;
+  customer_name: string;
+  store_name: string;
+  total: number;
+  status: string;
+  created_at: string;
+}
+
+export interface DashboardAnalyticsResponse {
+  summary: DashboardAnalyticsSummary;
+  revenue_trend: DashboardRevenuePoint[];
+  category_distribution: DashboardCategoryShare[];
+  recent_transactions: DashboardRecentTransaction[];
+}
+
 export interface Store {
   location_id: string;
   location_name: string;
@@ -1041,18 +1080,6 @@ class ApiClient {
     return this.request(`/stores/payment-methods/${id}`, {
       method: 'DELETE',
     });
-  }
-
-  async getDashboardAnalytics(params?: { range_days?: number; store_id?: string }): Promise<ApiResponse<DashboardAnalyticsResponse>> {
-    const query = new URLSearchParams();
-    if (params?.range_days) {
-      query.append('range_days', params.range_days.toString());
-    }
-    if (params?.store_id) {
-      query.append('store_id', params.store_id);
-    }
-    const suffix = query.toString() ? `?${query.toString()}` : '';
-    return this.request<DashboardAnalyticsResponse>(`/dashboard/analytics/overview${suffix}`);
   }
 
   // Transaction endpoints

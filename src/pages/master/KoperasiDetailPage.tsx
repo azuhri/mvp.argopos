@@ -669,8 +669,8 @@ export default function KoperasiDetailPage() {
           </GlassCard>
 
           {/* Product Stocks */}
-          <GlassCard>
-            <div className="p-4">
+          <GlassCard className="p-3">
+            <div className="">
               <h4 className="font-semibold mb-3">Product Stock</h4>
               {/* Desktop/Tablet: Table View */}
               <div className="hidden md:block">
@@ -695,10 +695,10 @@ export default function KoperasiDetailPage() {
                           <TableCell>
                             {stock.master_product?.image_url ? (
                               <img
-                                src={stock.master_product.image_url}
+                                src={`${config.apiUrl}/${stock.master_product.image_path}`}
                                 alt={stock.master_product.product_name}
-                                className="w-12 h-12 object-cover rounded-md"
-                              />
+                                className="w-30 h-30 object-cover rounded-md"
+                              />  
                             ) : (
                               <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center">
                                 <Package className="h-5 w-5 text-muted-foreground" />
@@ -713,7 +713,7 @@ export default function KoperasiDetailPage() {
                           <TableCell>{stock.tax_percentage}%</TableCell>
                           <TableCell>{formatCurrency(calculateFinalPrice(stock))}</TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="sm" onClick={() => openStockEdit(stock)}>
+                            <Button variant="secondary" size="sm" onClick={() => openStockEdit(stock)}>
                               <Pencil className="h-3 w-3" />
                             </Button>
                           </TableCell>
@@ -739,15 +739,15 @@ export default function KoperasiDetailPage() {
                       animate={{ opacity: 1, y: 0 }}
                       className="glass-card p-3"
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-2">
                         {stock.master_product?.image_url ? (
                           <img
-                            src={stock.master_product.image_url}
+                            src={`${config.apiUrl}/${stock.master_product.image_path}`}
                             alt={stock.master_product.product_name}
-                            className="w-16 h-16 object-cover rounded-md"
+                            className="w-24 h-24 object-cover rounded-md"
                           />
                         ) : (
-                          <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center">
+                          <div className="w-24 h-24 bg-muted rounded-md flex items-center justify-center">
                             <Package className="h-6 w-6 text-muted-foreground" />
                           </div>
                         )}
@@ -779,8 +779,8 @@ export default function KoperasiDetailPage() {
                               <span className="font-medium">{stock.tax_percentage}%</span>
                             </div>
                           </div>
-                          <div className="mt-2">
-                            <Button variant="ghost" size="sm" onClick={() => openStockEdit(stock)}>
+                          <div className="mt-3">
+                            <Button variant="secondary" className="w-full" size="sm" onClick={() => openStockEdit(stock)}>
                               <Pencil className="h-3 w-3 mr-1" />
                               Edit
                             </Button>
@@ -1394,20 +1394,20 @@ export default function KoperasiDetailPage() {
 
       {/* Stock Edit Dialog */}
       <Dialog open={stockEditOpen} onOpenChange={setStockEditOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md px-6">
           <DialogHeader>
             <DialogTitle>Edit Product Stock</DialogTitle>
             <DialogDescription>Update harga dan pajak untuk produk ini</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* <div className="space-y-1.5">
+            <div className="space-y-1.5">
               <Label>Stock</Label>
               <Input
                 type="number"
                 value={stockFormData.stock}
                 onChange={(e) => setStockFormData({ ...stockFormData, stock: Number(e.target.value) })}
               />
-            </div> */}
+            </div>
             <div className="space-y-1.5">
               <Label>Base Price</Label>
               <Input

@@ -306,9 +306,9 @@ export default function PaymentDetail() {
 
   return (
     <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-2">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex flex-col md:flex-row items-start gap-4 mb-6">
           <Button variant="outline" size="sm" asChild>
             <Link to={`/${locationCode}/commerce/cart`}>
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -336,7 +336,7 @@ export default function PaymentDetail() {
           </GlassCard>
         )}
 
-         {(transactionData.status === 'PAID') && (
+        {(transactionData.status === 'PAID') && (
           <GlassCard className="p-6 mb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -352,9 +352,9 @@ export default function PaymentDetail() {
           </GlassCard>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
           {/* Product List */}
-          <GlassCard className="p-6 lg:col-span-3">
+          <GlassCard className="p-2 lg:col-span-3">
             <h2 className="text-lg font-semibold mb-4">Daftar Produk</h2>
             <div className="space-y-4">
               {transactionData?.transaction_carts && transactionData.transaction_carts.length > 0 ? (
@@ -507,7 +507,7 @@ export default function PaymentDetail() {
                       <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-medium">
                         {user.username.charAt(0).toUpperCase()}
                       </div>
-                      <div>
+                      <div className="flex flex-col">
                         <p className="font-medium text-sm">{user.username}</p>
                         <p className="text-xs text-muted-foreground">{user.email}</p>
                         {user.no_wa && (
@@ -516,17 +516,18 @@ export default function PaymentDetail() {
                             <span>{user.no_wa}</span>
                           </div>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSendToWA(user)}
+                          disabled={!user.no_wa}
+                          className="mt-1 max-w-[150px]"
+                        >
+                          <FaWhatsapp color="green" className="h-4 w-4" />
+                          <span className="text-xs text-green-900">Kontak WA</span>
+                        </Button>
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSendToWA(user)}
-                      disabled={!user.no_wa}
-                    >
-                      <FaWhatsapp color="green" className="h-4 w-4" />
-                      <span className="text-xs text-green-900">WA</span>
-                    </Button>
                   </div>
                 ))}
               </div>

@@ -20,7 +20,7 @@ export function AppLayoutCommerce({ children, title, locationCode }: AppLayoutPr
         style={{ marginLeft: undefined }} // overridden by motion
       >
         <TopBarCommerce title={title} locationCode={locationCode} />
-        <main className="flex-1 p-5 md:p-6">
+        <main className="flex-1 py-5 px-2 md:p-6">
           {children}
         </main>
       </motion.div>
@@ -28,7 +28,7 @@ export function AppLayoutCommerce({ children, title, locationCode }: AppLayoutPr
       {/* Mobile layout without sidebar margin */}
       <div className="flex flex-col min-h-screen md:hidden">
         <TopBarCommerce title={title} locationCode={locationCode} />
-        <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6">
+        <main className="flex-1 py-5 px-2 md:p-6 pb-20 md:pb-6">
           {children}
         </main>
       </div>

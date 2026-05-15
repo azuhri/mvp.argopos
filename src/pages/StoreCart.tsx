@@ -459,7 +459,7 @@ export default function StoreCart() {
         {/* Header */}
         <div className="flex flex-col items-start gap-6 mb-4">
           <Button variant="outline" size="sm" asChild>
-            <Link to={`${locationCode}/commerce`}>
+            <Link to={`/commerce`}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Kembali Belanja
             </Link>
@@ -488,79 +488,91 @@ export default function StoreCart() {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <GlassCard className="p-4">
-                      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                        {/* Product Image */}
-                        <div className="flex gap-2">
-                          <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                            <img
-                              src={item.product.image_url}
-                              alt={item.product.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
+                    <GlassCard className="p-4 md:p-5 my-2 bg-white rounded-2xl border border-gray-100 shadow-sm transition-all">
+                      {/* Container Utama: CSS Grid di Mobile, Flex Row di Desktop */}
+                      <div className="grid grid-cols-[1fr_auto] md:flex md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
 
-                          {/* Product Info */}
-                          <div className="flex-1">
-                            <h3 className="font-semibold mb-1">{item.product.name}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {formatCurrency(item.product.price)}
+                        {/* 1. Product Image & Info (Mobile: Atas Kiri | Desktop: Paling Kiri) */}
+                        <div className="flex flex-col">
+                          <div className="flex items-start gap-3 md:gap-4 min-w-0">
+                            <div className="w-24 h-24 md:w-30 md:h-30 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 flex-shrink-0">
+                              <img
+                                src={item.product.image_url}
+                                alt={item.product.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="flex flex-col min-w-0 pt-0.5 md:pt-0">
+                              <h3 className="font-semibold text-sm md:text-base text-gray-900 leading-tight mb-1 truncate md:whitespace-normal">
+                                {item.product.name}
+                              </h3>
+                              <p className="text-xs md:text-sm font-medium text-gray-500">
+                                {formatCurrency(item.product.price)}
+                              </p>
+                              <div className="flex mt-2 items-start md:items-center">
+                                <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100 shadow-sm">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 w-7 md:h-8 md:w-8 p-0 rounded-lg bg-white border-gray-200 hover:bg-gray-100 text-gray-600"
+                                    onClick={() => handleUpdateQty(item.productId, item.qty - 1)}
+                                    disabled={updating === item.productId || item.qty <= 1}
+                                  >
+                                    {updating === item.productId ? (
+                                      <LoadingSpinner size="sm" />
+                                    ) : (
+                                      <Minus className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                  <span className="w-6 md:w-8 text-center text-sm font-bold text-gray-800">
+                                    {item.qty}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 w-7 md:h-8 md:w-8 p-0 rounded-lg bg-white border-gray-200 hover:bg-gray-100 text-gray-600"
+                                    onClick={() => handleUpdateQty(item.productId, item.qty + 1)}
+                                    disabled={updating === item.productId}
+                                  >
+                                    {updating === item.productId ? (
+                                      <LoadingSpinner size="sm" />
+                                    ) : (
+                                      <Plus className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          {/* 2. Quantity Controls (Mobile: Atas Kanan | Desktop: Tengah) */}
+                        </div>
+
+
+                        {/* 3. Subtotal & Trash Button (Mobile: Bawah Kanan | Desktop: Paling Kanan) */}
+                        {/* col-span-2 membuat elemen ini pindah ke baris baru khusus saat di layar HP */}
+                        <div className="col-span-2 flex items-center justify-end gap-3 md:gap-4 mt-2 md:mt-0 pt-3 md:pt-0 border-t border-gray-100 md:border-none">
+                          <div className="text-right">
+                            <p className="text-sm md:text-[15px] font-medium text-gray-900">
+                              <span className="text-xs text-gray-500 font-normal mr-1.5">Subtotal:</span>
+                              <span className="font-bold">{formatCurrency(item.product.price * item.qty)}</span>
                             </p>
                           </div>
-                        </div>
 
-                        {/* Quantity Controls */}
-                        <div className="flex flex-row items-center gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleUpdateQty(item.productId, item.qty - 1)}
-                            disabled={updating === item.productId || item.qty <= 1}
-                          >
-                            {updating === item.productId ? (
-                              <LoadingSpinner size="sm" />
-                            ) : (
-                              <Minus className="h-3 w-3" />
-                            )}
-                          </Button>
-                          <span className="w-8 text-center font-medium">
-                            {item.qty}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleUpdateQty(item.productId, item.qty + 1)}
+                            onClick={() => handleUpdateQty(item.productId, 0)}
                             disabled={updating === item.productId}
+                            className="h-8 w-8 md:h-9 md:w-9 p-0 flex items-center justify-center rounded-xl border-red-100 text-red-500 bg-red-50 hover:bg-red-100 hover:text-red-700 hover:border-red-200 transition-colors shrink-0"
                           >
                             {updating === item.productId ? (
                               <LoadingSpinner size="sm" />
                             ) : (
-                              <Plus className="h-3 w-3" />
+                              <Trash2 className="h-4 w-4" />
                             )}
                           </Button>
                         </div>
 
-                        {/* Item Total */}
-                        <div className="text-right">
-                          <p className="font-semibold">
-                            <span className="text-gray-500">Subtotal: </span> {formatCurrency(item.product.price * item.qty)}
-                          </p>
-                        </div>
-
-                        {/* Remove Button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUpdateQty(item.productId, 0)}
-                          disabled={updating === item.productId}
-                          className="text-red-500 hover:text-red-600"
-                        >
-                          {updating === item.productId ? (
-                            <LoadingSpinner size="sm" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
                       </div>
                     </GlassCard>
                   </motion.div>

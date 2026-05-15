@@ -137,9 +137,7 @@ export default function MasterRoles() {
           description: newRoleDescription
         });
         // Then update permissions
-        const setRole = await accessRoleService.setRolePermissions(editingRole.id, selectedPermissions);
-        console.log(setRole);
-        
+        await accessRoleService.setRolePermissions(editingRole.id, selectedPermissions);
         toast.success("Role updated successfully");
       } else {
         // Create new role using accessRoleService
