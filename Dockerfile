@@ -10,15 +10,13 @@ COPY . .
 
 RUN npm run build
 
-
 # Stage 2: Serve dengan Nginx
 FROM nginx:alpine
 
-# copy config nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# copy hasil build ke subfolder celestia
-COPY --from=builder /app/dist /usr/share/nginx/html/celestia
+# copy langsung ke root nginx
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
 
