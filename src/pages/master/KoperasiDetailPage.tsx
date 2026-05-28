@@ -598,7 +598,7 @@ export default function KoperasiDetailPage() {
         {/* Summary Tab */}
         <TabsContent value="summary" className="space-y-4">
           <GlassCard>
-            <div className="p-6">
+            <div className="p-1">
               <div className="mb-6">
                 <h3 className="text-xl font-semibold mb-4">Summary Metrics</h3>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -683,7 +683,7 @@ export default function KoperasiDetailPage() {
           </GlassCard>
 
           {/* Product Stocks */}
-          <GlassCard className="p-3">
+          <GlassCard className="p-4">
             <div className="">
               <h4 className="font-semibold mb-3">Product Stock</h4>
               {/* Desktop/Tablet: Table View */}
@@ -711,11 +711,11 @@ export default function KoperasiDetailPage() {
                               <img
                                 src={`${config.apiUrl}/${stock.master_product.image_path}`}
                                 alt={stock.master_product.product_name}
-                                className="w-30 h-30 object-cover rounded-md"
+                                className="w-20 h-20 object-cover rounded-md"
                               />
                             ) : (
-                              <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center">
-                                <Package className="h-5 w-5 text-muted-foreground" />
+                              <div className="w-20 h-20 bg-muted rounded-md flex items-center justify-center">
+                                <Package className="h-10 w-10 text-muted-foreground" />
                               </div>
                             )}
                           </TableCell>
@@ -1385,10 +1385,10 @@ export default function KoperasiDetailPage() {
                     <img
                       src={`${config.apiUrl}/${item.product_details.image_path}`}
                       alt={item.product_details?.product_name || 'Product'}
-                      className="w-16 h-16 rounded-lg object-cover"
+                      className="w-20 h-20 rounded-lg object-cover"
                     />
                   ) : (
-                    <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                    <div className="w-20 h-20 rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground">
                       No Image
                     </div>
                   )}

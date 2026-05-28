@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { productService } from "@/lib/services/productService";
 import { type Product, type CreateProductRequest, type UpdateProductRequest } from "@/lib/api";
+import { config } from "@/lib/config";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +56,11 @@ export default function Products() {
   const [newImageCollectionFiles, setNewImageCollectionFiles] = useState<File[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageCollectionPreviews, setImageCollectionPreviews] = useState<string[]>([]);
+
+  // Existing images state for editing
+  const [existingMainImage, setExistingMainImage] = useState<string | null>(null);
+  const [existingCollectionImages, setExistingCollectionImages] = useState<string[]>([]);
+  const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
 
   // Pagination state
@@ -178,6 +184,19 @@ export default function Products() {
     setNewImageCollectionUrl(newFiles.map(f => f.name).join(', '));
   };
 
+  // Remove existing main image (mark for deletion)
+  const removeExistingMainImage = () => {
+    setExistingMainImage(null);
+    setImagesToDelete(prev => [...prev, 'main']);
+  };
+
+  // Remove existing collection image (mark for deletion)
+  const removeExistingCollectionImage = (index: number) => {
+    const newExisting = existingCollectionImages.filter((_, i) => i !== index);
+    setExistingCollectionImages(newExisting);
+    setImagesToDelete(prev => [...prev, `collection_${index}`]);
+  };
+
   // Create product mutation
   const createMutation = useMutation({
     mutationFn: (product: CreateProductRequest) =>
@@ -235,6 +254,9 @@ export default function Products() {
     setNewImageCollectionFiles([]);
     setImagePreview(null);
     setImageCollectionPreviews([]);
+    setExistingMainImage(null);
+    setExistingCollectionImages([]);
+    setImagesToDelete([]);
     setSearch("");
     setDebouncedSearch("");
   };
@@ -247,10 +269,30 @@ export default function Products() {
     setNewBasePrice(product.base_price);
     setNewImagePath(product.image_path);
     setNewImageCollectionUrl(product.image_collection_url);
+
+    // Load existing main image
+    setExistingMainImage(product.image_url || null);
+    setImagePreview(null);
+
+    // Load existing collection images
+    const collectionImages: string[] = [];
+    if (product.image_collection) {
+      product.image_collection.forEach(img => {
+        if (img.startsWith('http')) {
+          collectionImages.push(img);
+        } else {
+          collectionImages.push(`${config.apiUrl}/${img}`);
+        }
+      });
+    }
+    setExistingCollectionImages(collectionImages);
+    setImageCollectionPreviews([]);
+
+    // Reset new files
     setNewImageFile(null);
     setNewImageCollectionFiles([]);
-    setImagePreview(null);
-    setImageCollectionPreviews([]);
+    setImagesToDelete([]);
+
     setIsCreateOpen(true);
   };
 
@@ -421,7 +463,39 @@ export default function Products() {
                 {/* Single Image Upload */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Product Image</label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-start gap-4">
+                    {/* Existing Image Preview (for editing) */}
+                    {editingProduct && existingMainImage && (
+                      <div className="relative group">
+                        <img
+                          src={existingMainImage}
+                          alt="Existing Product"
+                          className="h-24 w-24 object-cover rounded-lg border"
+                        />
+                        <button
+                          type="button"
+                          onClick={removeExistingMainImage}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                        <span className="absolute -bottom-5 left-0 right-0 text-center text-xs text-muted-foreground">Current</span>
+                      </div>
+                    )}
+
+                    {/* New Image Preview */}
+                    {imagePreview && (
+                      <div className="relative group">
+                        <img
+                          src={imagePreview}
+                          alt="New Product"
+                          className="h-24 w-24 object-cover rounded-lg border border-primary"
+                        />
+                        <span className="absolute -bottom-5 left-0 right-0 text-center text-xs text-primary">New</span>
+                      </div>
+                    )}
+
+                    {/* Upload Button */}
                     <div className="flex-1">
                       <input
                         type="file"
@@ -432,23 +506,25 @@ export default function Products() {
                       />
                       <label
                         htmlFor="image_path"
-                        className="flex items-center justify-center w-full h-24 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors bg-muted/20"
+                        className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors bg-muted/20"
                       >
                         {imagePreview ? (
-                          <img
-                            src={imagePreview}
-                            alt="Preview"
-                            className="h-full w-full object-cover rounded-lg"
-                          />
+                          <div className="text-center p-2">
+                            <Package className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                            <p className="text-xs text-muted-foreground">Change Image</p>
+                          </div>
                         ) : (
                           <div className="text-center p-4">
-                            <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground">Click to upload image</p>
-                            <p className="text-xs text-muted-foreground">PNG, JPG, JPEG (max 5MB)</p>
+                            <Package className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                            <p className="text-xs text-muted-foreground">
+                              {editingProduct ? 'Replace Image' : 'Upload Image'}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">PNG, JPG (max 10MB)</p>
                           </div>
                         )}
                       </label>
                     </div>
+
                     {imagePreview && (
                       <Button
                         type="button"
@@ -456,7 +532,7 @@ export default function Products() {
                         size="sm"
                         onClick={removeImageFile}
                       >
-                        Remove
+                        Cancel
                       </Button>
                     )}
                   </div>
@@ -476,34 +552,65 @@ export default function Products() {
                     />
                     <label
                       htmlFor="image_collection_url"
-                      className="flex items-center justify-center w-full h-24 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors bg-muted/20"
+                      className="flex items-center justify-center w-full h-20 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors bg-muted/20"
                     >
                       <div className="text-center p-4">
-                        <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">Click to upload multiple images</p>
-                        <p className="text-xs text-muted-foreground">PNG, JPG, JPEG (max 5MB each)</p>
+                        <Package className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">
+                          {editingProduct ? 'Add More Images' : 'Click to upload images'}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">PNG, JPG (max 5MB each)</p>
                       </div>
                     </label>
 
-                    {/* Image Collection Previews */}
+                    {/* Existing Collection Images (for editing) */}
+                    {editingProduct && existingCollectionImages.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Current Images:</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          {existingCollectionImages.map((img, index) => (
+                            <div key={`existing-${index}`} className="relative group">
+                              <img
+                                src={img}
+                                alt={`Collection ${index + 1}`}
+                                className="w-full h-16 object-cover rounded-lg border"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeExistingCollectionImage(index)}
+                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* New Image Collection Previews */}
                     {imageCollectionPreviews.length > 0 && (
-                      <div className="grid grid-cols-3 gap-2">
-                        {imageCollectionPreviews.map((preview, index) => (
-                          <div key={index} className="relative group">
-                            <img
-                              src={preview}
-                              alt={`Collection ${index + 1}`}
-                              className="w-full h-20 object-cover rounded-lg"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeImageCollectionFile(index)}
-                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">New Images:</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          {imageCollectionPreviews.map((preview, index) => (
+                            <div key={`new-${index}`} className="relative group border border-primary rounded-lg overflow-hidden">
+                              <img
+                                src={preview}
+                                alt={`New Collection ${index + 1}`}
+                                className="w-full h-16 object-cover"
+                              />
+                              <span className="absolute bottom-0 left-0 right-0 bg-primary/80 text-white text-[10px] text-center">New</span>
+                              <button
+                                type="button"
+                                onClick={() => removeImageCollectionFile(index)}
+                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

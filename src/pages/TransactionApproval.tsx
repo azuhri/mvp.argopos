@@ -3,8 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Package } from "lucide-react";
 import { motion } from "framer-motion";
+import { apiClient } from "@/lib/api";
+import type { Transaction } from "@/lib/api";
 
 export default function TransactionApproval() {
   const { transactionId } = useParams<{ transactionId: string }>();
@@ -12,6 +14,7 @@ export default function TransactionApproval() {
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [transaction, setTransaction] = useState<Transaction | null>(null);
 
   useEffect(() => {
     if (!transactionId) {
@@ -20,17 +23,28 @@ export default function TransactionApproval() {
       return;
     }
 
-    approvePayment();
+    fetchTransaction();
   }, [transactionId]);
 
-  const approvePayment = async () => {
+  const fetchTransaction = async () => {
     try {
-      // TODO: Call API to approve payment
-      // await transactionService.approvePayment(transactionId);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      const response = await apiClient.getTransaction(transactionId!);
+      if (response.success && response.data) {
+        setTransaction(response.data);
+        // After fetching, proceed with approval
+        approvePayment(response.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch transaction:", err);
+      setError("Transaction not found");
+      setLoading(false);
+    }
+  };
+
+  const approvePayment = async (tx?: Transaction) => {
+    try {
+      await apiClient.approveTransactionPayment(transactionId!);
+      if (tx) setTransaction(tx);
       setSuccess(true);
       toast.success("Payment approved successfully");
     } catch (err) {
@@ -45,6 +59,14 @@ export default function TransactionApproval() {
     navigate("/dashboard/transactions");
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 flex items-center justify-center p-4">
       <GlassCard className="max-w-md w-full">
@@ -54,20 +76,50 @@ export default function TransactionApproval() {
           className="p-8 text-center"
         >
           {loading ? (
-            <div className="flex flex-col items-center gap-4">
-              <Loader2 className="h-16 w-16 text-primary animate-spin" />
-              <h2 className="text-xl font-semibold">Processing Approval...</h2>
-              <p className="text-muted-foreground">Please wait while we process the payment approval.</p>
-            </div>
+            <>
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-16 w-16 text-primary animate-spin" />
+                <h2 className="text-xl font-semibold">Processing Approval...</h2>
+                <p className="text-muted-foreground">Please wait while we process the payment approval.</p>
+              </div>
+              {transaction && (
+                <div className="mt-6 p-4 bg-muted/50 rounded-lg text-left space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Transaction Code</span>
+                  </div>
+                  <p className="font-mono font-semibold text-lg">{transaction.transaction_code}</p>
+                  <div className="pt-2 border-t border-border">
+                    <span className="text-sm text-muted-foreground">Customer</span>
+                    <p className="font-medium">{transaction.customer_name || "N/A"}</p>
+                  </div>
+                  <div className="pt-2 border-t border-border">
+                    <span className="text-sm text-muted-foreground">Total Amount</span>
+                    <p className="font-semibold text-primary">{formatCurrency(transaction.total_amount)}</p>
+                  </div>
+                </div>
+              )}
+            </>
           ) : success ? (
             <div className="flex flex-col items-center gap-4">
               <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
                 <CheckCircle className="h-8 w-8 text-green-600" />
               </div>
               <h2 className="text-xl font-semibold text-green-600">Payment Approved!</h2>
-              <p className="text-muted-foreground">
-                Transaction {transactionId?.slice(0, 8)}... payment has been successfully approved.
-              </p>
+              <div className="w-full p-4 bg-green-50 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Transaction Code</span>
+                  <span className="font-mono font-medium">{transaction?.transaction_code}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Customer</span>
+                  <span className="font-medium">{transaction?.customer_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Amount</span>
+                  <span className="font-semibold text-green-600">{transaction && formatCurrency(transaction.total_amount)}</span>
+                </div>
+              </div>
               <Button onClick={handleGoToDashboard} className="w-full mt-4">
                 Go to Transactions
               </Button>

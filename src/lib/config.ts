@@ -7,6 +7,7 @@ export const config = {
   
   // API Configuration
   apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  endpointUrl: import.meta.env.VITE_BE_ENDPOINT || import.meta.env.VITE_API_URL,
   apiTimeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '10000'),
   
   // Feature Flags

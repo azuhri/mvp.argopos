@@ -30,8 +30,8 @@ export class ProductService {
   }
 
   // Update product
-  async updateProduct(id: string, product: UpdateProductRequest, imageFile?: File, imageCollectionFiles?: File[]): Promise<Product> {
-    const response = await apiClient.updateProduct(id, product, imageFile, imageCollectionFiles);
+  async updateProduct(id: string, product: UpdateProductRequest, imageFile?: File, imageCollectionFiles?: File[], imagesToDelete?: string[]): Promise<Product> {
+    const response = await apiClient.updateProduct(id, product, imageFile, imageCollectionFiles, imagesToDelete);
     if (!response.success || !response.data) {
       throw new Error(response.message || 'Failed to update product');
     }

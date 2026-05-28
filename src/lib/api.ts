@@ -871,22 +871,29 @@ class ApiClient {
     return this.request<Product>(`/products/code/${productCode}`);
   }
 
-  async updateProduct(id: string, product: UpdateProductRequest, imageFile?: File, imageCollectionFiles?: File[]): Promise<ApiResponse<Product>> {
+  async updateProduct(id: string, product: UpdateProductRequest, imageFile?: File, imageCollectionFiles?: File[], imagesToDelete?: string[]): Promise<ApiResponse<Product>> {
     const formData = new FormData();
-    
+
     // Add form fields
     formData.append('product_name', product.product_name);
     formData.append('product_code', product.product_code);
     formData.append('product_description', product.description);
     formData.append('base_price', product.base_price.toString());
-    
+
     if (imageFile) {
       formData.append('image_path', imageFile);
     }
-    
+
     if (imageCollectionFiles && imageCollectionFiles.length > 0) {
       imageCollectionFiles.forEach((file, index) => {
         formData.append(`image_collection_url`, file);
+      });
+    }
+
+    // Pass images to delete
+    if (imagesToDelete && imagesToDelete.length > 0) {
+      imagesToDelete.forEach(img => {
+        formData.append('images_to_delete', img);
       });
     }
 
