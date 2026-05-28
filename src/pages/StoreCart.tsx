@@ -111,13 +111,18 @@ export default function StoreCart() {
   useEffect(() => {
     if (storeData) {
       const products = storeData.product_stores.map(p => ({
-        id: p.id,
+        id: p.master_product.id,
         name: p.master_product.product_name,
         price: p.base_price,
+        stock: p.stock,
       }));
       setCart(getCartSummary(products));
     }
   }, [storeData]);
+
+  const findProductByid = (productId: string) => {
+    return storeData?.product_stores.find(p => p.id === productId);
+  }
 
   // Update cart summary when localStorage changes
   useEffect(() => {
@@ -127,6 +132,7 @@ export default function StoreCart() {
           id: p.master_product.id,
           name: p.master_product.product_name,
           price: p.base_price,
+          stock: p.stock,
         }));
         setCart(getCartSummary(products));
       }
@@ -153,6 +159,8 @@ export default function StoreCart() {
   }, []);
 
   const handleUpdateQty = async (productId: string, newQty: number) => {
+    const product = findProductByid(productId);
+    
     if (newQty < 0) return;
 
     setUpdating(productId);
@@ -162,17 +170,18 @@ export default function StoreCart() {
       removeFromCart(productId);
       toast.success("Produk dihapus dari keranjang");
     } else {
-      updateCartQty(productId, newQty);
+      if (product && newQty > product.stock) {
+        setUpdating(null);
+        toast.error("Stok tidak mencukupi");
+        return;
+      }
+      const result = updateCartQty(productId, newQty);
+      if (!result.success) {
+        toast.error(result.message);
+      }
     }
     // Refresh cart after update
-    if (storeData) {
-      const products = storeData.product_stores.map(p => ({
-        id: p.master_product.id,
-        name: p.master_product.product_name,
-        price: p.base_price,
-      }));
-      setCart(getCartSummary(products));
-    }
+    refreshCart();
     setUpdating(null);
   };
 
@@ -506,8 +515,11 @@ export default function StoreCart() {
                               <h3 className="font-semibold text-sm md:text-base text-gray-900 leading-tight mb-1 truncate md:whitespace-normal">
                                 {item.product.name}
                               </h3>
-                              <p className="text-xs md:text-sm font-medium text-gray-500">
+                              <p className="text-xs md:text-sm font-semibold text-gray-500">
                                 {formatCurrency(item.product.price)}
+                              </p>
+                              <p className="text-xs md:text-sm font-medium text-yellow-500">
+                                <span className="text-xs">Available Stock: {findProductByid(item.productId)?.stock}</span>
                               </p>
                               <div className="flex mt-2 items-start md:items-center">
                                 <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100 shadow-sm">
@@ -532,7 +544,7 @@ export default function StoreCart() {
                                     size="sm"
                                     className="h-7 w-7 md:h-8 md:w-8 p-0 rounded-lg bg-white border-gray-200 hover:bg-gray-100 text-gray-600"
                                     onClick={() => handleUpdateQty(item.productId, item.qty + 1)}
-                                    disabled={updating === item.productId}
+                                    disabled={updating === item.productId || (item.product?.stock !== undefined && item.qty >= item.product.stock)}
                                   >
                                     {updating === item.productId ? (
                                       <LoadingSpinner size="sm" />

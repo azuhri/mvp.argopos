@@ -309,12 +309,12 @@ export default function PaymentDetail() {
       <div className="max-w-7xl mx-auto px-4 py-2">
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start gap-4 mb-6">
-          <Button variant="outline" size="sm" asChild>
+          {/* <Button variant="outline" size="sm" asChild>
             <Link to={`/${locationCode}/commerce/cart`}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Kembali
             </Link>
-          </Button>
+          </Button> */}
           <h1 className="text-2xl font-bold">Detail Pembayaran</h1>
         </div>
 
@@ -354,7 +354,7 @@ export default function PaymentDetail() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
           {/* Product List */}
-          <GlassCard className="p-2 lg:col-span-3">
+          <GlassCard className="p-6 lg:col-span-3">
             <h2 className="text-lg font-semibold mb-4">Daftar Produk</h2>
             <div className="space-y-4">
               {transactionData?.transaction_carts && transactionData.transaction_carts.length > 0 ? (

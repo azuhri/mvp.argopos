@@ -8,4 +8,5 @@ export interface Product {
   stock: number;
   unit: string;
   image_url?: string;
+  stock?: number;
 }

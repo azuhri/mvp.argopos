@@ -164,6 +164,8 @@ export interface DashboardAnalyticsSummary {
   total_revenue: number;
   total_transactions: number;
   unique_customers: number;
+  internal_customers: number;
+  external_customers: number;
   revenue_growth: number;
   previous_revenue: number;
   period_start: string;
@@ -219,6 +221,8 @@ export interface DashboardAnalyticsSummary {
   total_revenue: number;
   total_transactions: number;
   unique_customers: number;
+  internal_customers: number;
+  external_customers: number;
   revenue_growth: number;
   previous_revenue: number;
   period_start: string;
@@ -258,6 +262,8 @@ export interface DashboardAnalyticsSummary {
   total_revenue: number;
   total_transactions: number;
   unique_customers: number;
+  internal_customers: number;
+  external_customers: number;
   revenue_growth: number;
   previous_revenue: number;
   period_start: string;
@@ -1132,13 +1138,19 @@ class ApiClient {
     });
   }
 
-  async getDashboardAnalytics(params?: { range_days?: number; store_id?: string }): Promise<ApiResponse<DashboardAnalyticsResponse>> {
+  async getDashboardAnalytics(params?: { range_days?: number; store_id?: string; start_date?: string; end_date?: string }): Promise<ApiResponse<DashboardAnalyticsResponse>> {
     const query = new URLSearchParams();
     if (params?.range_days) {
       query.append('range_days', params.range_days.toString());
     }
     if (params?.store_id) {
       query.append('store_id', params.store_id);
+    }
+    if (params?.start_date) {
+      query.append('start_date', params.start_date);
+    }
+    if (params?.end_date) {
+      query.append('end_date', params.end_date);
     }
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.request<DashboardAnalyticsResponse>(`/dashboard/analytics/overview${suffix}`);

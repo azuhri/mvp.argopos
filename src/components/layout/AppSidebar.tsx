@@ -22,7 +22,7 @@ interface SidebarProps {
 export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const { canRead, user } = useAuth();
-  
+
   // Fetch full user data to get assigned_stores
   const { data: fullUser } = useQuery({
     queryKey: ['current-user'],
@@ -30,10 +30,22 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   });
 
   const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
-  const visibleGroups = getFilteredNavigation(assignedStoresCount).map(group => ({
-    ...group,
-    listMenus: group.listMenus.filter(() => group.role !== 'super_admin' || user?.role === 'super_admin'),
-  })).filter(group => group.listMenus.length > 0);
+  const visibleGroups = getFilteredNavigation(assignedStoresCount)
+    .map(group => ({
+      ...group,
+      listMenus: group.listMenus.filter(item => {
+        // Check if user has read permission for this menu
+        if (!canRead(item.key)) {
+          return false;
+        }
+        // For super_admin group, only show if user is super_admin
+        if (group.role === 'super_admin' && user?.role !== 'super_admin') {
+          return false;
+        }
+        return true;
+      }),
+    }))
+    .filter(group => group.listMenus.length > 0);
 
   return (
     <motion.aside
@@ -77,7 +89,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
             <div className="">
               {group.listMenus.map((item) => {
-                const isActive = location.pathname === item.path;
+                const isActive = location.pathname.startsWith(item.path);
 
                 return (
                   <NavLink

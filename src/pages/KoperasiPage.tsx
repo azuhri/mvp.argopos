@@ -78,7 +78,7 @@ export default function KoperasiPage() {
   );
 
   const openDetail = (store: Store) => {
-    navigate(`/master/koperasi/${store.location_id}`);
+    navigate(`/master/store/${store.location_id}`);
   };
 
   const formatCurrency = (value: number) => {

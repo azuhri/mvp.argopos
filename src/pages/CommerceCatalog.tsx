@@ -68,6 +68,7 @@ export default function CommerceCatalog() {
         id: p.master_product.id,
         name: p.master_product.product_name,
         price: p.base_price,
+        stock: p.stock,
       }));
       setCartSummary(getCartSummary(products));
     }
@@ -110,27 +111,35 @@ export default function CommerceCatalog() {
     );
   });
 
-  const { items, total, totalItems } = cartSummary;
+  const { total, totalItems } = cartSummary;
 
   const handleAddToCart = (
     productId: string,
     productName: string,
     productPrice: number,
     productImageUrl: string,
-    productStockId: string,
+    _productStockId: string,
+    productStock: number,
   ) => {
-    addToCart(productId, 1, {
+    const result = addToCart(productId, 1, {
       name: productName,
       price: productPrice,
       imageUrl: productImageUrl,
-    });
+    }, productStock);
+
     setTimeout(() => {
       setCartSummary(getCartSummary());
     }, 0);
-    console.log('cart',getCartSummary());
     
-    toast.success(`${productName} ditambahkan ke keranjang`);
+    if (result.success) {
+      console.log('cart',getCartSummary());
+      toast.success(`${productName} ditambahkan ke keranjang`);
+    } else {
+      toast.error(result.message);
+    }
   };
+
+  
 
 
 

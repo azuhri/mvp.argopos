@@ -41,6 +41,7 @@ interface ProductStock {
   base_price: number;
   discount_price: number;
   final_price: number;
+  tax_percentage?: number;
   master_product: MasterProduct;
 }
 
@@ -226,14 +227,18 @@ export default function StoreProductDetail() {
     setIsAddingToCart(true);
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    addToCart(product.id, quantity, {
+    const result = addToCart(product.id, quantity, {
       name: product.name,
       price: product.price,
       imageUrl: product.image_url,
       category: product.category,
-    });
+    }, product.stock);
 
-    toast.success(`${quantity} ${product.name} ditambahkan ke keranjang`);
+    if (result.success) {
+      toast.success(`${quantity} ${product.name} ditambahkan ke keranjang`);
+    } else {
+      toast.error(result.message);
+    }
     setIsAddingToCart(false);
   };
 
@@ -251,18 +256,23 @@ export default function StoreProductDetail() {
       items.forEach(item => removeFromCart(item.productId));
     }
 
-    // Add current product with details
-    addToCart(product.id, quantity, {
+    // Add current product with stock validation
+    const result = addToCart(product.id, quantity, {
       name: product.name,
       price: product.price,
       imageUrl: product.image_url,
       category: product.category,
-    });
+    }, product.stock);
 
-    toast.success("Produk ditambahkan, mengalihkan ke checkout...");
-    setTimeout(() => {
-      window.location.href = `/commerce/cart`;
-    }, 1000);
+    if (result.success) {
+      toast.success("Produk ditambahkan, mengalihkan ke checkout...");
+      setTimeout(() => {
+        window.location.href = `/commerce/cart`;
+      }, 1000);
+    } else {
+      toast.error(result.message);
+      setIsBuyingNow(false);
+    }
   };
 
   const handleClearCart = () => {

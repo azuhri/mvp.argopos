@@ -103,6 +103,14 @@ class AccessRoleService {
     return response.data;
   }
 
+  async updateRole(id: string, role: { role_name: string; description: string }): Promise<Role> {
+    const response = await apiClient.updateRole(id, role);
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to update role');
+    }
+    return response.data;
+  }
+
   async createBulkAccessRoles(accessRoles: { access_roles: Partial<AccessRole>[] }): Promise<AccessRole[]> {
     const response = await apiClient.createBulkAccessRoles(accessRoles);
     if (!response.success || !response.data) {
@@ -184,33 +192,37 @@ class AccessRoleService {
 
   async getAllRoles(): Promise<Role[]> {
     const response = await apiClient.getAllRoles();
-    console.log('API response in getAllRoles:', response);
-    
+    console.log('API response in getAllRoles:', JSON.stringify(response, null, 2));
+
     if (!response.success) {
       throw new Error(response.message || 'Failed to get all roles');
     }
-    
-    // Handle nested response structure: {success: true, data: {data: [...], meta: {...}}}
-    const responseData = response.data as any;
-    const roles = responseData?.data || responseData || [];
+
+    // Backend returns: { success: true, data: { roles: [...], meta: {...} } }
+    // axios interceptor returns the parsed JSON body
+    const data = response.data as any;
+    // Extract roles from response.data.roles or response.data (direct array)
+    const roles = data?.roles || data || [];
     console.log('Extracted roles in service:', roles);
-    
+
     return roles;
   }
 
   async getAllMenus(): Promise<Menu[]> {
     const response = await apiClient.getAllMenus();
-    console.log('API response in getAllMenus:', response);
-    
+    console.log('API response in getAllMenus:', JSON.stringify(response, null, 2));
+
     if (!response.success) {
       throw new Error(response.message || 'Failed to get all menus');
     }
-    
-    // Handle nested response structure: {success: true, data: {data: [...], meta: {...}}}
-    const responseData = response.data as any;
-    const menus = responseData?.data || responseData || [];
+
+    // Backend returns: { success: true, data: [...] }
+    // axios interceptor returns the parsed JSON body
+    const data = response.data as any;
+    // response.data is directly the array (from ListMenus)
+    const menus = Array.isArray(data) ? data : (data?.data || []);
     console.log('Extracted menus in service:', menus);
-    
+
     return menus;
   }
 
@@ -228,16 +240,20 @@ class AccessRoleService {
     const roleWithAccess = await this.getRoleWithAccess(roleId);
     const permissions: Record<string, 'hidden' | 'read' | 'write'> = {};
 
-    if (roleWithAccess.access_roles) {
-      roleWithAccess.access_roles.forEach(accessRole => {
+    console.log('Role with access:', JSON.stringify(roleWithAccess, null, 2));
+
+    if (roleWithAccess.access_roles && Array.isArray(roleWithAccess.access_roles)) {
+      roleWithAccess.access_roles.forEach((accessRole: any) => {
         if (accessRole.menu) {
-          // Map menu_name to MenuKey format (lowercase with underscores)
-          const menuKey = accessRole.menu.menu_name.toLowerCase().replace(/\s+/g, '_');
-          permissions[menuKey] = accessRole.access_type;
+          // menu_name from backend is already lowercase (e.g., "dashboard", "master_users")
+          const menuKey = accessRole.menu.menu_name.toLowerCase();
+          permissions[menuKey] = accessRole.access_type as 'hidden' | 'read' | 'write';
+          console.log(`Mapped permission: ${menuKey} = ${accessRole.access_type}`);
         }
       });
     }
 
+    console.log('Final permissions object:', permissions);
     return permissions;
   }
 
@@ -247,8 +263,8 @@ class AccessRoleService {
     console.log('Permissions from frontend:', permissions);
 
     const menuAccesses = menus.map(menu => {
-      // Map MenuKey back to menu_name format
-      const menuKey = menu.menu_name.toLowerCase().replace(/\s+/g, '_');
+      // menu_name from backend is already lowercase (e.g., "dashboard", "master_users")
+      const menuKey = menu.menu_name.toLowerCase();
       const accessType = permissions[menuKey] || 'hidden';
       console.log(`Mapping menu: ${menu.menu_name} -> menuKey: ${menuKey} -> access_type: ${accessType}`);
       return {

@@ -59,16 +59,18 @@ export default function MasterRoles() {
       queryFn: async () => {
         try {
           const data = await accessRoleService.getAllRoles();
-          
-          if (!data || data.roles.length === 0) {
+          console.log('getAllRoles returned:', data);
+
+          // data is now an array directly (not { roles: [...] })
+          if (!data || data.length === 0) {
             console.log('No roles found');
             return [];
           }
-          
+
           const rolesWithPermissions = await Promise.all(
-            data?.roles.map(async (role) => {
+            data.map(async (role) => {
               try {
-                const permissions = await accessRoleService.getRolePermissions(role.id);                
+                const permissions = await accessRoleService.getRolePermissions(role.id);
                 return {
                   id: role.id,
                   name: role.role_name,
@@ -88,7 +90,7 @@ export default function MasterRoles() {
               }
             })
           );
-          
+
           console.log('Final roles data:', rolesWithPermissions);
           return rolesWithPermissions;
         } catch (error) {
@@ -123,16 +125,17 @@ export default function MasterRoles() {
   };
 
   const handleSaveRole = async () => {
-      if (!newRoleName.trim()) {
-        toast.error("Role name is required");
-        return;
-      }
+    if (!newRoleName.trim()) {
+      toast.error("Role name is required");
+      return;
+    }
 
+    try {
       setIsCreating(true);
 
       if (editingRole) {
-        // Update existing role name/description first
-        await apiClient.updateRole(editingRole.id, {
+        // Update existing role using accessRoleService
+        await accessRoleService.updateRole(editingRole.id, {
           role_name: newRoleName,
           description: newRoleDescription
         });
@@ -146,23 +149,23 @@ export default function MasterRoles() {
           role_name: newRoleName,
           description: newRoleDescription
         });
-        
+
         console.log('New role created:', newRole);
-        
+
         // Create access roles for the new role using bulk API
         const accessRolesData = Object.entries(selectedPermissions)
           .filter(([_, accessType]) => accessType !== 'hidden')
           .map(([menuKey, accessType]) => {
             // Find menu by menu_name (convert MenuKey back to menu_name format)
-            const menu = menus?.find(m => 
-              m.menu_name.toLowerCase().replace(/\s+/g, '_') === menuKey
+            const menu = menus?.find(m =>
+              m.menu_name.toLowerCase() === menuKey.toLowerCase()
             );
-            
+
             if (!menu) {
               console.warn('Menu not found for key:', menuKey);
               return null;
             }
-            
+
             return {
               role_id: newRole.id,
               menu_id: menu.id,
@@ -170,16 +173,16 @@ export default function MasterRoles() {
             };
           })
           .filter(Boolean) as Partial<AccessRole>[];
-        
+
         console.log('Creating access roles:', accessRolesData);
-        
+
         if (accessRolesData.length > 0) {
           await accessRoleService.createBulkAccessRoles({
             access_roles: accessRolesData
           });
           console.log('Access roles created successfully');
         }
-        
+
         toast.success("Role created successfully");
       }
 
@@ -189,8 +192,6 @@ export default function MasterRoles() {
       setNewRoleDescription("");
       setSelectedPermissions({} as Record<MenuKey, "hidden" | "read" | "write">);
       refetch();
-    try {
-
     } catch (error) {
       console.error('Error saving role:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save role');
@@ -595,17 +596,17 @@ export default function MasterRoles() {
               </Button>
               {role.name !== "Super Admin" && (
                 <>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={() => handleResetPermissions(role.id, role.name)}
                   >
                     <RotateCcw className="h-3 w-3 mr-1" />
                     Reset
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     className="text-destructive"
                     onClick={() => handleDeleteRole(role.id, role.name)}
                   >

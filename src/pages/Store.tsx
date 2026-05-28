@@ -12,6 +12,8 @@ import { config } from "@/lib/config";
 import { locationService } from "@/lib/services/locationService";
 import { useQuery } from "@tanstack/react-query";
 import { productService } from "@/lib/services/productService";
+import { Stock } from "@/lib/api";
+import { Item } from "@radix-ui/react-dropdown-menu";
 
 interface ProductStock {
   id: string;
@@ -75,7 +77,7 @@ export default function Store() {
 
   useEffect(() => {
     const saved = localStorage.getItem("selectedLocationCode");
-    if(selectedLocationCode && selectedLocationCode !== saved) {
+    if (selectedLocationCode && selectedLocationCode !== saved) {
       handleClearCart();
     }
     if (selectedLocationCode) {
@@ -152,12 +154,29 @@ export default function Store() {
     productPrice: number,
     productImageUrl: string,
     productStockId: string,
+    productStock: number,
   ) => {
+
+    // cari item di cart
+    const cartItem = getCartSummary().items.find(
+      (item) => item.product.id === productId
+    );
+
+    // qty sekarang di cart
+    const currentQty = cartItem?.qty || 0;
+
+    // cek stok
+    if (currentQty >= productStock) {
+      toast.error("Stok tidak mencukupi");
+      return;
+    }
+
     addToCart(productId, 1, {
       name: productName,
       price: productPrice,
       imageUrl: productImageUrl,
     });
+
     setTimeout(() => {
       setCartSummary(getCartSummary());
     }, 0);

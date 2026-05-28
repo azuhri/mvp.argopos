@@ -12,12 +12,12 @@ export default function CardProduct({ product, handleAddToCart, urlDetail }: {
     name: string,
     price: number,
     imageUrl: string,
-    category: string,
-    productStockId: string
+    productStockId: string,
+    productStock: number,
   ) => void
 }) {
 
-  
+
   return <React.Fragment>
     <Link
       key={product.id}
@@ -64,7 +64,14 @@ export default function CardProduct({ product, handleAddToCart, urlDetail }: {
         <Button
           size="sm"
           className="w-full btn-tap"
-          onClick={() => handleAddToCart(product.id, product.name, product.price, product.image_url || '', product.category, product.product_stock_id || product.id)}
+          onClick={() => handleAddToCart(
+            product.id,
+            product.name,
+            product.price,
+            product.image_url || '',
+            product.product_stock_id || product.id,
+            product.stock,
+          )}
         >
           + Keranjang
         </Button>

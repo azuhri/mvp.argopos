@@ -28,7 +28,7 @@ export function BottomNav() {
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-strong border-t border-border/40 px-2 pb-safe">
       <div className="flex items-center justify-around h-16">
         {visibleNavItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = location.pathname.startsWith(item.path);
           return (
             <NavLink
               key={item.key}

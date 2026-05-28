@@ -19,12 +19,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, Save, X, Plus, Calendar, Package, ArrowUpDown } from "lucide-react";
+import { User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, Save, X, Plus, Calendar, Package, ArrowUpDown, Users, Briefcase, Building2, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { storeService } from "@/lib/services/storeService";
 import { stockService } from "@/lib/services/stockService";
 import { transactionService } from "@/lib/services/transactionService";
-import { Store, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, TransactionCart } from "@/lib/api";
+import { Store, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, TransactionCart, apiClient } from "@/lib/api";
 import { config } from "@/lib/config";
 
 export default function KoperasiDetailPage() {
@@ -44,7 +44,12 @@ export default function KoperasiDetailPage() {
     const now = new Date();
     return now.toISOString().split('T')[0];
   });
-  const [summaryData, setSummaryData] = useState({ total_transactions: 0, total_revenue: 0, total_stock: 0 });
+  const [summaryData, setSummaryData] = useState({
+    total_transactions: 0,
+    total_revenue: 0,
+    internal_customers: 0,
+    external_customers: 0
+  });
   const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Transaction filters
@@ -145,27 +150,23 @@ export default function KoperasiDetailPage() {
   const loadSummaryData = async () => {
     try {
       setSummaryLoading(true);
-      // Fetch transactions for the date range to calculate summary metrics
-      const response = await storeService.getStoreTransactions(locationId!, {
+
+      // Use dashboard analytics API with custom date range and store_id filter
+      const response = await apiClient.getDashboardAnalytics({
+        range_days: 0,
+        store_id: locationId,
         start_date: summaryStartDate,
         end_date: summaryEndDate,
-        page: 1,
-        page_size: 1000, // Get all transactions for accurate calculation
       });
 
-      // Handle case where data is null (no transactions found)
-      const transactions = response.transactions || [];
-
-      // Calculate summary metrics from filtered transactions
-      const total_transactions = transactions.length;
-      const total_revenue = transactions.reduce((sum, tx) => sum + (tx.total_amount || 0), 0);
-      const total_stock = store?.total_stock || 0; // Stock is not transaction-dependent
-
-      setSummaryData({
-        total_transactions,
-        total_revenue,
-        total_stock,
-      });
+      if (response.success && response.data?.summary) {
+        setSummaryData({
+          total_transactions: response.data.summary.total_transactions || 0,
+          total_revenue: response.data.summary.total_revenue || 0,
+          internal_customers: response.data.summary.internal_customers || 0,
+          external_customers: response.data.summary.external_customers || 0,
+        });
+      }
     } catch (error) {
       toast.error("Failed to load summary data");
       console.error(error);
@@ -540,7 +541,7 @@ export default function KoperasiDetailPage() {
         <div className="text-center py-12 text-muted-foreground">
           <Building2 className="h-10 w-10 mx-auto mb-3 opacity-40" />
           <p>Store not found</p>
-          <Button variant="outline" className="mt-4" onClick={() => navigate('/koperasi')}>
+          <Button variant="outline" className="mt-4" onClick={() => navigate('/master/store')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Kembali
           </Button>
@@ -552,7 +553,7 @@ export default function KoperasiDetailPage() {
   return (
     <AppLayout title={store.location_name}>
       <div className="mb-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/koperasi')}>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/master/store')}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Kembali
         </Button>
@@ -565,6 +566,7 @@ export default function KoperasiDetailPage() {
             onClick={() => setActiveTab('summary')}
             className="whitespace-nowrap"
           >
+            <Building2 className="h-4 w-4 mr-2" />
             Summary
           </Button>
           <Button
@@ -572,6 +574,7 @@ export default function KoperasiDetailPage() {
             onClick={() => setActiveTab('users')}
             className="whitespace-nowrap"
           >
+            <Users className="h-4 w-4 mr-2" />
             User Assigned
           </Button>
           <Button
@@ -579,6 +582,7 @@ export default function KoperasiDetailPage() {
             onClick={() => setActiveTab('transaction')}
             className="whitespace-nowrap"
           >
+            <DollarSign className="h-4 w-4 mr-2" />
             Transaction
           </Button>
           <Button
@@ -586,6 +590,7 @@ export default function KoperasiDetailPage() {
             onClick={() => setActiveTab('payment')}
             className="whitespace-nowrap"
           >
+            <CreditCard className="h-4 w-4 mr-2" />
             Payment Method
           </Button>
         </div>
@@ -639,7 +644,7 @@ export default function KoperasiDetailPage() {
                       <div className="p-2 rounded-lg bg-blue-500/20">
                         <CreditCard className="h-5 w-5 text-blue-600" />
                       </div>
-                      <p className="text-sm text-muted-foreground font-medium">Total Transaksi</p>
+                      <p className="text-sm text-muted-foreground font-medium">Total Transaksi Berhasil</p>
                     </div>
                     <p className="text-3xl font-bold text-foreground">
                       <AnimatedCounter end={summaryData.total_transactions} />
@@ -657,11 +662,20 @@ export default function KoperasiDetailPage() {
                   <div className="p-6 rounded-xl bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-200/30 hover:shadow-lg transition-shadow">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 rounded-lg bg-purple-500/20">
-                        <Package className="h-5 w-5 text-purple-600" />
+                        <Briefcase className="h-5 w-5 text-purple-600" />
                       </div>
-                      <p className="text-sm text-muted-foreground font-medium">Total Stock</p>
+                      <p className="text-sm text-muted-foreground font-medium">Customer Internal</p>
                     </div>
-                    <p className="text-3xl font-bold text-foreground">{summaryData.total_stock}</p>
+                    <p className="text-3xl font-bold text-foreground"><AnimatedCounter end={summaryData.internal_customers} /></p>
+                  </div>
+                  <div className="p-6 rounded-xl bg-gradient-to-br from-orange-500/10 to-orange-600/10 border border-orange-200/30 hover:shadow-lg transition-shadow md:col-span-2 lg:col-span-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 rounded-lg bg-orange-500/20">
+                        <Users className="h-5 w-5 text-orange-600" />
+                      </div>
+                      <p className="text-sm text-muted-foreground font-medium">Customer External</p>
+                    </div>
+                    <p className="text-3xl font-bold text-foreground"><AnimatedCounter end={summaryData.external_customers} /></p>
                   </div>
                 </div>
               )}
@@ -698,7 +712,7 @@ export default function KoperasiDetailPage() {
                                 src={`${config.apiUrl}/${stock.master_product.image_path}`}
                                 alt={stock.master_product.product_name}
                                 className="w-30 h-30 object-cover rounded-md"
-                              />  
+                              />
                             ) : (
                               <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center">
                                 <Package className="h-5 w-5 text-muted-foreground" />
@@ -1299,7 +1313,7 @@ export default function KoperasiDetailPage() {
               </div>
 
               {/* Mobile Card View */}
-              <div className="hidden sm:block md:hidden lg:hidden grid grid-cols-1 gap-4">
+              <div className="md:hidden grid grid-cols-1 gap-4">
                 {store.payment_methods.map((pm) => (
                   <div key={pm.id} className="p-4 rounded-lg border bg-card">
                     <div className="flex items-start justify-between mb-3">
@@ -1332,6 +1346,9 @@ export default function KoperasiDetailPage() {
                     )}
                     {pm.payment_type === 'qris' && pm.account_name && (
                       <p className="text-sm text-muted-foreground">a.n. {pm.account_name}</p>
+                    )}
+                    {pm.payment_type === 'cutoff_hutang' && (
+                      <p className="text-sm text-muted-foreground">Cutoff / Hutang</p>
                     )}
                   </div>
                 ))}

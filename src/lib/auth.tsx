@@ -80,15 +80,17 @@ interface AuthContextValue {
 
 // Hook to fetch permissions from API
 function usePermissions(roleId?: string) {
-  const { data: permissions = {}, isLoading } = useQuery({
+  const { data: permissions = {}, isLoading, error } = useQuery({
     queryKey: ['role-permissions', roleId],
     queryFn: async () => {
       if (!roleId) return {};
       try {
-        return await accessRoleService.getRolePermissions(roleId as any);
-      } catch (error) {
-        console.error('Failed to fetch permissions:', error);
-        // Fallback to hardcoded permissions for demo
+        const result = await accessRoleService.getRolePermissions(roleId as any);
+        console.log('Fetched permissions for roleId:', roleId, result);
+        return result;
+      } catch (err) {
+        console.error('Failed to fetch permissions:', err);
+        // Return empty permissions - don't use hardcoded fallback
         return {};
       }
     },

@@ -16,7 +16,7 @@ export const APP_CONFIG = {
       products: '/products',
       customers: '/customers',
       transactions: '/transactions',
-      koperasi: '/koperasi',
+      koperasi: '/store',
       reports: '/reports',
     }
   },

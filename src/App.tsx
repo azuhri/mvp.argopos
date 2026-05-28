@@ -29,6 +29,7 @@ import CreateProduct from "./pages/master/CreateProduct";
 import MasterCategories from "./pages/master/Categories";
 import StoreManagement from "./pages/master/StoreManagement";
 import KoperasiDetailPage from "./pages/master/KoperasiDetailPage";
+import PaymentApprovalPage from "./pages/master/PaymentApprovalPage";
 import CommerceCatalog from "./pages/CommerceCatalog";
 import PaymentDetail from "./pages/PaymentDetail";
 import PaymentSuccess from "./pages/PaymentSuccess";
@@ -89,15 +90,23 @@ const App = () => (
               </ProtectedRoute>
             } />
 
-            <Route path="/koperasi" element={
+            <Route path="/store" element={<Navigate to="/master/store" replace />} />
+
+            <Route path="/master/store" element={
               <ProtectedRoute>
                 <KoperasiPage />
               </ProtectedRoute>
             } />
 
-            <Route path="/master/koperasi/:locationId" element={
+            <Route path="/master/store/:locationId" element={
               <ProtectedRoute>
                 <KoperasiDetailPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/master/store/:locationId/payment-approval" element={
+              <ProtectedRoute>
+                <PaymentApprovalPage />
               </ProtectedRoute>
             } />
 
