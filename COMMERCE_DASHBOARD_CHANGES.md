@@ -91,7 +91,7 @@ Created complete transaction module following existing domain patterns:
 - Placeholder for API integration
 
 ### 3. Transaction Page
-**File:** `argopos/src/pages/dashboard/TransactionPage.tsx` (NEW)
+**File:** `argopos/src/pages/transactionsPage.tsx` (NEW)
 - Created Transaction page with responsive design
 - Desktop/Tablet: Table view with columns (ID, Customer, Status, Total Amount, Payment Code, Created At, Actions)
 - Mobile: Card view with transaction details
@@ -108,7 +108,7 @@ Created complete transaction module following existing domain patterns:
 - Added imports: ProductPage, TransactionPage, TransactionApproval
 - Added routes:
   - `/dashboard/products` - Product page (protected)
-  - `/dashboard/transactions` - Transaction page (protected)
+  - `/transactions` - Transaction page (protected)
   - `/transactions/:transactionId/approve-payment` - Public route for email approval
 
 ### 5. KoperasiDetailPage Responsive Design
@@ -181,7 +181,7 @@ Created complete transaction module following existing domain patterns:
 ### Protected Routes
 - `/dashboard` - Dashboard with mobile bottom navigation
 - `/dashboard/products` - Product management page
-- `/dashboard/transactions` - Transaction management page
+- `/transactions` - Transaction management page
 
 ### Public Routes
 - `/transactions/:transactionId/approve-payment` - Email-based transaction approval

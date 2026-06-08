@@ -12,7 +12,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
   { id: "product", label: "Product", icon: Package, path: "/dashboard/products" },
-  { id: "transaction", label: "Transaction", icon: ShoppingCart, path: "/dashboard/transactions" },
+  { id: "transaction", label: "Transaction", icon: ShoppingCart, path: "/transactions" },
 ];
 
 export function DashboardMobileNav() {

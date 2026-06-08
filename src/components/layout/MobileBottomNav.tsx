@@ -15,7 +15,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard", permissionKey: "dashboard" },
   { id: "product", label: "Product", icon: Package, path: "/dashboard/products", permissionKey: "master_products" },
-  { id: "transaction", label: "Transaction", icon: ShoppingCart, path: "/dashboard/transactions", permissionKey: "transactions" },
+  { id: "transaction", label: "Transaction", icon: ShoppingCart, path: "/transactions", permissionKey: "transactions" },
 ];
 
 export function MobileBottomNav() {

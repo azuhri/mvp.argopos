@@ -56,7 +56,7 @@ export default function TransactionApproval() {
   };
 
   const handleGoToDashboard = () => {
-    navigate("/dashboard/transactions");
+    navigate("/transactions");
   };
 
   const formatCurrency = (amount: number) => {

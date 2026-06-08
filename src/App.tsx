@@ -78,7 +78,7 @@ const App = () => (
               </ProtectedRoute>
             } />
 
-            <Route path="/dashboard/transactions" element={
+            <Route path="/transactions" element={
               <ProtectedRoute>
                 <TransactionPage />
               </ProtectedRoute>
@@ -116,11 +116,11 @@ const App = () => (
               </ProtectedRoute>
             } />
 
-            <Route path="/transactions" element={
+            {/* <Route path="/transactions" element={
               <ProtectedRoute>
                 <Transactions />
               </ProtectedRoute>
-            } />
+            } /> */}
 
             <Route path="/store" element={
               <ProtectedRoute>
