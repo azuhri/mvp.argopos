@@ -158,6 +158,9 @@ export interface Transaction {
   customer_no_wa?: string;
   customer_employee_code?: string;
   transaction_carts?: TransactionCart[];
+  // Pickup proof fields
+  path_proof_pickup?: string;
+  pickup_at?: string;
 }
 
 export interface DashboardAnalyticsSummary {
@@ -1142,6 +1145,23 @@ class ApiClient {
   async approveTransactionDelivery(transactionId: string): Promise<ApiResponse<void>> {
     return this.request<void>(`/transactions/required/${transactionId}/approve-delivery`, {
       method: 'POST',
+    });
+  }
+
+  async uploadPickupProof(transactionId: string, file?: File, pathProofPickup?: string): Promise<ApiResponse<{ path_proof_pickup: string; pickup_at: string }>> {
+    // Support both file upload (FormData) and base64 string (JSON)
+    if (file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      return this.request(`/transactions/${transactionId}/upload-pickup-proof`, {
+        method: 'POST',
+        data: formData,
+      });
+    }
+    // Fallback to JSON with base64 string
+    return this.request(`/transactions/${transactionId}/upload-pickup-proof`, {
+      method: 'POST',
+      data: { path_proof_pickup: pathProofPickup },
     });
   }
 

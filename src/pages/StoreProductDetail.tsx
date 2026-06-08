@@ -31,7 +31,7 @@ interface MasterProduct {
   description?: string;
   image_path: string;
   image_url: string;
-  image_collection_url?: string[] | string; // Can be array or JSON string from backend
+  image_collection_url?: string[] | string;
   category?: string;
 }
 
@@ -53,7 +53,6 @@ interface StoreData {
   product_stores: ProductStock[];
 }
 
-// Extended product interface for detail view
 interface ProductDetail {
   id: string;
   name: string;
@@ -69,27 +68,31 @@ interface ProductDetail {
   sold: number;
   images: string[];
   features: string[];
-  shipping: {
-    free: boolean;
-    estimated: string;
-  };
+  shipping: { free: boolean; estimated: string };
   warranty: string;
   isOutOfStock: boolean;
 }
 
+// All hooks must be at the top level
 export default function StoreProductDetail() {
   const { locationCode, productId } = useParams<{ locationCode: string; productId: string }>();
 
-  // All state hooks must be called before any conditional logic
+  // State hooks - all at the top
   const [quantity, setQuantity] = useState(1);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [isBuyingNow, setIsBuyingNow] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [mainImageLoaded, setMainImageLoaded] = useState(false);
+  const [mainImageError, setMainImageError] = useState(false);
+  const [thumbnailLoaded, setThumbnailLoaded] = useState<Record<number, boolean>>({});
+  const [thumbnailError, setThumbnailError] = useState<Record<number, boolean>>({});
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+
+  // Ref
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch store data from backend API
+  // Query - after all state hooks
   const { data: storeData, error, isLoading } = useQuery({
     queryKey: ['store', locationCode],
     queryFn: async () => {
@@ -104,12 +107,10 @@ export default function StoreProductDetail() {
     enabled: !!locationCode,
   });
 
-  // Find product from store data
+  // Find product
   const productStock = storeData?.product_stores.find(p => p.id === productId);
-  // console.log(productStock);
 
-
-  // Build product detail from API data
+  // Build product detail - using useMemo for performance
   const product: ProductDetail | null = productStock ? {
     id: productStock.id,
     name: productStock.master_product.product_name,
@@ -118,13 +119,11 @@ export default function StoreProductDetail() {
     price: productStock.base_price,
     discount_price: productStock.discount_price || 0,
     tax_percentage: productStock?.tax_percentage || 0,
-    // Build full image URL using backend base URL + image_path
-    image_url: productStock.master_product.image_url || `${config.apiUrl}/uploads/${productStock.master_product.image_path}`,
+    image_url: `${config.endpointUrl}/${productStock.master_product.image_path}` || productStock.master_product.image_url,
     description: productStock.master_product.description || "High-quality product from our store.",
     stock: productStock.stock,
     rating: 4.8,
     sold: 234,
-    // Build image collection URLs - handle if it's a string or array
     images: (() => {
       const collection = productStock.master_product.image_collection_url;
       let imageArray: string[] = [];
@@ -132,7 +131,6 @@ export default function StoreProductDetail() {
       if (Array.isArray(collection)) {
         imageArray = collection;
       } else if (typeof collection === 'string' && collection) {
-        // If backend sends JSON string, try to parse it
         try {
           const parsed = JSON.parse(collection);
           imageArray = Array.isArray(parsed) ? parsed : [collection];
@@ -143,38 +141,44 @@ export default function StoreProductDetail() {
 
       if (imageArray.length > 0) {
         return imageArray.map(img =>
-          img?.startsWith('http') ? img : `${config.apiUrl}/${img}`
+          img?.startsWith('http') ? img : `${config.endpointUrl}/${img}`
         );
       }
 
-      // Fallback to main image
-      const mainImage = `${config.apiUrl}/${productStock.master_product.image_path}`;
+      const mainImage = `${config.endpointUrl}/${productStock.master_product.image_path}`;
       return [mainImage];
     })(),
-    features: [
-      "High quality",
-      "Fresh stock",
-      "Best price"
-    ],
-    shipping: {
-      free: true,
-      estimated: "2-3 days"
-    },
+    features: ["High quality", "Fresh stock", "Best price"],
+    shipping: { free: true, estimated: "2-3 days" },
     warranty: "30-day money back guarantee",
     isOutOfStock: productStock.stock === 0
   } : null;
 
+  // Cart summary
   const { items, total, totalItems } = getCartSummary();
 
-  // All useEffect hooks must be called before any conditional returns
-  // Auto-carousel effect
+  // Image handlers
+  const handleMainImageLoad = () => setMainImageLoaded(true);
+  const handleMainImageError = () => {
+    setMainImageLoaded(true);
+    setMainImageError(true);
+  };
+  const handleThumbnailLoad = (index: number) => {
+    setThumbnailLoaded(prev => ({ ...prev, [index]: true }));
+  };
+  const handleThumbnailError = (index: number) => {
+    setThumbnailLoaded(prev => ({ ...prev, [index]: true }));
+    setThumbnailError(prev => ({ ...prev, [index]: true }));
+  };
+
+  // Effect - auto-carousel (after all state hooks and before conditional returns)
   useEffect(() => {
     if (!product || !isAutoPlaying || product.images.length <= 1) return;
 
     intervalRef.current = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % product.images.length);
       setSelectedImage((prev) => (prev + 1) % product.images.length);
-    }, 4000); // Change every 4 seconds
+    }, 4000);
 
     return () => {
       if (intervalRef.current) {
@@ -183,7 +187,21 @@ export default function StoreProductDetail() {
     };
   }, [isAutoPlaying, product?.images?.length]);
 
-  // Handle loading state - after all hooks
+  // Helper function
+  const calculateFinalPrice = (stock: {
+    base_price: number;
+    discount_price: number;
+    tax_percentage: number;
+  }) => {
+    const basePrice = stock.base_price;
+    const discountPrice = stock.discount_price || 0;
+    const taxPercentage = stock.tax_percentage || 0;
+    const price = discountPrice > 0 ? discountPrice : basePrice;
+    const tax = price * (taxPercentage / 100);
+    return Math.round(price + tax);
+  };
+
+  // Conditional returns AFTER all hooks
   if (isLoading) {
     return (
       <AppLayoutCommerce title="Loading..." locationCode={locationCode || ''}>
@@ -194,7 +212,6 @@ export default function StoreProductDetail() {
     );
   }
 
-  // Handle error or product not found - after all hooks
   if (error || !product) {
     return (
       <AppLayoutCommerce title="Product Not Found" locationCode={locationCode || ''}>
@@ -210,7 +227,7 @@ export default function StoreProductDetail() {
     );
   }
 
-  // Continue with the rest of the component...
+  // Event handlers
   const handleQuantityChange = (delta: number) => {
     const newQuantity = quantity + delta;
     if (newQuantity >= 1 && newQuantity <= product.stock) {
@@ -229,7 +246,11 @@ export default function StoreProductDetail() {
 
     const result = addToCart(product.id, quantity, {
       name: product.name,
-      price: product.price,
+      price: calculateFinalPrice({
+        base_price: product.price,
+        discount_price: product.discount_price,
+        tax_percentage: product.tax_percentage,
+      }),
       imageUrl: product.image_url,
       category: product.category,
     }, product.stock);
@@ -251,15 +272,17 @@ export default function StoreProductDetail() {
     setIsBuyingNow(true);
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // Clear cart first for buy now
     if (items.length > 0) {
       items.forEach(item => removeFromCart(item.productId));
     }
 
-    // Add current product with stock validation
     const result = addToCart(product.id, quantity, {
       name: product.name,
-      price: product.price,
+      price: calculateFinalPrice({
+        base_price: product.price,
+        discount_price: product.discount_price,
+        tax_percentage: product.tax_percentage,
+      }),
       imageUrl: product.image_url,
       category: product.category,
     }, product.stock);
@@ -267,7 +290,7 @@ export default function StoreProductDetail() {
     if (result.success) {
       toast.success("Produk ditambahkan, mengalihkan ke checkout...");
       setTimeout(() => {
-        window.location.href = `/commerce/cart`;
+        window.location.href = `/${locationCode}/commerce/cart`;
       }, 1000);
     } else {
       toast.error(result.message);
@@ -283,32 +306,23 @@ export default function StoreProductDetail() {
   };
 
   const nextImage = () => {
-    // Pause auto-play when user manually navigates
     setIsAutoPlaying(false);
     setCurrentImageIndex((prev) => (prev + 1) % product.images.length);
     setSelectedImage((prev) => (prev + 1) % product.images.length);
-
-    // Resume auto-play after 10 seconds
     setTimeout(() => setIsAutoPlaying(true), 10000);
   };
 
   const prevImage = () => {
-    // Pause auto-play when user manually navigates
     setIsAutoPlaying(false);
     setCurrentImageIndex((prev) => (prev - 1 + product.images.length) % product.images.length);
     setSelectedImage((prev) => (prev - 1 + product.images.length) % product.images.length);
-
-    // Resume auto-play after 10 seconds
     setTimeout(() => setIsAutoPlaying(true), 10000);
   };
 
   const handleThumbnailClick = (index: number) => {
-    // Pause auto-play when user manually selects
     setIsAutoPlaying(false);
     setCurrentImageIndex(index);
     setSelectedImage(index);
-
-    // Resume auto-play after 10 seconds
     setTimeout(() => setIsAutoPlaying(true), 10000);
   };
 
@@ -341,19 +355,26 @@ export default function StoreProductDetail() {
           <div className="space-y-4">
             {/* Main Image */}
             <div className="relative aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-primary/5 to-accent/5">
+              {/* Skeleton Layer */}
+              {!mainImageLoaded && !mainImageError && (
+                <motion.div
+                  className="absolute inset-0 z-20 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 animate-pulse"
+                  initial={{ opacity: 1 }}
+                />
+              )}
+
               <AnimatePresence mode="wait">
                 <motion.img
                   key={currentImageIndex}
                   src={product.images[currentImageIndex]}
                   alt={product.name}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-cover transition-opacity duration-400 ease-out ${mainImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  onLoad={handleMainImageLoad}
+                  onError={handleMainImageError}
                   initial={{ opacity: 0, scale: 0.95, x: 50 }}
-                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  animate={{ opacity: mainImageLoaded ? 1 : 0, scale: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 1.05, x: -50 }}
-                  transition={{
-                    duration: 0.6,
-                    ease: [0.25, 0.46, 0.45, 0.94]
-                  }}
+                  transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
                 />
               </AnimatePresence>
 
@@ -361,20 +382,12 @@ export default function StoreProductDetail() {
               {isAutoPlaying && product.images.length > 1 && (
                 <div className="absolute bottom-4 left-4 right-4 flex gap-1">
                   {product.images.map((_, index) => (
-                    <motion.div
-                      key={index}
-                      className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden"
-                    >
+                    <motion.div key={index} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
                       <motion.div
                         className="h-full bg-white rounded-full"
                         initial={{ width: "0%" }}
-                        animate={{
-                          width: index === currentImageIndex ? "100%" : "0%"
-                        }}
-                        transition={{
-                          duration: 4,
-                          ease: "linear"
-                        }}
+                        animate={{ width: index === currentImageIndex ? "100%" : "0%" }}
+                        transition={{ duration: 4, ease: "linear" }}
                       />
                     </motion.div>
                   ))}
@@ -382,79 +395,33 @@ export default function StoreProductDetail() {
               )}
 
               {/* Image Navigation */}
-              <motion.div
-                className="absolute left-2 top-1/2 -translate-y-1/2 flex gap-2"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <motion.div
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all"
-                    onClick={prevImage}
-                  >
+              <motion.div className="absolute left-2 top-1/2 -translate-y-1/2 flex gap-2" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                  <Button variant="outline" size="sm" className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all" onClick={prevImage}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                 </motion.div>
               </motion.div>
 
-              <motion.div
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <motion.div
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all"
-                    onClick={nextImage}
-                  >
+              <motion.div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                  <Button variant="outline" size="sm" className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all" onClick={nextImage}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </motion.div>
               </motion.div>
 
               {/* Stock Badge */}
-              <motion.div
-                className="absolute top-2 right-2"
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <Badge
-                  variant={product.stock > 5 ? "default" : "destructive"}
-                  className="bg-white/40 backdrop-blur"
-                >
+              <motion.div className="absolute top-2 right-2" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                <Badge variant={product.stock > 5 ? "default" : "destructive"} className="bg-white/40 backdrop-blur">
                   {product.stock > 5 ? `Stok: ${product.stock}` : "Habis"}
                 </Badge>
               </motion.div>
 
               {/* Favorite Button */}
-              <motion.div
-                className="absolute bottom-2 right-2"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-              >
-                <motion.div
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all"
-                  >
+              <motion.div className="absolute bottom-2 right-2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+                <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                  <Button variant="outline" size="sm" className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all">
                     <Heart className="h-4 w-4" />
                   </Button>
                 </motion.div>
@@ -474,19 +441,27 @@ export default function StoreProductDetail() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <img
-                    src={image}
-                    alt={`${product.name} ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  {selectedImage === index && (
-                    <motion.div
-                      className="absolute inset-0 bg-primary/20"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.2 }}
-                    />
-                  )}
+                  <div className="relative w-full h-full overflow-hidden rounded-lg">
+                    {!thumbnailLoaded[index] && !thumbnailError[index] && (
+                      <div className="absolute inset-0 z-10 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 animate-pulse" />
+                    )}
+                    {!thumbnailError[index] && (
+                      <img
+                        src={image}
+                        alt={`${product.name} ${index + 1}`}
+                        className={`w-full h-full object-cover transition-opacity duration-300 ease-out ${thumbnailLoaded[index] ? 'opacity-100' : 'opacity-0'}`}
+                        onLoad={() => handleThumbnailLoad(index)}
+                        onError={() => handleThumbnailError(index)}
+                      />
+                    )}
+                    {thumbnailError[index] && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-muted/30 z-10">
+                        <svg className="w-5 h-5 text-muted-foreground opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
                 </motion.button>
               ))}
             </div>
@@ -494,7 +469,6 @@ export default function StoreProductDetail() {
 
           {/* Product Information */}
           <div className="space-y-6">
-            {/* Product Title and Rating */}
             <div>
               <div className="flex flex-col gap-1 mb-2">
                 <h1 className="text-2xl font-bold">{product.name}</h1>
@@ -508,9 +482,7 @@ export default function StoreProductDetail() {
                   {renderStars(product.rating)}
                   <span className="text-sm font-medium">{product.rating}</span>
                 </div>
-                <span className="text-sm text-muted-foreground">
-                  ({product.sold} terjual)
-                </span>
+                <span className="text-sm text-muted-foreground">({product.sold} terjual)</span>
               </div>
             </div>
 
@@ -519,71 +491,40 @@ export default function StoreProductDetail() {
               <div className="flex items-baseline gap-2">
                 <div className="flex md:flex-row flex-col gap-1">
                   <p className={`font-semibold line-through text-xl ${product.discount_price > 0 ? 'text-xl text-destructive' : 'no-underline text-primary'}`}>
-                    Rp {(product.price).toLocaleString("id-ID")}
+                    Rp {Math.round(product.price * (1 + product.tax_percentage / 100)).toLocaleString("id-ID")}
                   </p>
                   {product.discount_price > 0 && (
-                    <p className={`font-bold text-md text-success text-3xl font-bold text-primary`}>
-                      Rp {(product.discount_price).toLocaleString("id-ID")}
+                    <p className="font-bold text-md text-success text-3xl font-bold text-primary">
+                      Rp {calculateFinalPrice({ base_price: product.price, discount_price: product.discount_price, tax_percentage: product.tax_percentage }).toLocaleString("id-ID")}
                     </p>
                   )}
-
                 </div>
-                {/* <span className="text-3xl font-bold text-primary">
-                  {formatCurrency(product.price)}
-                </span> */}
                 <span className="text-sm text-muted-foreground">/pcs</span>
               </div>
               <GlassCard className="p-4">
                 <h2 className="text-xl font-semibold mb-4">Deskripsi Produk</h2>
-                <p className="text-muted-foreground leading-relaxed">
-                  {product.description}
-                </p>
+                <p className="text-muted-foreground leading-relaxed">{product.description}</p>
               </GlassCard>
-              {/* {product.shipping.free && (
-                <div className="flex items-center gap-1 text-sm text-green-600">
-                  <Truck className="h-4 w-4" />
-                  <span>Gratis ongkir</span>
-                </div>
-              )} */}
             </div>
 
             {/* Quantity Selector */}
             <div className="space-y-3">
               <label className="text-sm font-medium">Jumlah</label>
               <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuantityChange(-1)}
-                  disabled={quantity <= 1}
-                >
+                <Button variant="outline" size="sm" onClick={() => handleQuantityChange(-1)} disabled={quantity <= 1}>
                   <Minus className="h-4 w-4" />
                 </Button>
-                <div className="w-16 text-center font-medium">
-                  {quantity}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuantityChange(1)}
-                  disabled={quantity >= product.stock}
-                >
+                <div className="w-16 text-center font-medium">{quantity}</div>
+                <Button variant="outline" size="sm" onClick={() => handleQuantityChange(1)} disabled={quantity >= product.stock}>
                   <Plus className="h-4 w-4" />
                 </Button>
-                <span className="text-sm text-muted-foreground ml-2">
-                  Stok: {product.stock}
-                </span>
+                <span className="text-sm text-muted-foreground ml-2">Stok: {product.stock}</span>
               </div>
             </div>
 
             {/* Action Buttons */}
             <div className="space-y-3">
-              <Button
-                size="lg"
-                className="w-full btn-tap"
-                onClick={handleAddToCart}
-                disabled={isAddingToCart || product.stock === 0}
-              >
+              <Button size="lg" className="w-full btn-tap" onClick={handleAddToCart} disabled={isAddingToCart || product.stock === 0}>
                 {isAddingToCart ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
@@ -597,13 +538,7 @@ export default function StoreProductDetail() {
                 )}
               </Button>
 
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full btn-tap border-gray-900"
-                onClick={handleBuyNow}
-                disabled={isBuyingNow || product.stock === 0}
-              >
+              <Button variant="outline" size="lg" className="w-full btn-tap border-gray-900" onClick={handleBuyNow} disabled={isBuyingNow || product.stock === 0}>
                 {isBuyingNow ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
@@ -630,27 +565,11 @@ export default function StoreProductDetail() {
                 ))}
               </div>
             </div>
-
-            {/* Shipping Info */}
-            {/* <div className="space-y-3">
-              <h3 className="font-medium">Pengiriman</h3>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Truck className="h-4 w-4 text-muted-foreground" />
-                  <span>Estimasi: {product.shipping.estimated}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Shield className="h-4 w-4 text-muted-foreground" />
-                  <span>{product.warranty}</span>
-                </div>
-              </div>
-            </div> */}
           </div>
         </div>
 
-        {/* Product Description */}
+        {/* Cart Summary */}
         <div className="space-y-6">
-          {/* Cart Summary */}
           {items.length > 0 && (
             <GlassCard className="p-6">
               <h2 className="text-xl font-semibold mb-4">Ringkasan Keranjang</h2>
@@ -658,16 +577,10 @@ export default function StoreProductDetail() {
                 {items.map((item) => (
                   <div key={item.productId} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={item.product.image_url}
-                        alt={item.product.name}
-                        className="w-12 h-12 rounded-lg object-cover"
-                      />
+                      <img src={item.product.image_url} alt={item.product.name} className="w-12 h-12 rounded-lg object-cover" />
                       <div>
                         <h4 className="font-medium text-sm">{item.product.name}</h4>
-                        <p className="text-xs text-muted-foreground">
-                          {item.qty} × {formatCurrency(item.product.price)}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{item.qty} × {formatCurrency(item.product.price)}</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -682,15 +595,9 @@ export default function StoreProductDetail() {
                 </div>
                 <div className="space-y-3">
                   <Button asChild className="w-full btn-tap">
-                    <Link to={`/commerce/checkout`}>
-                      Checkout
-                    </Link>
+                    <Link to={`/commerce/checkout`}>Checkout</Link>
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleClearCart}
-                  >
+                  <Button variant="outline" className="w-full" onClick={handleClearCart}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Kosongkan Keranjang
                   </Button>

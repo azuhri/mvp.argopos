@@ -17,6 +17,7 @@ import { CartItemSkeleton, CartSummarySkeleton, LoadingSpinner } from "@/compone
 import { useQuery } from "@tanstack/react-query";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { calculateFinalPrice } from "@/lib/utils";
 
 interface ProductStock {
   id: string;
@@ -59,6 +60,7 @@ export default function StoreCart() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [cart, setCart] = useState(getCartSummary());
+  const [totalTax, setTotalTax] = useState(0);
   const [updating, setUpdating] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
 
@@ -75,6 +77,19 @@ export default function StoreCart() {
   const [isExternalCustomerExists, setIsExternalCustomerExists] = useState(false);
   const [isValidatingExternal, setIsValidatingExternal] = useState(false);
   const [isCreatingTransaction, setIsCreatingTransaction] = useState(false);
+
+  // Track image loading states for cart items
+  const [imageLoaded, setImageLoaded] = useState<Record<string, boolean>>({});
+  const [imageError, setImageError] = useState<Record<string, boolean>>({});
+
+  const handleImageLoad = (productId: string) => {
+    setImageLoaded(prev => ({ ...prev, [productId]: true }));
+  };
+
+  const handleImageError = (productId: string) => {
+    setImageLoaded(prev => ({ ...prev, [productId]: true }));
+    setImageError(prev => ({ ...prev, [productId]: true }));
+  };
 
   // Fetch store data from backend API
   const { data: storeData, error } = useQuery({
@@ -117,8 +132,16 @@ export default function StoreCart() {
         stock: p.stock,
       }));
       setCart(getCartSummary(products));
+      setTotalTax(
+        getCartSummary(products).items.reduce(
+          (acc, item) =>
+            acc + ((item.productPrice * item.tax_percentage / 100) * item.qty),
+          0
+        )
+      );
     }
   }, [storeData]);
+
 
   const findProductByid = (productId: string) => {
     return storeData?.product_stores.find(p => p.id === productId);
@@ -160,7 +183,7 @@ export default function StoreCart() {
 
   const handleUpdateQty = async (productId: string, newQty: number) => {
     const product = findProductByid(productId);
-    
+
     if (newQty < 0) return;
 
     setUpdating(productId);
@@ -504,12 +527,35 @@ export default function StoreCart() {
                         {/* 1. Product Image & Info (Mobile: Atas Kiri | Desktop: Paling Kiri) */}
                         <div className="flex flex-col">
                           <div className="flex items-start gap-3 md:gap-4 min-w-0">
-                            <div className="w-24 h-24 md:w-30 md:h-30 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 flex-shrink-0">
-                              <img
-                                src={item.product.image_url}
-                                alt={item.product.name}
-                                className="w-full h-full object-cover"
-                              />
+                            <div className="w-24 h-24 md:w-30 md:h-30 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 flex-shrink-0 relative">
+                              {/* Skeleton - always behind image during loading */}
+                              {(!imageLoaded[item.productId] && !imageError[item.productId]) && (
+                                <div className="absolute inset-0 z-10 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 animate-pulse" />
+                              )}
+
+                              {/* Image with fade-in */}
+                              {!imageError[item.productId] && (
+                                <img
+                                  src={item.product.image_url}
+                                  alt={item.product.name}
+                                  className={`
+                                    w-full h-full object-cover
+                                    transition-opacity duration-300 ease-out
+                                    ${imageLoaded[item.productId] ? 'opacity-100' : 'opacity-0'}
+                                  `}
+                                  onLoad={() => handleImageLoad(item.productId)}
+                                  onError={() => handleImageError(item.productId)}
+                                />
+                              )}
+
+                              {/* Error fallback */}
+                              {imageError[item.productId] && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-muted/30 z-10">
+                                  <svg className="w-5 h-5 text-muted-foreground opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                              )}
                             </div>
                             <div className="flex flex-col min-w-0 pt-0.5 md:pt-0">
                               <h3 className="font-semibold text-sm md:text-base text-gray-900 leading-tight mb-1 truncate md:whitespace-normal">
@@ -595,13 +641,17 @@ export default function StoreCart() {
               <h2 className="text-lg font-semibold mb-4">Ringkasan Belanja</h2>
 
               <div className="space-y-3 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal ({totalItems} item)</span>
-                  <span>{formatCurrency(total)}</span>
+                <div className="flex justify-between text-sm font-normal">
+                  <span>Subtotal <span className="text-xs font-medium italic">({totalItems} items without tax)</span></span>
+                  <span>{formatCurrency(total - totalTax)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Pajak</span>
-                  <span className="text-green-600">Rp0</span>
+                <div className="flex justify-between text-sm font-normal text-red-500">
+                  <span>Tax</span>
+                  <span>+{formatCurrency(totalTax)}</span>
+                </div>
+                <div className="flex justify-between text-md font-semibold">
+                  <span>Total</span>
+                  <span>{formatCurrency(total)}</span>
                 </div>
               </div>
             </GlassCard>

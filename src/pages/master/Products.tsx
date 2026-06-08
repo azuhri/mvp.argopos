@@ -281,7 +281,7 @@ export default function Products() {
         if (img.startsWith('http')) {
           collectionImages.push(img);
         } else {
-          collectionImages.push(`${config.apiUrl}/${img}`);
+          collectionImages.push(`${config.endpointUrl}/${img}`);
         }
       });
     }

@@ -97,7 +97,7 @@ export default function PaymentSuccess() {
                       <div key={index} className="flex items-start gap-4 p-3 rounded-lg bg-muted/30">
                         {item.product_details?.image_path ? (
                           <img
-                            src={`${config.apiUrl}/${item.product_details.image_path}`}
+                            src={`${config.endpointUrl}/${item.product_details.image_path}`}
                             alt={item.product_details.product_name || 'Product'}
                             className="w-16 h-16 object-cover rounded-md"
                           />

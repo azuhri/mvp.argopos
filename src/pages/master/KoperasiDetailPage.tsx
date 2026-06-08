@@ -116,7 +116,7 @@ export default function KoperasiDetailPage() {
 
       data.payment_methods = (data.payment_methods || []).map((payment) => ({
         ...payment,
-        image_url: payment.image_url ? config.apiUrl + "/public/" + payment.image_url : '',
+        image_url: payment.image_url ? config.endpointUrl + "/public/" + payment.image_url : '',
       }));
       console.log(data.payment_methods);
 
@@ -709,7 +709,7 @@ export default function KoperasiDetailPage() {
                           <TableCell>
                             {stock.master_product?.image_url ? (
                               <img
-                                src={`${config.apiUrl}/${stock.master_product.image_path}`}
+                                src={`${config.endpointUrl}/${stock.master_product.image_path}`}
                                 alt={stock.master_product.product_name}
                                 className="w-20 h-20 object-cover rounded-md"
                               />
@@ -756,7 +756,7 @@ export default function KoperasiDetailPage() {
                       <div className="flex items-start gap-2">
                         {stock.master_product?.image_url ? (
                           <img
-                            src={`${config.apiUrl}/${stock.master_product.image_path}`}
+                            src={`${config.endpointUrl}/${stock.master_product.image_path}`}
                             alt={stock.master_product.product_name}
                             className="w-24 h-24 object-cover rounded-md"
                           />
@@ -1383,7 +1383,7 @@ export default function KoperasiDetailPage() {
                 <div key={item.id} className="flex items-center gap-4 rounded-lg border p-3">
                   {item.product_details?.image_path ? (
                     <img
-                      src={`${config.apiUrl}/${item.product_details.image_path}`}
+                      src={`${config.endpointUrl}/${item.product_details.image_path}`}
                       alt={item.product_details?.product_name || 'Product'}
                       className="w-20 h-20 rounded-lg object-cover"
                     />
@@ -1426,7 +1426,7 @@ export default function KoperasiDetailPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Base Price</Label>
+              <Label>Store Price</Label>
               <Input
                 type="number"
                 value={stockFormData.base_price}

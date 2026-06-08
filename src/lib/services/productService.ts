@@ -62,17 +62,20 @@ export class ProductService {
     }
     
     const responseData = response.data as any;
-    const endpointAPI = import.meta.env.VITE_API_URL;
+    // Use VITE_BE_ENDPOINT for image URLs (production server), fallback to VITE_API_URL
+    const imageEndpoint = import.meta.env.VITE_BE_ENDPOINT || import.meta.env.VITE_API_URL;
     let products = responseData?.products || responseData || [];
-    
-    console.log('=== PRODUCT DATA DEBUG ===');
-    console.log('Raw responseData:', responseData);
-    console.log('Raw products array:', products);
-    console.log('Products length:', products.length);
-    
+
+    console.log('=== PRODUCT IMAGE URL DEBUG ===');
+    console.log('VITE_BE_ENDPOINT (from env):', import.meta.env.VITE_BE_ENDPOINT);
+    console.log('VITE_API_URL (from env):', import.meta.env.VITE_API_URL);
+    console.log('imageEndpoint being used:', imageEndpoint);
+    console.log('Products count:', products.length);
+
+    // Debug first product's image data
     if (products.length > 0) {
-      console.log('First product structure:', products[0]);
-      console.log('First product keys:', Object.keys(products[0]));
+      console.log('First product raw image_path:', products[0].image_path);
+      console.log('First product raw image_url:', products[0].image_url);
     }
     
     products = products.map((product: any) => {
@@ -90,12 +93,25 @@ export class ProductService {
           imageCollection = [];
         }
       }
-      
+
+      // Helper function to build full image URL
+      // Check if URL is already complete (http/https) or just a path
+      const buildImageUrl = (path: string | undefined | null): string => {
+        if (!path) return '';
+        // If already a complete URL, use it directly
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          return path;
+        }
+        // Otherwise, prepend the image endpoint
+        return `${imageEndpoint}/${path}`;
+      };
+
       return {
         ...product,
-        product_description: product.description || product.product_description || '', // Fix field mapping
-        image_url: product.image_path ? `${endpointAPI}/${product.image_path}` : '',
-        image_collection: imageCollection.map((path: string) => `${endpointAPI}${path}`),
+        product_description: product.description || product.product_description || '',
+        // Build image URL - check if image_url is already complete or needs endpoint
+        image_url: buildImageUrl(product.image_path || product.image_url),
+        image_collection: imageCollection.map((path: string) => buildImageUrl(path)),
       };
     });
     

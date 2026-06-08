@@ -4,9 +4,11 @@ export const config = {
   appName: import.meta.env.VITE_APP_NAME || 'ArgoPOS',
   appNameCommerce: import.meta.env.VITE_APP_NAME_COMMERCE || 'ArgoPOS Commerce',
   appUrl: import.meta.env.VITE_APP_URL || 'http://localhost:5173',
-  
+
   // API Configuration
   apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  // Use VITE_BE_ENDPOINT for image URLs (production server)
+  // This is used for static assets like images, not API calls
   endpointUrl: import.meta.env.VITE_BE_ENDPOINT || import.meta.env.VITE_API_URL,
   apiTimeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '10000'),
   

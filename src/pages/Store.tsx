@@ -21,6 +21,7 @@ interface ProductStock {
   base_price: number;
   discount_price: number;
   final_price: number;
+  tax_percentage?: number;
   master_product: {
     id: string;
     product_name: string;
@@ -155,6 +156,7 @@ export default function Store() {
     productImageUrl: string,
     productStockId: string,
     productStock: number,
+    tax_percentage: number,
   ) => {
 
     // cari item di cart
@@ -175,6 +177,7 @@ export default function Store() {
       name: productName,
       price: productPrice,
       imageUrl: productImageUrl,
+      tax_percentage: tax_percentage,
     });
 
     setTimeout(() => {
@@ -249,7 +252,7 @@ export default function Store() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 pb-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {filtered.map((product, i) => (
             <motion.div
               key={product.id}
@@ -264,10 +267,11 @@ export default function Store() {
                   id: product.id,
                   name: product.master_product.product_name,
                   price: product.base_price,
-                  image_url: config.apiUrl + "/" + product.master_product.image_path,
+                  image_url: config.endpointUrl + "/" + product.master_product.image_path,
                   stock: product.stock,
                   category: product.master_product.category || "",
                   discount_price: product.discount_price,
+                  tax_percentage: product.tax_percentage || 0,
                   unit: "pack",
                   product_stock_id: product.id
                 }}

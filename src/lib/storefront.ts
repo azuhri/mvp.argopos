@@ -9,6 +9,7 @@ export interface CartItem {
   productCategory?: string;
   productStock?: number;
   productStockId?: string;
+  tax_percentage?: number;
 }
 
 interface AddToCartResult {
@@ -36,7 +37,7 @@ export function saveCart(cart: CartItem[]) {
 export function addToCart(
   productId: string,
   qty = 1,
-  productDetails?: { name: string; price: number; imageUrl?: string; category?: string },
+  productDetails?: { name: string; price: number; imageUrl?: string; category?: string; tax_percentage?: number },
   productStock: number = 999999
 ): AddToCartResult {
   const cart = getCart();
@@ -68,7 +69,8 @@ export function addToCart(
       productImageUrl: productDetails?.imageUrl,
       productCategory: productDetails?.category,
       productStock: productStock,
-      productStockId: productId
+      productStockId: productId,
+      tax_percentage: productDetails?.tax_percentage,
     }];
   saveCart(next);
   return { success: true, message: "Produk ditambahkan ke keranjang", cart: next };
@@ -118,6 +120,13 @@ export function getCartSummary(products: any[] = mockProducts) {
   const items = cart.map((item) => {
     // Use stored product details if available
     if (item.productName && item.productPrice) {
+      // Calculate base subtotal (before tax)
+      const baseSubtotal = item.productPrice * item.qty;
+      // Calculate tax amount
+      const taxAmount = item.tax_percentage ? (item.productPrice * item.tax_percentage / 100) * item.qty : 0;
+      // Calculate final subtotal (after tax)
+      const finalSubtotal = baseSubtotal; //+ taxAmount;
+
       return {
         ...item,
         product: {
@@ -127,25 +136,38 @@ export function getCartSummary(products: any[] = mockProducts) {
           image_url: item.productImageUrl,
           category: item.productCategory,
           stock: item.productStock,
+          tax_percentage: item.tax_percentage,
         },
-        subtotal: item.productPrice * item.qty,
+        subtotal: baseSubtotal,
+        final_subtotal: finalSubtotal,
       };
     }
 
     // Fallback to looking up in products list (for backward compatibility)
     const product = products.find((p) => p.id === item.productId);
     if (!product) return null;
+
+    const baseSubtotal = product.price * item.qty;
+    const taxPercentage = product.tax_percentage || 0;
+    // const taxAmount = taxPercentage ? (product.price * taxPercentage / 100) * item.qty : 0;
+    const finalSubtotal = baseSubtotal;// + taxAmount;
+
     return {
       ...item,
       product,
-      subtotal: product.price * item.qty,
+      subtotal: baseSubtotal,
+      // tax_amount: taxAmount,
+      final_subtotal: finalSubtotal,
     };
-  }).filter(Boolean) as Array<CartItem & { product: any; subtotal: number }>;
+  }).filter(Boolean) as Array<CartItem & { product: any; subtotal: number; tax_amount: number; final_subtotal: number }>;
 
-  const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+  // Calculate totals
+  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+  const totalTax = items.reduce((sum, item) => sum + item.tax_amount, 0);
+  const total = subtotal; //+ totalTax; // Total includes tax
   const totalItems = items.reduce((sum, item) => sum + item.qty, 0);
 
-  return { items, total, totalItems };
+  return { items, subtotal, totalTax, total, totalItems };
 }
 
 // Helper function to update stock in cart items (for sync with store data)

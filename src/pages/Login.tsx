@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, Lock, Mail, Phone, ShoppingBag, Snowflake } from "lucide-react";
+import { ArrowRight, ArrowRightFromLineIcon, Eye, EyeOff, Loader2, Lock, Mail, Phone, ShoppingBag, ShoppingCart, Snowflake } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { RoleName, useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
 import { config } from "@/lib/config";
+import { a } from "vitest/dist/chunks/environment.d.cL3nLXbE.js";
 
 const roleRedirectMap: Record<RoleName, string> = {
   super_admin: "/dashboard",
-  staff_internal: "/dashboard", 
+  staff_internal: "/dashboard",
   sales_external: "/store",
 };
 
@@ -55,7 +56,7 @@ export default function Login() {
       }
 
       toast.success("Login berhasil");
-      
+
       // Extract role from backend response
       const role = result.data?.user?.role?.role_name as RoleName;
       console.log('User role from backend:', role);
@@ -147,6 +148,15 @@ export default function Login() {
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Masuk"}
           </Button>
         </form>
+        <div className="mt-8 text-xs flex w-full justify-end">
+          <Button 
+            onClick={() => window.location.href='/celestia/commerce'}
+            variant="ghost" size="sm" className="text-[10px]">
+            Mulai belanja
+            <ArrowRightFromLineIcon width={18} />
+            <ShoppingCart width={15} />
+          </Button>
+        </div>
       </motion.div>
     </div>
   );

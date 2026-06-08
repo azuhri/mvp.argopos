@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { stockService } from "@/lib/services/stockService";
 import { Stock } from "@/lib/api";
+import { config } from "@/lib/config";
 
 export default function Products() {
   const [search, setSearch] = useState("");
@@ -80,9 +81,9 @@ export default function Products() {
                 filtered.map((stock) => (
                   <TableRow key={stock.id}>
                     <TableCell>
-                      {stock.master_product?.image_url ? (
+                      {stock.master_product?.image_path ? (
                         <img
-                          src={stock.master_product.image_url}
+                          src={`${config.endpointUrl}/${stock.master_product.image_path}`}
                           alt={stock.master_product.product_name}
                           className="w-12 h-12 object-cover rounded-md"
                         />
@@ -135,9 +136,9 @@ export default function Products() {
           filtered.map((stock) => (
             <GlassCard key={stock.id} className="p-4">
               <div className="flex items-start gap-3">
-                {stock.master_product?.image_url ? (
+                {stock.master_product?.image_path ? (
                   <img
-                    src={stock.master_product.image_url}
+                    src={`${config.endpointUrl}/${stock.master_product.image_path}`}
                     alt={stock.master_product.product_name}
                     className="w-16 h-16 object-cover rounded-md"
                   />

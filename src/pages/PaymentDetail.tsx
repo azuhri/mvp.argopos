@@ -15,6 +15,8 @@ import { formatCurrency } from "@/lib/mockData";
 import { useAuth } from "@/lib/auth";
 import { userService } from "@/lib/services/userService";
 import { FaWhatsapp } from "react-icons/fa";
+import { badgeOderStatus, getStatusBadgeKey } from "@/lib/utils";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 interface StoreData {
   location_id: string;
@@ -68,6 +70,9 @@ interface Transaction {
   updated_at: string;
   transaction_code?: string;
   transaction_carts?: TransactionCart[];
+  // Pickup proof fields
+  path_proof_pickup?: string;
+  pickup_at?: string;
 }
 
 export default function PaymentDetail() {
@@ -77,6 +82,8 @@ export default function PaymentDetail() {
   const [timeLeft, setTimeLeft] = useState(2 * 60 * 60); // 2 hours in seconds
   const [codeTrx, setCodeTrx] = useState<string>("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false);
+  const [confirmedReceipt, setConfirmedReceipt] = useState(false);
   const [copied, setCopied] = useState<Record<string, boolean>>({});
 
   // Fetch store data
@@ -224,6 +231,8 @@ export default function PaymentDetail() {
       return;
     }
 
+    setIsConfirmingReceipt(true);
+
     try {
       console.log('Confirming receipt for transaction:', transactionId);
       const response = await fetch(`${config.apiUrl}/api/v1/transactions/${transactionId}/confirm-receipt`, {
@@ -234,7 +243,6 @@ export default function PaymentDetail() {
       });
 
       console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -245,12 +253,18 @@ export default function PaymentDetail() {
       const result = await response.json();
       console.log('Success response:', result);
 
-      toast.success('Penerimaan barang berhasil dikonfirmasi');
-      console.log('Navigating to:', `/${locationCode}/commerce/payment-success/${transactionId}`);
-      navigate(`/${locationCode}/commerce/payment-success/${transactionId}`);
+      setConfirmedReceipt(true);
+      toast.success('✅ Terima kasih! Konfirmasi penerimaan barang berhasil recorded');
+
+      // Navigate after a short delay to show success
+      setTimeout(() => {
+        navigate(`/${locationCode}/commerce/payment-success/${transactionId}`);
+      }, 1500);
     } catch (error) {
       console.error('Error in handleConfirmReceipt:', error);
       toast.error('Gagal mengkonfirmasi penerimaan barang');
+    } finally {
+      setIsConfirmingReceipt(false);
     }
   };
 
@@ -259,6 +273,19 @@ export default function PaymentDetail() {
     setCopied(prev => ({ ...prev, [key]: true }));
     toast.success(key + ' disalin!');
     setTimeout(() => setCopied(prev => ({ ...prev, [key]: false })), 2000);
+  };
+
+  const handleDownload = (url) => {
+    const anchor = document.createElement("a");
+
+    const fileName = url.split("/").pop();
+
+    anchor.href = url;
+    anchor.download = fileName;
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
   };
 
   const handleMarkAsPaid = () => {
@@ -306,7 +333,7 @@ export default function PaymentDetail() {
 
   return (
     <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-      <div className="max-w-7xl mx-auto px-4 py-2">
+      <div className="max-w-[1800px] mx-auto px-4 py-2">
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start gap-4 mb-6">
           {/* <Button variant="outline" size="sm" asChild>
@@ -342,7 +369,7 @@ export default function PaymentDetail() {
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-6 w-6 text-green-500" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Pembarayaran Telah Dikonfirmasi</p>
+                  <span className="text-sm text-muted-foreground">Pembarayaran Telah Dikonfirmasi</span>
                 </div>
               </div>
               <Badge variant="default">
@@ -354,15 +381,15 @@ export default function PaymentDetail() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
           {/* Product List */}
-          <GlassCard className="p-6 lg:col-span-3">
+          <GlassCard className="glass-card p-6 col-span-4">
             <h2 className="text-lg font-semibold mb-4">Daftar Produk</h2>
-            <div className="space-y-4">
+            <div className="space-y-4 text-sm md:text-lg">
               {transactionData?.transaction_carts && transactionData.transaction_carts.length > 0 ? (
                 transactionData.transaction_carts.map((item) => (
-                  <div key={item.id} className="flex items-start gap-4 p-3 rounded-lg bg-muted/30">
+                  <div key={item.id} className="flex items-center gap-4 p-3 rounded-lg bg-muted/30">
                     {item.product_details?.image_path ? (
                       <img
-                        src={`${config.apiUrl}/${item.product_details.image_path}`}
+                        src={`${config.endpointUrl}/${item.product_details.image_path}`}
                         alt={item.product_details.product_name || 'Product'}
                         className="w-16 h-16 object-cover rounded-md"
                       />
@@ -388,10 +415,10 @@ export default function PaymentDetail() {
           </GlassCard>
 
           {/* Payment Method Details */}
-          <GlassCard className="p-6">
+          <GlassCard className="p-6 col-span-4 md:col-span-2">
             <h2 className="text-lg font-semibold mb-4">Metode Pembayaran</h2>
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
                 {selectedPaymentMethod.payment_type === 'qris' && (
                   <QrCode className="h-10 w-10 text-primary" />
                 )}
@@ -401,16 +428,14 @@ export default function PaymentDetail() {
                 {selectedPaymentMethod.payment_type === 'cutoff_hutang' && (
                   <Wallet className="h-10 w-10 text-primary" />
                 )}
-                <div>
-                  <p className="font-medium">
-                    {selectedPaymentMethod.payment_type === 'qris' && 'QRIS'}
-                    {selectedPaymentMethod.payment_type === 'transfer_rekening' && 'Transfer Rekening'}
-                    {selectedPaymentMethod.payment_type === 'cutoff_hutang' && 'Cutoff/Hutang'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Status: {transactionData.status === 'PAID' ? <Badge variant="secondary" className="text-green-700 font-bold">Dibayar</Badge> : <Badge variant="secondary">Menunggu Pembayaran</Badge>}
-                  </p>
-                </div>
+                <div className="flex items-center">
+                {selectedPaymentMethod.payment_type === 'qris' && <span className="font-medium">QRIS</span>}
+                {selectedPaymentMethod.payment_type === 'transfer_rekening' && <span className="font-medium">Transfer Rekening</span>}
+                {selectedPaymentMethod.payment_type === 'cutoff_hutang' && <span className="font-medium">Cutoff/Hutang</span>}
+                {/* <div className="flex items-center gap-1">
+                  Status: {transactionData.status === 'PAID' ? <Badge variant="secondary" className="text-green-700 font-bold">Dibayar</Badge> : <Badge variant="secondary">Menunggu Pembayaran</Badge>}
+                </div> */}
+              </div>
               </div>
 
               {selectedPaymentMethod.payment_type === 'transfer_rekening' && (
@@ -433,12 +458,17 @@ export default function PaymentDetail() {
               {selectedPaymentMethod.payment_type === 'qris' && (
                 <div className="space-y-2 text-sm">
                   {selectedPaymentMethod.image_url && (
-                    <div className="w-full bg-white rounded-lg p-4 flex justify-center">
+                    <div className="w-full bg-white rounded-lg p-4 flex flex-col items-center justify-center">
                       <img
-                        src={`${config.apiUrl}/public/${selectedPaymentMethod.image_url}`}
+                        src={`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`}
                         alt="QRIS"
                         className="w-full h-auto max-w-[20rem] object-contain"
                       />
+                      <div className="mt-4">
+                        <Button onClick={() => handleDownload(`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`)} variant="outline" className="w-full font-medium px-8 py-2 rounded-lg">
+                          Download QRIS
+                        </Button>
+                      </div>
                     </div>
                   )}
                   {selectedPaymentMethod.account_name && (
@@ -497,7 +527,7 @@ export default function PaymentDetail() {
 
           {/* Admin Contact - Show for staff users (<=1 assigned store) */}
           {storeAssignedUsers && storeAssignedUsers.length > 0 && (
-            <GlassCard className="p-6">
+            <GlassCard className="glass-card p-6 col-span-4 md:col-span-2">
               <h2 className="text-lg font-semibold mb-4">Kontak Admin</h2>
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">Hubungi admin untuk konfirmasi pembayaran atau bantuan:</p>
@@ -535,44 +565,132 @@ export default function PaymentDetail() {
           )}
 
           {/* Payment Amount */}
-          <GlassCard className="p-6">
+          <GlassCard className="p-6 col-span-4">
             <h2 className="text-lg font-semibold mb-4">Detail Pembayaran</h2>
             <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Transaction Code</span>
-                <span className="font-mono text-xs font-medium">{transactionData.transaction_code || '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(transactionData?.base_amount || 0)}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-sm md:text-md">Order Status</span>
+                <div className="flex items-center gap-0">
+                  <StatusBadge status={getStatusBadgeKey(transactionData.status)} />
+                </div>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Nominal Code (Unik)</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-primary">{transactionData.payment_code}</span>
-                  <Button variant="ghost" size="sm" onClick={() => handleCopyCode('nominal code', codeTrx)}>
-                    {copied['codeTrx'] ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span className="text-muted-foreground text-sm md:text-md">Transaction Code</span>
+                <div className="flex items-center gap-0">
+                  <span className="font-bold text-xs text-primary">{transactionData.transaction_code}</span>
+                  <Button variant="ghost" size="xs" onClick={() => handleCopyCode('transaction code', transactionData.transaction_code)}>
+                    {copied['transaction code'] ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </Button>
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground text-sm md:text-md">Subtotal</span>
+                <span className="font-semibold">{formatCurrency(transactionData?.base_amount || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground text-sm md:text-md">Nominal Code (Unik)</span>
+                <div className="flex items-center gap-0">
+                  <span className="font-semibold">{transactionData.payment_code}</span>
                 </div>
               </div>
               <Separator />
               <div className="flex justify-between items-center">
                 <span className="font-semibold">Total Pembayaran</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-0">
                   <span className="font-bold text-primary">{formatCurrency(totalWithCode)}</span>
-                  <Button variant="ghost" size="sm" onClick={() => handleCopyCode('total harga', totalWithCode.toString())}>
-                    {copied['total'] ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  <Button variant="ghost" size="xs" onClick={() => handleCopyCode('total harga', totalWithCode.toString())}>
+                    {copied['total harga'] ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
             </div>
 
-            {/* Show confirm receipt button when transaction is PAID, PREPARING_PRODUCT, or READY_TO_PICKUP */}
-            {(transactionData.status === 'PAID' || transactionData.status === 'PREPARING_PRODUCT' || transactionData.status === 'READY_TO_PICKUP') && (
-              <Button className="w-full mt-4" onClick={handleConfirmReceipt}>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Konfirmasi Penerimaan Barang
-              </Button>
+            {/* Show pickup proof status if available */}
+            {transactionData.path_proof_pickup && (
+              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-green-800 text-sm">✅ Bukti Serah Terima Telah Diupload</p>
+                    <p className="text-xs text-green-600 mt-1">
+                      Diupload pada: {transactionData.pickup_at ? new Date(transactionData.pickup_at).toLocaleString('id-ID', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : '-'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Show confirmed state */}
+            {confirmedReceipt && (
+              <div className="mt-4 p-4 px-2 bg-green-100 rounded-lg border border-green-300 text-center">
+                <div className="flex items-center justify-center gap-2 text-green-800 font-semibold">
+                  <CheckCircle className="h-6 w-6" />
+                  <span>Konfirmasi penerimaan barang berhasil!</span>
+                </div>
+              </div>
+            )}
+
+            {/* Show preparation message for PAID/PREPARING_PRODUCT status */}
+            {(transactionData.status === 'PAID' || transactionData.status === 'PREPARING_PRODUCT') && (
+              <div className="mt-4 p-4 px-2 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                <div className="flex items-center justify-center gap-2 text-blue-800">
+                  <span className="text-xs font-medium">📦 Pesanan sedang dalam preparation. Mohon tunggu.</span>
+                </div>
+              </div>
+            )}
+
+            {/* Show pickup proof image if available */}
+            {transactionData.path_proof_pickup && (transactionData.status === 'READY_TO_PICKUP' || transactionData.status === 'PAID') && (
+              <div className="mt-4">
+                <p className="text-sm font-medium mb-2">Bukti Serah Terima:</p>
+                <div className="rounded-lg overflow-hidden border border-border bg-muted/20">
+                  {transactionData.path_proof_pickup ? (
+                    <img
+                      src={`${config.endpointUrl}/${transactionData.path_proof_pickup}`}
+                      alt="Bukti Serah Terima"
+                      className="w-full h-auto max-h-64 object-contain"
+                    />
+                  ) : (
+                    <img
+                      src={`${config.endpointUrl}/${transactionData.path_proof_pickup}`}
+                      alt="Bukti Serah Terima"
+                      className="w-full h-auto max-h-64 object-contain"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  )}
+                  <div className="hidden p-4 text-center text-sm text-muted-foreground">
+                    Bukti serah terima tersedia
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Show waiting message if pickup proof not yet uploaded by admin */}
+            {transactionData.status === 'READY_TO_PICKUP' && !transactionData.path_proof_pickup && (
+              <div className="mt-4 p-4 px-2 bg-amber-50 rounded-lg border border-amber-200 text-center">
+                <div className="flex items-center justify-center gap-2 text-amber-800">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+                  <span className="text-sm font-medium">Menunggu admin mengupload bukti serah terima...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Show PAID status message - encouraging direct confirmation */}
+            {transactionData.status === 'PAID' && !confirmedReceipt && (
+              <div className="mt-4 p-4 px-2 bg-green-50 rounded-lg border border-green-200 text-center">
+                <div className="flex items-center justify-center gap-2 text-green-800">
+                  <span className="text-xs font-medium">💰 Pembayaran telah dikonfirmasi.</span>
+                </div>
+              </div>
             )}
 
             {/* {selectedPaymentMethod.payment_type !== 'cutoff_hutang' && transactionData.status === 'WAITING_TO_PAYMENT' && (
@@ -580,6 +698,34 @@ export default function PaymentDetail() {
                 Konfirmasi Pembayaran
               </Button>
             )} */}
+
+            {/* Show confirm receipt button - Customer confirms pickup themselves after seeing proof */}
+            {(transactionData.status === 'READY_TO_PICKUP') && !confirmedReceipt && (
+              <div className="mt-4 space-y-3">
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                  <p className="text-xs text-gray-800 font-medium">
+                    👆 Silakan konfirmasi pengambilan barang di bawah setelah Anda menerima barang
+                  </p>
+                </div>
+                <Button
+                  className="w-full bg-primary hover:bg-primary text-white text-sm font-semibold py-3"
+                  onClick={handleConfirmReceipt}
+                  disabled={isConfirmingReceipt}
+                >
+                  {isConfirmingReceipt ? (
+                    <>
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                      Memproses...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-5 w-5 mr-2" />
+                      Konfirmasi Barang Sudah Diterima
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </GlassCard>
         </div>
 
