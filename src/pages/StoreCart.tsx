@@ -520,7 +520,7 @@ export default function StoreCart() {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <GlassCard className="p-4 md:p-5 my-2 bg-white rounded-2xl border border-gray-100 shadow-sm transition-all">
+                    <GlassCard className="p-4 md:p-5 my-2 rounded-2xl shadow-sm transition-all">
                       {/* Container Utama: CSS Grid di Mobile, Flex Row di Desktop */}
                       <div className="grid grid-cols-[1fr_auto] md:flex md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
 
@@ -558,7 +558,7 @@ export default function StoreCart() {
                               )}
                             </div>
                             <div className="flex flex-col min-w-0 pt-0.5 md:pt-0">
-                              <h3 className="font-semibold text-sm md:text-base text-gray-900 leading-tight mb-1 truncate md:whitespace-normal">
+                              <h3 className="font-semibold text-sm md:text-base leading-tight mb-1 truncate md:whitespace-normal">
                                 {item.product.name}
                               </h3>
                               <p className="text-xs md:text-sm font-semibold text-gray-500">
@@ -608,11 +608,11 @@ export default function StoreCart() {
 
                         {/* 3. Subtotal & Trash Button (Mobile: Bawah Kanan | Desktop: Paling Kanan) */}
                         {/* col-span-2 membuat elemen ini pindah ke baris baru khusus saat di layar HP */}
-                        <div className="col-span-2 flex items-center justify-end gap-3 md:gap-4 mt-2 md:mt-0 pt-3 md:pt-0 border-t border-gray-100 md:border-none">
+                        <div className="col-span-2 flex items-center justify-end gap-3 md:gap-4 mt-2 md:mt-0 pt-3 md:pt-0 border-t-2  md:border-none">
                           <div className="text-right">
                             <p className="text-sm md:text-[15px] font-medium text-gray-900">
-                              <span className="text-xs text-gray-500 font-normal mr-1.5">Subtotal:</span>
-                              <span className="font-bold">{formatCurrency(item.product.price * item.qty)}</span>
+                              <span className="text-xs text-foreground font-normal mr-1.5">Subtotal:</span>
+                              <span className="font-bold text-foreground">{formatCurrency(item.product.price * item.qty)}</span>
                             </p>
                           </div>
 

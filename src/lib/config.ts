@@ -11,6 +11,7 @@ export const config = {
   // This is used for static assets like images, not API calls
   endpointUrl: import.meta.env.VITE_BE_ENDPOINT || import.meta.env.VITE_API_URL,
   apiTimeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '10000'),
+  trxLifetime: parseInt(import.meta.env.VITE_TRANSACTION_TIMEOUT_HOURS || '6'),
   
   // Feature Flags
   enableDarkMode: import.meta.env.VITE_ENABLE_DARK_MODE === 'true',

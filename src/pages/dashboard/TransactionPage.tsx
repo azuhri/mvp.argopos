@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Calendar, CheckCircle, Eye, Package, Search, Store, ArrowUpDown, Camera, Upload, X } from "lucide-react";
+import { Calendar, CheckCircle, Eye, Package, Search, Store, ArrowUpDown, Camera, Upload, X, FileDown, FileText, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
@@ -30,6 +31,12 @@ import { userService } from "@/lib/services/userService";
 import { config } from "@/lib/config";
 import { apiClient } from "@/lib/api";
 import type { Transaction, TransactionCart } from "@/lib/api";
+import {
+  exportTransactionsToCSV,
+  exportTransactionsToXLSX,
+  exportTransactionInvoiceToPDF,
+  exportAllTransactionsInvoiceToPDF,
+} from "@/lib/exportUtils";
 
 const PAYMENT_OPTIONS = [
   { label: "All Methods", value: "all" },
@@ -199,6 +206,46 @@ export default function TransactionPage() {
       transactionsQuery.refetch();
     } catch (err: any) {
       toast.error(err.message || 'Gagal');
+    }
+  };
+
+  // Export handlers
+  const handleExportCSV = () => {
+    if (transactions.length === 0) {
+      toast.error('No transactions to export');
+      return;
+    }
+    try {
+      exportTransactionsToCSV(transactions);
+      toast.success('CSV exported successfully');
+    } catch (error) {
+      toast.error('Failed to export CSV');
+    }
+  };
+
+  const handleExportXLSX = () => {
+    if (transactions.length === 0) {
+      toast.error('No transactions to export');
+      return;
+    }
+    try {
+      exportTransactionsToXLSX(transactions);
+      toast.success('Excel exported successfully');
+    } catch (error) {
+      toast.error('Failed to export Excel');
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (transactions.length === 0) {
+      toast.error('No transactions to export');
+      return;
+    }
+    try {
+      exportAllTransactionsInvoiceToPDF(transactions);
+      toast.success('PDF exported successfully');
+    } catch (error) {
+      toast.error('Failed to export PDF');
     }
   };
 
@@ -453,18 +500,43 @@ export default function TransactionPage() {
             </GlassCard>
 
             <GlassCard className="hidden md:block">
-              <div className="p-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 z-10" />
-                  <Input
-                    className="pl-9 bg-card/70 backdrop-blur border-2 border-border/50"
-                    placeholder="Search by code, customer, or payment code"
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(1);
-                    }}
-                  />
+              <div className="p-4 space-y-4">
+                <div className="flex gap-4 items-center">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 z-10" />
+                    <Input
+                      className="pl-9 bg-card/70 backdrop-blur border-2 border-border/50"
+                      placeholder="Search by code, customer, or payment code"
+                      value={search}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setPage(1);
+                      }}
+                    />
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <FileDown className="h-4 w-4 mr-2" />
+                        Export
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleExportPDF}>
+                        <FileText className="h-4 w-4 mr-2" />
+                        Invoice (PDF)
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleExportCSV}>
+                        <FileSpreadsheet className="h-4 w-4 mr-2" />
+                        Excel (.csv)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleExportXLSX}>
+                        <FileSpreadsheet className="h-4 w-4 mr-2" />
+                        Excel (.xlsx)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <Table>
                   <TableHeader>
@@ -509,12 +581,6 @@ export default function TransactionPage() {
                                   Approve Payment
                                 </Button>
                               )}
-                              {tx.status === "PREPARING_PRODUCT" && !tx.path_proof_pickup && (
-                                <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => openPickupProofModal(tx)}>
-                                  <Camera className="h-3 w-3 mr-1" />
-                                  Upload Bukti
-                                </Button>
-                              )}
                               {(tx.status === "PAID" || tx.status === "PREPARING_PRODUCT") && !tx.path_proof_pickup && (
                                 <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => openPickupProofModal(tx)}>
                                   <Camera className="h-3 w-3 mr-1" />
@@ -541,7 +607,33 @@ export default function TransactionPage() {
               {transactionsQuery.isLoading ? (
                 <div className="text-center text-muted-foreground py-8">Loading transactions...</div>
               ) : transactions.length > 0 ? (
-                transactions.map((tx) => (
+                <>
+                  <div className="flex justify-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <FileDown className="h-4 w-4 mr-2" />
+                          Export
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={handleExportPDF}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Invoice (PDF)
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={handleExportCSV}>
+                          <FileSpreadsheet className="h-4 w-4 mr-2" />
+                          Excel (.csv)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleExportXLSX}>
+                          <FileSpreadsheet className="h-4 w-4 mr-2" />
+                          Excel (.xlsx)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  {transactions.map((tx) => (
                   <GlassCard className="p-2" key={tx.id}>
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-4 space-y-3">
                       <div className="flex items-start justify-between">
@@ -595,7 +687,8 @@ export default function TransactionPage() {
                       </div>
                     </motion.div>
                   </GlassCard>
-                ))
+                ))}
+                </>
               ) : (
                 <div className="text-center text-muted-foreground py-8">No transactions found</div>
               )}

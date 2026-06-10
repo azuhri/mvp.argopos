@@ -313,6 +313,11 @@ export interface Store {
   assigned_users: StoreAssignedUser[];
   payment_methods: StorePaymentMethod[];
   transactions?: Transaction[];
+  // Time cutoff fields
+  time_open_store?: string;
+  time_close_store?: string;
+  time_start_pickup?: string;
+  time_end_pickup?: string;
 }
 
 export interface Product {
@@ -387,6 +392,24 @@ export interface UpdateLocationRequest {
   latitude?: number | null;
   type?: 'warehouse' | 'store';
   updated_by?: string;
+}
+
+export interface TimeCutoffRequest {
+  time_open_store?: string;   // e.g., "08:00"
+  time_close_store?: string;  // e.g., "20:00"
+  time_start_pickup?: string; // e.g., "09:00"
+  time_end_pickup?: string;  // e.g., "18:00"
+}
+
+export interface OperationalStatus {
+  is_open: boolean;
+  current_time: string;
+  store_open_time?: string;
+  store_close_time?: string;
+  pickup_start_time?: string;
+  pickup_end_time?: string;
+  is_within_pickup_window: boolean;
+  message?: string;
 }
 
 // Stock Management Interfaces
@@ -948,6 +971,20 @@ class ApiClient {
       method: 'PUT',
       data: location,
     });
+  }
+
+  async updateTimeCutoff(
+    id: string,
+    timeCutoff: TimeCutoffRequest
+  ): Promise<ApiResponse<Location>> {
+    return this.request<Location>(`/locations/${id}/time-cutoff`, {
+      method: 'PUT',
+      data: timeCutoff,
+    });
+  }
+
+  async getOperationalStatus(locationId: string): Promise<ApiResponse<OperationalStatus>> {
+    return this.request<OperationalStatus>(`/location/stores/operational-status?location_id=${locationId}`);
   }
 
   async deleteLocation(id: string): Promise<ApiResponse<void>> {

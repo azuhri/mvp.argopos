@@ -19,18 +19,18 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, Save, X, Plus, Calendar, Package, ArrowUpDown, Users, Briefcase, Building2, DollarSign } from "lucide-react";
+import { User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, Save, X, Plus, Calendar, Package, ArrowUpDown, Users, Briefcase, Building2, DollarSign, Camera, CheckCircle, Clock, Store } from "lucide-react";
 import { toast } from "sonner";
 import { storeService } from "@/lib/services/storeService";
 import { stockService } from "@/lib/services/stockService";
 import { transactionService } from "@/lib/services/transactionService";
-import { Store, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, TransactionCart, apiClient } from "@/lib/api";
+import { Store as StoreType, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, TransactionCart, apiClient } from "@/lib/api";
 import { config } from "@/lib/config";
 
 export default function KoperasiDetailPage() {
   const { locationId } = useParams<{ locationId: string }>();
   const navigate = useNavigate();
-  const [store, setStore] = useState<Store | null>(null);
+  const [store, setStore] = useState<StoreType | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('summary');
 
@@ -73,6 +73,12 @@ export default function KoperasiDetailPage() {
   const [cartModalLoading, setCartModalLoading] = useState(false);
   const [cartModalTransaction, setCartModalTransaction] = useState<Transaction | null>(null);
   const [cartModalItems, setCartModalItems] = useState<TransactionCart[]>([]);
+  // Pickup proof upload modal state
+  const [pickupProofModalOpen, setPickupProofModalOpen] = useState(false);
+  const [pickupProofTransaction, setPickupProofTransaction] = useState<Transaction | null>(null);
+  const [pickupProofFile, setPickupProofFile] = useState<File | null>(null);
+  const [pickupProofPreview, setPickupProofPreview] = useState<string | null>(null);
+  const [pickupProofUploading, setPickupProofUploading] = useState(false);
 
   // Stock edit state
   const [stockEditOpen, setStockEditOpen] = useState(false);
@@ -95,6 +101,16 @@ export default function KoperasiDetailPage() {
   const [qrisImagePreview, setQrisImagePreview] = useState<string | null>(null);
   const [deletePaymentOpen, setDeletePaymentOpen] = useState(false);
   const [deletingPayment, setDeletingPayment] = useState<StorePaymentMethod | null>(null);
+
+  // Time cutoff state
+  const [timeCutoffOpen, setTimeCutoffOpen] = useState(false);
+  const [timeCutoffSaving, setTimeCutoffSaving] = useState(false);
+  const [timeCutoffForm, setTimeCutoffForm] = useState({
+    time_open_store: '08:00',
+    time_close_store: '20:00',
+    time_start_pickup: '09:00',
+    time_end_pickup: '18:00',
+  });
 
   useEffect(() => {
     if (locationId) {
@@ -121,6 +137,14 @@ export default function KoperasiDetailPage() {
       console.log(data.payment_methods);
 
       setStore(data);
+
+      // Set time cutoff form from store data
+      setTimeCutoffForm({
+        time_open_store: data.time_open_store || '08:00',
+        time_close_store: data.time_close_store || '20:00',
+        time_start_pickup: data.time_start_pickup || '09:00',
+        time_end_pickup: data.time_end_pickup || '18:00',
+      });
     } catch (error) {
       toast.error("Failed to load store detail");
       console.error(error);
@@ -257,6 +281,69 @@ export default function KoperasiDetailPage() {
     }
   };
 
+  // Pickup proof handlers
+  const openPickupProofModal = (tx: Transaction) => {
+    setPickupProofTransaction(tx);
+    setPickupProofFile(null);
+    setPickupProofPreview(null);
+    setPickupProofModalOpen(true);
+  };
+
+  const closePickupProofModal = () => {
+    setPickupProofModalOpen(false);
+    setPickupProofTransaction(null);
+    setPickupProofFile(null);
+    setPickupProofPreview(null);
+  };
+
+  const handlePickupProofFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB');
+      return;
+    }
+    setPickupProofFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setPickupProofPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadProof = async () => {
+    if (!pickupProofTransaction || !pickupProofFile) return;
+    setPickupProofUploading(true);
+    try {
+      const response = await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile);
+      if (!response.success) throw new Error(response.message || 'Upload failed');
+      toast.success('Bukti serah terima berhasil diupload');
+      closePickupProofModal();
+      loadTransactions();
+    } catch (err: any) {
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setPickupProofUploading(false);
+    }
+  };
+
+  const handleMarkReadyPickup = async (tx: Transaction) => {
+    try {
+      const res = await fetch(`${config.apiUrl}/api/v1/transactions/${tx.id}/mark-ready-pickup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Failed');
+      toast.success('Berhasil menandai siap diambil');
+      loadTransactions();
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal');
+    }
+  };
+
   const calculateFinalPrice = (stock: Stock) => {
     const basePrice = stock.base_price;
     const discountPrice = stock.discount_price || 0;
@@ -306,6 +393,27 @@ export default function KoperasiDetailPage() {
     } catch (error) {
       toast.error("Failed to update stock");
       console.error(error);
+    }
+  };
+
+  const handleTimeCutoffSave = async () => {
+    if (!locationId) return;
+    setTimeCutoffSaving(true);
+    try {
+      await apiClient.updateTimeCutoff(locationId, {
+        time_open_store: timeCutoffForm.time_open_store,
+        time_close_store: timeCutoffForm.time_close_store,
+        time_start_pickup: timeCutoffForm.time_start_pickup,
+        time_end_pickup: timeCutoffForm.time_end_pickup,
+      });
+      toast.success("Time cutoff settings updated successfully");
+      setTimeCutoffOpen(false);
+      loadStoreDetail();
+    } catch (error) {
+      toast.error("Failed to update time cutoff settings");
+      console.error(error);
+    } finally {
+      setTimeCutoffSaving(false);
     }
   };
 
@@ -592,6 +700,14 @@ export default function KoperasiDetailPage() {
           >
             <CreditCard className="h-4 w-4 mr-2" />
             Payment Method
+          </Button>
+          <Button
+            variant={activeTab === 'time-cutoff' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('time-cutoff')}
+            className="whitespace-nowrap"
+          >
+            <Calendar className="h-4 w-4 mr-2" />
+            Time Cutoff
           </Button>
         </div>
 
@@ -1019,7 +1135,27 @@ export default function KoperasiDetailPage() {
                                   onClick={() => handleApprovePayment(tx.id)}
                                 >
                                   <CreditCard className="h-3 w-3 mr-1" />
-                                  Confirm
+                                  Approve Payment
+                                </Button>
+                              )}
+                              {(tx.status === 'PAID' || tx.status === 'PREPARING_PRODUCT') && !tx.path_proof_pickup && (
+                                <Button
+                                  size="sm"
+                                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                                  onClick={() => openPickupProofModal(tx)}
+                                >
+                                  <Camera className="h-3 w-3 mr-1" />
+                                  Upload Bukti
+                                </Button>
+                              )}
+                              {tx.path_proof_pickup && (
+                                <Button
+                                  size="sm"
+                                  className="bg-green-500 hover:bg-green-600 text-white"
+                                  onClick={() => handleMarkReadyPickup(tx)}
+                                >
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Siap Diambil
                                 </Button>
                               )}
                             </div>
@@ -1091,6 +1227,26 @@ export default function KoperasiDetailPage() {
                           Confirm Payment
                         </Button>
                       )}
+                      {(tx.status === 'PAID' || tx.status === 'PREPARING_PRODUCT') && !tx.path_proof_pickup && (
+                        <Button
+                          size="sm"
+                          className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+                          onClick={() => openPickupProofModal(tx)}
+                        >
+                          <Camera className="h-3 w-3 mr-1" />
+                          Upload Bukti
+                        </Button>
+                      )}
+                      {tx.path_proof_pickup && (
+                        <Button
+                          size="sm"
+                          className="w-full bg-green-500 hover:bg-green-600 text-white"
+                          onClick={() => handleMarkReadyPickup(tx)}
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Siap Diambil
+                        </Button>
+                      )}
                     </div>
                   </motion.div>
                 ))
@@ -1151,6 +1307,42 @@ export default function KoperasiDetailPage() {
               </div>
             </GlassCard>
           </div>
+
+          {/* Pickup Proof Upload Modal */}
+          <Dialog open={pickupProofModalOpen} onOpenChange={(open) => { if (!open) closePickupProofModal(); }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Upload Bukti Serah Terima</DialogTitle>
+                <DialogDescription>
+                  Transaksi: {pickupProofTransaction?.transaction_code || pickupProofTransaction?.id?.slice(0, 8) || '-'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                {!pickupProofPreview ? (
+                  <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-8 cursor-pointer hover:border-primary transition-colors">
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePickupProofFileChange} />
+                    <Camera className="h-12 w-12 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Ambil foto atau upload bukti</span>
+                    <span className="text-xs text-muted-foreground">JPG/PNG, max 5MB</span>
+                  </label>
+                ) : (
+                  <div className="relative">
+                    <img src={pickupProofPreview} alt="Preview" className="w-full h-auto max-h-48 rounded-lg object-contain" />
+                    <Button size="sm" variant="outline" className="absolute top-2 right-2" onClick={() => { setPickupProofFile(null); setPickupProofPreview(null); }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                <Button className="w-full" disabled={!pickupProofFile || pickupProofUploading} onClick={handleUploadProof}>
+                  {pickupProofUploading ? (
+                    <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />Mengupload... </>
+                  ) : (
+                    <><Upload className="h-4 w-4 mr-2" />Upload Bukti </>
+                  )}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Payment Method Tab */}
@@ -1357,6 +1549,93 @@ export default function KoperasiDetailPage() {
                     <p className="text-sm text-muted-foreground">Tidak ada payment method</p>
                   </div>
                 )}
+              </div>
+            </div>
+          </GlassCard>
+        </TabsContent>
+
+        {/* Time Cutoff Tab */}
+        <TabsContent value="time-cutoff" className="space-y-4">
+          <GlassCard>
+            <div className="p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Pengaturan Waktu Operasional
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Atur jam operasional toko dan waktu pengambilan barang
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTimeCutoffOpen(true)}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit Waktu
+                </Button>
+              </div>
+
+              {/* Current Settings Display */}
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* Store Operational Hours */}
+                <div className="p-4 rounded-lg border bg-card">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Store className="h-5 w-5 text-primary" />
+                    <h4 className="font-medium">Jam Operasional Toko</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Jam Buka</Label>
+                      <p className="text-2xl font-bold text-primary">
+                        {store.time_open_store || '08:00'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Jam Tutup</Label>
+                      <p className="text-2xl font-bold text-primary">
+                        {store.time_close_store || '20:00'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pickup Time Window */}
+                <div className="p-4 rounded-lg border bg-card">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Package className="h-5 w-5 text-green-600" />
+                    <h4 className="font-medium">Waktu Pengambilan</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Mulai</Label>
+                      <p className="text-2xl font-bold text-green-600">
+                        {store.time_start_pickup || '09:00'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Selesai</Label>
+                      <p className="text-2xl font-bold text-green-600">
+                        {store.time_end_pickup || '18:00'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current Time Display */}
+              <div className="p-4 rounded-lg bg-muted/50 border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Waktu Sekarang:</span>
+                  </div>
+                  <p className="text-lg font-mono font-bold">
+                    {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
               </div>
             </div>
           </GlassCard>
@@ -1636,6 +1915,89 @@ export default function KoperasiDetailPage() {
             </Button>
             <Button onClick={handleConfirmApprovePayment}>
               Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Time Cutoff Edit Dialog */}
+      <Dialog open={timeCutoffOpen} onOpenChange={setTimeCutoffOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Pengaturan Waktu</DialogTitle>
+            <DialogDescription>
+              Atur jam operasional dan waktu pengambilan barang
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Store Operational Hours */}
+            <div className="space-y-2">
+              <Label className="text-base font-medium flex items-center gap-2">
+                <Store className="h-4 w-4" />
+                Jam Operasional Toko
+              </Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Jam Buka</Label>
+                  <Input
+                    type="time"
+                    value={timeCutoffForm.time_open_store}
+                    onChange={(e) => setTimeCutoffForm({ ...timeCutoffForm, time_open_store: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Jam Tutup</Label>
+                  <Input
+                    type="time"
+                    value={timeCutoffForm.time_close_store}
+                    onChange={(e) => setTimeCutoffForm({ ...timeCutoffForm, time_close_store: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Pickup Time Window */}
+            <div className="space-y-2">
+              <Label className="text-base font-medium flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                Waktu Pengambilan Barang
+              </Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Mulai</Label>
+                  <Input
+                    type="time"
+                    value={timeCutoffForm.time_start_pickup}
+                    onChange={(e) => setTimeCutoffForm({ ...timeCutoffForm, time_start_pickup: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Selesai</Label>
+                  <Input
+                    type="time"
+                    value={timeCutoffForm.time_end_pickup}
+                    onChange={(e) => setTimeCutoffForm({ ...timeCutoffForm, time_end_pickup: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTimeCutoffOpen(false)}>
+              Batal
+            </Button>
+            <Button onClick={handleTimeCutoffSave} disabled={timeCutoffSaving}>
+              {timeCutoffSaving ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                  Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Simpan
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

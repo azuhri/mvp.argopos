@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Clock, QrCode, CreditCard, Wallet, MessageCircle, Copy, CheckCircle, Package, CheckCircle2, Phone } from "lucide-react";
+import { ArrowLeft, Clock, QrCode, CreditCard, Wallet, MessageCircle, Copy, CheckCircle, Package, CheckCircle2, Phone, XCircle } from "lucide-react";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -79,7 +79,10 @@ export default function PaymentDetail() {
   const { locationCode, transactionId } = useParams<{ locationCode: string; transactionId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [timeLeft, setTimeLeft] = useState(2 * 60 * 60); // 2 hours in seconds
+
+  // Transaction timeout in hours from env (default: 6 hours)
+  const timeoutHours = config.trxLifetime;
+  const [timeLeft, setTimeLeft] = useState(timeoutHours * 60 * 60); // Convert hours to seconds
   const [codeTrx, setCodeTrx] = useState<string>("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false);
@@ -151,7 +154,11 @@ export default function PaymentDetail() {
       return result.data as Transaction;
     },
     enabled: !!transactionId,
-    refetchInterval: 5000, // Poll every 5 seconds
+    refetchInterval: (query) => {
+      const data = query.state.data as Transaction | undefined;
+
+      return data?.status === 'REJECTED' ? false : 5000;
+    },
   });
 
   // Set selected payment method from transaction data
@@ -177,18 +184,17 @@ export default function PaymentDetail() {
     const now = new Date();
     const diffMs = now.getTime() - createdAt.getTime();
     const diffSeconds = Math.floor(diffMs / 1000);
-    const maxSeconds = 2 * 60 * 60; // 2 hours
+    const maxSeconds = timeoutHours * 60 * 60; // Configurable timeout in hours
 
     const remainingSeconds = maxSeconds - diffSeconds;
 
     if (remainingSeconds <= 0) {
-      // Auto reject transaction if > 2 hours
+      // Time is up - API will auto-reject on next fetch
       setTimeLeft(0);
-      // TODO: Call API to auto reject transaction
     } else {
       setTimeLeft(remainingSeconds);
     }
-  }, [transactionData]);
+  }, [transactionData, timeoutHours]);
 
   // Countdown timer
   useEffect(() => {
@@ -331,6 +337,54 @@ export default function PaymentDetail() {
     );
   }
 
+  if (transactionData && transactionData.status === 'REJECTED') {
+    return (
+      <AppLayoutCommerce
+        title={config.appNameCommerce}
+        locationCode={locationCode || ''}
+      >
+        <div className="flex min-h-[80vh] items-center justify-center px-4">
+          <div className="w-full max-w-md">
+            <div className="rounded-2xl border bg-white p-8 shadow-lg">
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-4 rounded-full bg-red-100 p-4">
+                  <XCircle className="h-12 w-12 text-red-500" />
+                </div>
+
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Transaksi Dibatalkan
+                </h1>
+
+                <p className="mt-3 text-sm text-gray-500">
+                  Transaksi dengan code:
+                </p>
+                <div className="my-4 w-full rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                  <span className="text-lg font-mono font-semibold">{transactionData.transaction_code}</span>
+                </div>
+                <p className="text-sm text-gray-500">
+                  Telah dibatalkan oleh sistem, karena melewati batas waktu pembayaran. Silakan kembali ke keranjang untuk melakukan pemesanan ulang.
+                </p>
+
+
+                <div className="mt-8 flex w-full flex-col gap-3">
+                  <Button
+                    asChild
+                    size="lg"
+                    className="w-full"
+                  >
+                    <Link to={`/commerce`}>
+                      Lanjut Belanja
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </AppLayoutCommerce>
+    );
+  }
+
   return (
     <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
       <div className="max-w-[1800px] mx-auto px-4 py-2">
@@ -357,7 +411,7 @@ export default function PaymentDetail() {
                 </div>
               </div>
               <Badge variant={timeLeft > 1800 ? "default" : "destructive"}>
-                {timeLeft > 1800 ? "Aktif" : "Segera Expired"}
+                {timeLeft > 1800 ? `Aktif (${timeoutHours} jam)` : "Segera Expired"}
               </Badge>
             </div>
           </GlassCard>
@@ -429,13 +483,13 @@ export default function PaymentDetail() {
                   <Wallet className="h-10 w-10 text-primary" />
                 )}
                 <div className="flex items-center">
-                {selectedPaymentMethod.payment_type === 'qris' && <span className="font-medium">QRIS</span>}
-                {selectedPaymentMethod.payment_type === 'transfer_rekening' && <span className="font-medium">Transfer Rekening</span>}
-                {selectedPaymentMethod.payment_type === 'cutoff_hutang' && <span className="font-medium">Cutoff/Hutang</span>}
-                {/* <div className="flex items-center gap-1">
+                  {selectedPaymentMethod.payment_type === 'qris' && <span className="font-medium">QRIS</span>}
+                  {selectedPaymentMethod.payment_type === 'transfer_rekening' && <span className="font-medium">Transfer Rekening</span>}
+                  {selectedPaymentMethod.payment_type === 'cutoff_hutang' && <span className="font-medium">Cutoff/Hutang</span>}
+                  {/* <div className="flex items-center gap-1">
                   Status: {transactionData.status === 'PAID' ? <Badge variant="secondary" className="text-green-700 font-bold">Dibayar</Badge> : <Badge variant="secondary">Menunggu Pembayaran</Badge>}
                 </div> */}
-              </div>
+                </div>
               </div>
 
               {selectedPaymentMethod.payment_type === 'transfer_rekening' && (
