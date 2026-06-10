@@ -33,7 +33,7 @@ export function ProtectedRoute({
   }
 
   if (!user) {
-    return <Navigate to="/celestia/auth/sign-in" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/auth/sign-in" replace state={{ from: location.pathname }} />;
   }
 
   // Check menu permissions if menuKey is provided
