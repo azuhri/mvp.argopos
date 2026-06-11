@@ -82,6 +82,7 @@ export default function StoreCart() {
     pickupStart: string;
     pickupEnd: string;
   } | null>(null);
+  const [skipPickupTimeCheck, setSkipPickupTimeCheck] = useState(false);
 
   // Customer information form state
   const [isInternalCustomer, setIsInternalCustomer] = useState(false);
@@ -370,8 +371,8 @@ export default function StoreCart() {
       return;
     }
 
-    // Check if within pickup window
-    if (operationalStatus && !operationalStatus.is_within_pickup_window) {
+    // Check if within pickup window (skip if user already acknowledged)
+    if (operationalStatus && !operationalStatus.is_within_pickup_window && !skipPickupTimeCheck) {
       const currentTime = operationalStatus.current_time;
       const pickupStart = operationalStatus.pickup_start_time || storeData?.time_start_pickup || '09:00';
       const pickupEnd = operationalStatus.pickup_end_time || storeData?.time_end_pickup || '18:00';
@@ -946,11 +947,11 @@ export default function StoreCart() {
               Informasi Waktu Pengambilan
             </DialogTitle>
             <DialogDescription>
-              {pickupTimeAlert?.message}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="bg-muted/50 rounded-lg p-4">
+
               <div className="flex items-center gap-3">
                 <Clock className="h-5 w-5 text-green-600" />
                 <div>
@@ -960,19 +961,23 @@ export default function StoreCart() {
                   </p>
                 </div>
               </div>
+              <hr className="my-2" />
+              <p className="mt-1 text-center text-[10px] font-mono font-semibold">Note: {pickupTimeAlert?.message}</p>
             </div>
             <p className="text-sm text-center text-muted-foreground">
               Pesanan Anda tetap dapat dibuat dan akan menunggu hingga waktu pengambilan tersedia.
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPickupTimeAlert(null)}>
+            <Button variant="outline" className="my-2" onClick={() => {
+                setPickupTimeAlert(null);
+                setSkipPickupTimeCheck(false);
+              }}>
               Tutup
             </Button>
             <Button onClick={() => {
-              // Proceed with checkout anyway
-              setPickupTimeAlert(null);
-              // Continue to create transaction
+              setSkipPickupTimeCheck(true);
+              handleCreateTransaction();
             }}>
               Tetap Checkout
             </Button>
