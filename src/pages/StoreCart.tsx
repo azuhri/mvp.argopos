@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Minus, Plus, ShoppingBag, Trash2, ArrowLeft, MapPin, CreditCard, QrCode, Wallet, User, Mail, Phone } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Trash2, ArrowLeft, MapPin, CreditCard, QrCode, Wallet, User, Mail, Phone, Clock, AlertCircle } from "lucide-react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { useQuery } from "@tanstack/react-query";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { calculateFinalPrice } from "@/lib/utils";
+import { apiClient } from "@/lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 interface ProductStock {
   id: string;
@@ -55,6 +57,17 @@ interface PaymentMethod {
   is_active: boolean;
 }
 
+interface OperationalStatus {
+  is_open: boolean;
+  current_time: string;
+  store_open_time?: string;
+  store_close_time?: string;
+  pickup_start_time?: string;
+  pickup_end_time?: string;
+  is_within_pickup_window: boolean;
+  message?: string;
+}
+
 export default function StoreCart() {
   const { locationCode } = useParams<{ locationCode: string }>();
   const navigate = useNavigate();
@@ -63,6 +76,12 @@ export default function StoreCart() {
   const [totalTax, setTotalTax] = useState(0);
   const [updating, setUpdating] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
+  const [pickupTimeAlert, setPickupTimeAlert] = useState<{
+    show: boolean;
+    message: string;
+    pickupStart: string;
+    pickupEnd: string;
+  } | null>(null);
 
   // Customer information form state
   const [isInternalCustomer, setIsInternalCustomer] = useState(false);
@@ -120,6 +139,21 @@ export default function StoreCart() {
       return result.data as PaymentMethod[];
     },
     enabled: !!storeData?.location_id,
+  });
+
+  // Fetch operational status for pickup time check
+  const { data: operationalStatus } = useQuery({
+    queryKey: ['operationalStatus', storeData?.location_id],
+    queryFn: async () => {
+      if (!storeData?.location_id) return null;
+      const response = await apiClient.getOperationalStatus(storeData.location_id);
+      if (!response.success || !response.data) {
+        return null;
+      }
+      return response.data as OperationalStatus;
+    },
+    enabled: !!storeData?.location_id,
+    refetchInterval: 60000, // Check every minute
   });
 
   // Update cart summary when storeData loads
@@ -333,6 +367,28 @@ export default function StoreCart() {
   const handleCreateTransaction = async () => {
     if (!selectedPaymentMethod) {
       toast.error('Pilih metode pembayaran terlebih dahulu');
+      return;
+    }
+
+    // Check if within pickup window
+    if (operationalStatus && !operationalStatus.is_within_pickup_window) {
+      const currentTime = operationalStatus.current_time;
+      const pickupStart = operationalStatus.pickup_start_time || storeData?.time_start_pickup || '09:00';
+      const pickupEnd = operationalStatus.pickup_end_time || storeData?.time_end_pickup || '18:00';
+
+      let message = '';
+      if (currentTime < pickupStart.substring(0, 5)) {
+        message = `Pengambilan barang dapat dilakukan mulai jam ${pickupStart.substring(0, 5)}`;
+      } else {
+        message = `Waktu pengambilan sudah lewat. Silakan ambil besok pada jam ${pickupStart.substring(0, 5)} - ${pickupEnd.substring(0, 5)}`;
+      }
+
+      setPickupTimeAlert({
+        show: true,
+        message: message,
+        pickupStart: pickupStart.substring(0, 5),
+        pickupEnd: pickupEnd.substring(0, 5),
+      });
       return;
     }
 
@@ -880,6 +936,49 @@ export default function StoreCart() {
           </div>
         </div>
       </div>
+
+      {/* Pickup Time Alert Modal */}
+      <Dialog open={pickupTimeAlert?.show || false} onOpenChange={() => setPickupTimeAlert(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-500" />
+              Informasi Waktu Pengambilan
+            </DialogTitle>
+            <DialogDescription>
+              {pickupTimeAlert?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-muted/50 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium">Waktu Pengambilan Tersedia</p>
+                  <p className="text-sm text-muted-foreground">
+                    {pickupTimeAlert?.pickupStart} - {pickupTimeAlert?.pickupEnd}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-center text-muted-foreground">
+              Pesanan Anda tetap dapat dibuat dan akan menunggu hingga waktu pengambilan tersedia.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPickupTimeAlert(null)}>
+              Tutup
+            </Button>
+            <Button onClick={() => {
+              // Proceed with checkout anyway
+              setPickupTimeAlert(null);
+              // Continue to create transaction
+            }}>
+              Tetap Checkout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayoutCommerce>
   );
 }

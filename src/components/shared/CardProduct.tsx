@@ -5,7 +5,7 @@ import { Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
-export default function CardProduct({ product, handleAddToCart, urlDetail }: {
+export default function CardProduct({ product, handleAddToCart, urlDetail, disabled }: {
   product: Product & { product_stock_id?: string },
   urlDetail: string,
   handleAddToCart: (
@@ -16,7 +16,8 @@ export default function CardProduct({ product, handleAddToCart, urlDetail }: {
     productStockId: string,
     productStock: number,
     tax_percentage: number,
-  ) => void
+  ) => void,
+  disabled?: boolean
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -37,8 +38,9 @@ export default function CardProduct({ product, handleAddToCart, urlDetail }: {
   return <React.Fragment>
     <Link
       key={product.id}
-      to={urlDetail}
-      className="block"
+      to={disabled ? "#" : urlDetail}
+      className={`block ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+      onClick={(e) => disabled && e.preventDefault()}
     >
       <div className="aspect-square bg-gradient-to-br from-primary/5 to-accent/5 rounded-lg mb-3 flex items-center justify-center relative overflow-hidden">
         {/* Skeleton Layer - Full coverage, z-10 */}
@@ -77,12 +79,21 @@ export default function CardProduct({ product, handleAddToCart, urlDetail }: {
             </svg>
           </div>
         )}
+
+        {/* Closed overlay */}
+        {disabled && (
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-30">
+            <span className="text-white text-xs font-medium bg-destructive px-2 py-1 rounded">
+              TUTUP
+            </span>
+          </div>
+        )}
       </div>
     </Link>
 
     <div className="space-y-2 p-3">
       <div>
-        <h3 className="font-medium text-sm sm:text-lg line-clamp-2 group-hover:text-primary transition-colors">
+        <h3 className={`font-medium text-sm sm:text-lg line-clamp-2 ${disabled ? '' : 'group-hover:text-primary'} transition-colors`}>
           {product.name}
         </h3>
         <p className="text-xs text-muted-foreground">{product.category}</p>
@@ -114,7 +125,7 @@ export default function CardProduct({ product, handleAddToCart, urlDetail }: {
         </div>
       </div>
 
-      {product.stock > 0 ? (
+      {product.stock > 0 && !disabled ? (
         <Button
           size="sm"
           className="w-full btn-tap"
@@ -133,6 +144,10 @@ export default function CardProduct({ product, handleAddToCart, urlDetail }: {
           )}
         >
           + Keranjang
+        </Button>
+      ) : product.stock > 0 && disabled ? (
+        <Button size="sm" disabled className="w-full">
+          Tutup
         </Button>
       ) : (
         <Button size="sm" disabled className="w-full">

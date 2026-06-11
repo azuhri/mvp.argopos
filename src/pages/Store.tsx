@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, ShoppingBag, Package, StoreIcon } from "lucide-react";
+import { Search, ShoppingBag, Package, StoreIcon, Clock, AlertCircle, X } from "lucide-react";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
 import CardProduct from "@/components/shared/CardProduct";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,12 @@ import { addToCart, getCartSummary, removeFromCart } from "@/lib/storefront";
 import { toast } from "sonner";
 import { config } from "@/lib/config";
 import { locationService } from "@/lib/services/locationService";
+import { apiClient } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { productService } from "@/lib/services/productService";
 import { Stock } from "@/lib/api";
 import { Item } from "@radix-ui/react-dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface ProductStock {
   id: string;
@@ -38,6 +40,10 @@ interface StoreData {
   location_code: string;
   total_stock: number;
   product_stores: ProductStock[];
+  time_open_store?: string;
+  time_close_store?: string;
+  time_start_pickup?: string;
+  time_end_pickup?: string;
 }
 
 interface Location {
@@ -47,10 +53,30 @@ interface Location {
   type: string;
 }
 
+interface OperationalStatus {
+  is_open: boolean;
+  current_time: string;
+  store_open_time?: string;
+  store_close_time?: string;
+  pickup_start_time?: string;
+  pickup_end_time?: string;
+  is_within_pickup_window: boolean;
+  message?: string;
+}
+
 export default function Store() {
   const [search, setSearch] = useState("");
   const [selectedLocationCode, setSelectedLocationCode] = useState("");
   const [cartSummary, setCartSummary] = useState(() => getCartSummary([]));
+  const [storeClosedModal, setStoreClosedModal] = useState(false);
+  const [storeInfo, setStoreInfo] = useState<{
+    storeName: string;
+    openTime: string;
+    closeTime: string;
+    pickupStart: string;
+    pickupEnd: string;
+    message: string;
+  } | null>(null);
 
   // Fetch list of stores
   const { data: storeList, isLoading: storesLoading } = useQuery({
@@ -100,6 +126,36 @@ export default function Store() {
     },
     enabled: !!selectedLocationCode,
   });
+
+  // Fetch operational status when storeData is loaded
+  const { data: operationalStatus } = useQuery({
+    queryKey: ['operationalStatus', storeData?.location_id],
+    queryFn: async () => {
+      if (!storeData?.location_id) return null;
+      const response = await apiClient.getOperationalStatus(storeData.location_id);
+      if (!response.success || !response.data) {
+        return null;
+      }
+      return response.data as OperationalStatus;
+    },
+    enabled: !!storeData?.location_id,
+    refetchInterval: 60000, // Check every minute
+  });
+
+  // Check if store is open and show modal if closed
+  useEffect(() => {
+    if (operationalStatus && !operationalStatus.is_open && storeData) {
+      setStoreInfo({
+        storeName: storeData.location_name,
+        openTime: operationalStatus.store_open_time || storeData.time_open_store || '08:00',
+        closeTime: operationalStatus.store_close_time || storeData.time_close_store || '20:00',
+        pickupStart: operationalStatus.pickup_start_time || storeData.time_start_pickup || '09:00',
+        pickupEnd: operationalStatus.pickup_end_time || storeData.time_end_pickup || '18:00',
+        message: operationalStatus.message || 'Toko sedang tutup',
+      });
+      setStoreClosedModal(true);
+    }
+  }, [operationalStatus, storeData]);
 
   // Update cart summary when storeData loads
   useEffect(() => {
@@ -158,6 +214,19 @@ export default function Store() {
     productStock: number,
     tax_percentage: number,
   ) => {
+    // Check if store is closed
+    if (operationalStatus && !operationalStatus.is_open) {
+      setStoreInfo({
+        storeName: storeData?.location_name || 'Toko',
+        openTime: operationalStatus.store_open_time || storeData?.time_open_store || '08:00',
+        closeTime: operationalStatus.store_close_time || storeData?.time_close_store || '20:00',
+        pickupStart: operationalStatus.pickup_start_time || storeData?.time_start_pickup || '09:00',
+        pickupEnd: operationalStatus.pickup_end_time || storeData?.time_end_pickup || '18:00',
+        message: operationalStatus.message || 'Toko sedang tutup. Tidak dapat menambahkan barang.',
+      });
+      setStoreClosedModal(true);
+      return;
+    }
 
     // cari item di cart
     const cartItem = getCartSummary().items.find(
@@ -252,34 +321,60 @@ export default function Store() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 pb-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {filtered.map((product, i) => (
-            <motion.div
-              key={product.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              whileHover={{ y: -4, scale: 1.02 }}
-              className="glass-card-hover overflow-hidden cursor-pointer group"
-            >
-              <CardProduct
-                product={{
-                  id: product.id,
-                  name: product.master_product.product_name,
-                  price: product.base_price,
-                  image_url: config.endpointUrl + "/" + product.master_product.image_path,
-                  stock: product.stock,
-                  category: product.master_product.category || "",
-                  discount_price: product.discount_price,
-                  tax_percentage: product.tax_percentage || 0,
-                  unit: "pack",
-                  product_stock_id: product.id
-                }}
-                urlDetail={`/${selectedLocationCode}/commerce/product/${product.id}`}
-                handleAddToCart={handleAddToCart}
-              />
-            </motion.div>
-          ))}
+        <div className="space-y-4">
+          {/* Closed Store Banner */}
+          {operationalStatus?.is_open === false && (
+            <div className="sticky top-0 z-30 bg-orange-100 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 px-4 py-3 rounded-lg flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-orange-800 dark:text-orange-200">
+                    Toko Sedang Tutup. Buka pada jam <span className="font-bold text-destructive">{storeInfo?.openTime?.substring(0, 5)} - {storeInfo?.closeTime?.substring(0, 5)}</span>
+                  </p>
+                </div>
+              </div>
+              {/* <Button
+                size="sm"
+                variant="outline"
+                className="border-orange-300 text-orange-700 hover:bg-orange-200 flex-shrink-0"
+                onClick={() => setStoreClosedModal(true)}
+              >
+                Info
+              </Button> */}
+            </div>
+          )}
+
+          {/* Products Grid - Always show products */}
+          <div className="grid grid-cols-2 pb-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {filtered.map((product, i) => (
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                whileHover={operationalStatus?.is_open !== false ? { y: -4, scale: 1.02 } : {}}
+                className="glass-card-hover overflow-hidden cursor-pointer group"
+              >
+                <CardProduct
+                  product={{
+                    id: product.id,
+                    name: product.master_product.product_name,
+                    price: product.base_price,
+                    image_url: config.endpointUrl + "/" + product.master_product.image_path,
+                    stock: product.stock,
+                    category: product.master_product.category || "",
+                    discount_price: product.discount_price,
+                    tax_percentage: product.tax_percentage || 0,
+                    unit: "pack",
+                    product_stock_id: product.id
+                  }}
+                  urlDetail={`/${selectedLocationCode}/commerce/product/${product.id}`}
+                  handleAddToCart={handleAddToCart}
+                  disabled={operationalStatus?.is_open === false}
+                />
+              </motion.div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -289,6 +384,56 @@ export default function Store() {
           <p className="text-muted-foreground">Produk tidak ditemukan</p>
         </div>
       )}
+
+      {/* Store Closed Modal - Backdrop that can be closed */}
+      <Dialog open={storeClosedModal} onOpenChange={setStoreClosedModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-500" />
+              Toko Sedang Tutup
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="text-center">
+              <p className="text-lg font-medium mb-2">{storeInfo?.storeName}</p>
+              <p className="text-muted-foreground">{storeInfo?.message}</p>
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Jam Operasional</p>
+                  <p className="text-sm text-muted-foreground">
+                    {storeInfo?.openTime?.substring(0, 5)} - {storeInfo?.closeTime?.substring(0, 5)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Package className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium">Waktu Pengambilan</p>
+                  <p className="text-sm text-muted-foreground">
+                    {storeInfo?.pickupStart?.substring(0, 5)} - {storeInfo?.pickupEnd?.substring(0, 5)}
+                  </p>
+                  <p className="mt-1 text-[10px] font-mono font-semibold">Note: Pembelian barang melewati jam: {storeInfo?.pickupEnd?.substring(0, 5)}, bisa diambil besok.</p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-sm text-center text-muted-foreground">
+              Silakan kembali saat jam operasional toko.
+            </p>
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setStoreClosedModal(false)}>
+              Tutup
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayoutCommerce>
   );
 }
