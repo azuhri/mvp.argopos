@@ -170,7 +170,7 @@ export default function StoreCart() {
       setTotalTax(
         getCartSummary(products).items.reduce(
           (acc, item) =>
-            acc + ((item.productPrice * item.tax_percentage / 100) * item.qty),
+            acc + ((item.productPrice - (item.productPrice / (1 + (item.tax_percentage / 100)))) * item.qty),
           0
         )
       );
