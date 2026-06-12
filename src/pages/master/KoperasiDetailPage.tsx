@@ -39,6 +39,7 @@ export default function KoperasiDetailPage() {
   const [storePrice, setStorePrice] = useState("");
   const [discountPrice, setDiscountPrice] = useState("");
   const [tax, setTax] = useState("")
+  const [stock, setStock] = useState("")
 
   // Summary filters
   const [summaryStartDate, setSummaryStartDate] = useState(() => {
@@ -372,6 +373,7 @@ export default function KoperasiDetailPage() {
 
     setTax(String(stock.tax_percentage));
 
+    setStock(String(stock.stock));
     setEditingStock(stock);
     setStockFormData({
       base_price: stock.base_price,
@@ -1720,10 +1722,30 @@ export default function KoperasiDetailPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Stock</Label>
-              <Input
+              {/* <Input
                 type="number"
                 value={parseIDR(String(stockFormData.stock))}
                 onChange={(e) => setStockFormData({ ...stockFormData, stock: parseIDR(e.target.value) })}
+              /> */}
+              <Input
+                type="text"
+                value={stock}
+                onChange={(e) => {
+                  const value = e.target.value;
+
+                  if (value === "") {
+                    setStock("");
+                    return;
+                  }
+
+                  let num = Number(value.replace(/\./g,''))
+
+                  setStock(new Intl.NumberFormat("id-ID").format(num));
+                  setStockFormData({
+                    ...stockFormData,
+                    stock: num,
+                  });
+                }}
               />
             </div>
             <div className="space-y-1.5">
