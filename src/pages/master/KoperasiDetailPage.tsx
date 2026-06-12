@@ -26,6 +26,9 @@ import { stockService } from "@/lib/services/stockService";
 import { transactionService } from "@/lib/services/transactionService";
 import { Store as StoreType, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, TransactionCart, apiClient } from "@/lib/api";
 import { config } from "@/lib/config";
+import { parseIDR } from "@/lib/utils";
+import CurrencyInput from "@/components/ui/input-currency";
+
 
 export default function KoperasiDetailPage() {
   const { locationId } = useParams<{ locationId: string }>();
@@ -33,6 +36,9 @@ export default function KoperasiDetailPage() {
   const [store, setStore] = useState<StoreType | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('summary');
+  const [storePrice, setStorePrice] = useState("");
+  const [discountPrice, setDiscountPrice] = useState("");
+  const [tax, setTax] = useState("")
 
   // Summary filters
   const [summaryStartDate, setSummaryStartDate] = useState(() => {
@@ -354,6 +360,18 @@ export default function KoperasiDetailPage() {
   };
 
   const openStockEdit = (stock: Stock) => {
+    setStorePrice(
+      new Intl.NumberFormat("id-ID").format(stock.base_price)
+    );
+
+    setDiscountPrice(
+      new Intl.NumberFormat("id-ID").format(
+        stock.discount_price || 0
+      )
+    );
+
+    setTax(String(stock.tax_percentage));
+
     setEditingStock(stock);
     setStockFormData({
       base_price: stock.base_price,
@@ -580,6 +598,10 @@ export default function KoperasiDetailPage() {
       toast.error("Failed to save payment method");
       console.error(error);
     }
+  };
+
+  const inputNumber = (value: string) => {
+    return value.replace(/\D/g, '');
   };
 
   const openDeletePayment = (pm: StorePaymentMethod) => {
@@ -1700,32 +1722,73 @@ export default function KoperasiDetailPage() {
               <Label>Stock</Label>
               <Input
                 type="number"
-                value={stockFormData.stock}
-                onChange={(e) => setStockFormData({ ...stockFormData, stock: Number(e.target.value) })}
+                value={parseIDR(String(stockFormData.stock))}
+                onChange={(e) => setStockFormData({ ...stockFormData, stock: parseIDR(e.target.value) })}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Store Price</Label>
-              <Input
+              {/* <Input
                 type="number"
-                value={stockFormData.base_price}
+                value={parseIDR(String(stockFormData.base_price))}
                 onChange={(e) => setStockFormData({ ...stockFormData, base_price: Number(e.target.value) })}
+              /> */}
+              <CurrencyInput
+                value={storePrice}
+                onChange={(value) => {
+                  setStorePrice(value);
+
+                  setStockFormData({
+                    ...stockFormData,
+                    base_price: parseIDR(value),
+                  });
+                }}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Discount Price</Label>
-              <Input
+              {/* <Input
                 type="number"
-                value={stockFormData.discount_price}
+                value={parseIDR(String(stockFormData.discount_price))}
                 onChange={(e) => setStockFormData({ ...stockFormData, discount_price: Number(e.target.value) })}
+              /> */}
+              <CurrencyInput
+                value={discountPrice}
+                onChange={(value) => {
+                  setDiscountPrice(value);
+
+                  setStockFormData({
+                    ...stockFormData,
+                    discount_price: parseIDR(value),
+                  });
+                }}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Tax Percentage (%)</Label>
               <Input
                 type="number"
-                value={stockFormData.tax_percentage}
-                onChange={(e) => setStockFormData({ ...stockFormData, tax_percentage: Number(e.target.value) })}
+                min={0}
+                max={100}
+                value={tax}
+                onChange={(e) => {
+                  const value = e.target.value;
+
+                  if (value === "") {
+                    setTax("");
+                    return;
+                  }
+
+                  const num = Number(value);
+
+                  if (num < 0 || num > 100) return;
+
+                  setTax(value);
+                  setStockFormData({
+                    ...stockFormData,
+                    tax_percentage: Number(value),
+                  });
+                }}
               />
             </div>
           </div>

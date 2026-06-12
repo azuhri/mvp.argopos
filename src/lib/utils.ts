@@ -38,6 +38,16 @@ export const badgeOderStatus = (status: string) => {
   }
 };
 
+export const parseIDR = (value) => {
+  if (!value) return 0;
+
+  return Number(
+    value
+      .replace(/\./g, "")
+      .replace(",", ".")
+  );
+};
+
 
 export const getStatusBadgeKey = (status: string) => {
   const map: Record<string, Parameters<typeof StatusBadge>[0]["status"]> = {

@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Product } from "@/types/product";
 import { Button } from "../ui/button";
 import { Star } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { StatusBadge } from "./StatusBadge";
 
 export default function CardProduct({ product, handleAddToCart, urlDetail, disabled }: {
   product: Product & { product_stock_id?: string },
@@ -21,6 +23,7 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [discountPercentage, setDiscountPercentage] = useState(0);
 
   const calculateFinalPrice = (stock: {
     base_price: number;
@@ -34,6 +37,26 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
     const tax = price * (taxPercentage / 100);
     return Math.round(price + tax);
   };
+
+  useEffect(() => {
+    const productPrice = product.price || 0;
+    const productDiscountPrice = product.discount_price || 0;
+
+    if (
+      !productDiscountPrice ||
+      productDiscountPrice >= productPrice ||
+      productPrice <= 0
+    ) {
+      setDiscountPercentage(0);
+      return;
+    }
+
+    setDiscountPercentage(
+      Math.round(
+        ((productPrice - productDiscountPrice) / productPrice) * 100
+      )
+    );
+  }, [product.price, product.discount_price]);
 
   return <React.Fragment>
     <Link
@@ -54,21 +77,23 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
 
         {/* Image Layer - Full opacity transition */}
         {!imageError && (
-          <img
-            src={product.image_url}
-            alt={product.name}
-            className={`
-              h-full w-full object-cover
-              transition-opacity duration-300 ease-out
-              ${imageLoaded ? 'opacity-100' : 'opacity-0'}
-              ${product.stock === 0 ? 'grayscale' : ''}
-            `}
-            onLoad={() => setImageLoaded(true)}
-            onError={() => {
-              setImageLoaded(true);
-              setImageError(true);
-            }}
-          />
+          <div className="relative">
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className={`
+                h-full w-full object-cover
+                transition-opacity duration-300 ease-out
+                ${imageLoaded ? 'opacity-100' : 'opacity-0'}
+                ${product.stock === 0 ? 'grayscale' : ''}
+              `}
+              onLoad={() => setImageLoaded(true)}
+              onError={() => {
+                setImageLoaded(true);
+                setImageError(true);
+              }}
+            />
+          </div>
         )}
 
         {/* Error State */}
@@ -91,8 +116,15 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
       </div>
     </Link>
 
-    <div className="space-y-2 p-3">
+    <div className="space-y-2 p-3 pb-4 pt-0">
       <div>
+        {discountPercentage > 0 && (
+          <div className="top-0 left-0">
+            <Badge variant="outline" className={`text-[10px] font-bold ${discountPercentage > 0 ? 'bg-green-200 text-green-800 border-green-300' : ''}`}>
+              Discount {discountPercentage > 0 ? `${discountPercentage}%` : ''}
+            </Badge>
+          </div>
+        )}
         <h3 className={`font-medium text-sm sm:text-lg line-clamp-2 ${disabled ? '' : 'group-hover:text-primary'} transition-colors`}>
           {product.name}
         </h3>
