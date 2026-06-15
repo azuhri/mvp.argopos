@@ -115,7 +115,6 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
         )}
       </div>
     </Link>
-
     <div className="space-y-2 p-3 pb-4 pt-0">
       <div>
         {discountPercentage > 0 && (
@@ -187,5 +186,6 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
         </Button>
       )}
     </div>
+
   </React.Fragment>;
 }
