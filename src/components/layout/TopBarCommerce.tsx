@@ -1,4 +1,4 @@
-import { ShoppingBag } from "lucide-react";
+import { CalendarIcon, Clock10Icon, Info, ShoppingBag } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -21,9 +21,10 @@ interface TopBarCommerceProps {
     title: string;
     locationCode: string;
     productName?: string;
+    openModalInfo: () => void;
 }
 
-export function TopBarCommerce({ title, locationCode, productName }: TopBarCommerceProps) {
+export function TopBarCommerce({ title, locationCode, productName, openModalInfo }: TopBarCommerceProps) {
     const [cartSummary, setCartSummary] = useState(() => getCartSummary());
     const navigate = useNavigate();
 
@@ -64,8 +65,14 @@ export function TopBarCommerce({ title, locationCode, productName }: TopBarComme
                 </Link>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
                 <ThemeToggle />
+
+                {openModalInfo && (
+                    <Button size="sm" variant="secondary" onClick={openModalInfo}>
+                        <CalendarIcon size={20} />
+                    </Button>
+                )}
 
                 <div className="flex relative">
                     <DropdownMenu>

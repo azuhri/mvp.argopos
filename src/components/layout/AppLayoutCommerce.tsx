@@ -2,14 +2,16 @@ import { ReactNode } from "react";
 import { BottomNav } from "./BottomNav";
 import { TopBarCommerce } from "./TopBarCommerce";
 import { motion } from "framer-motion";
-
+import { useState } from "react";
 interface AppLayoutProps {
   children: ReactNode;
   title: string;
   locationCode: string;
+  openModalInfo: () => void;
 }
 
-export function AppLayoutCommerce({ children, title, locationCode }: AppLayoutProps) {
+export function AppLayoutCommerce({ children, title, locationCode, openModalInfo }: AppLayoutProps) {
+  const [storeClosedModal, setStoreClosedModal] = useState(false);
   return (
     <div className="min-h-screen bg-background">
       <motion.div
@@ -19,7 +21,7 @@ export function AppLayoutCommerce({ children, title, locationCode }: AppLayoutPr
         className="flex flex-col min-h-screen hidden md:block"
         style={{ marginLeft: undefined }} // overridden by motion
       >
-        <TopBarCommerce title={title} locationCode={locationCode} />
+        <TopBarCommerce title={title} locationCode={locationCode} openModalInfo={openModalInfo} />
         <main className="flex-1 py-5 px-2 md:p-6">
           {children}
         </main>
@@ -27,7 +29,7 @@ export function AppLayoutCommerce({ children, title, locationCode }: AppLayoutPr
 
       {/* Mobile layout without sidebar margin */}
       <div className="flex flex-col min-h-screen md:hidden">
-        <TopBarCommerce title={title} locationCode={locationCode} />
+        <TopBarCommerce title={title} locationCode={locationCode} openModalInfo={openModalInfo} />
         <main className="flex-1 py-5 px-2 md:p-6 pb-20 md:pb-6">
           {children}
         </main>

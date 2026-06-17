@@ -468,158 +468,8 @@ export default function PaymentDetail() {
             </div>
           </GlassCard>
 
-          {/* Payment Method Details */}
-          <GlassCard className="p-6 col-span-4 md:col-span-2">
-            <h2 className="text-lg font-semibold mb-4">Metode Pembayaran</h2>
-            <div className="space-y-4">
-              <div className="flex items-center gap-1">
-                {selectedPaymentMethod.payment_type === 'qris' && (
-                  <QrCode className="h-10 w-10 text-primary" />
-                )}
-                {selectedPaymentMethod.payment_type === 'transfer_rekening' && (
-                  <CreditCard className="h-10 w-10 text-primary" />
-                )}
-                {selectedPaymentMethod.payment_type === 'cutoff_hutang' && (
-                  <Wallet className="h-10 w-10 text-primary" />
-                )}
-                <div className="flex items-center">
-                  {selectedPaymentMethod.payment_type === 'qris' && <span className="font-medium">QRIS</span>}
-                  {selectedPaymentMethod.payment_type === 'transfer_rekening' && <span className="font-medium">Transfer Rekening</span>}
-                  {selectedPaymentMethod.payment_type === 'cutoff_hutang' && <span className="font-medium">Cutoff/Hutang</span>}
-                  {/* <div className="flex items-center gap-1">
-                  Status: {transactionData.status === 'PAID' ? <Badge variant="secondary" className="text-green-700 font-bold">Dibayar</Badge> : <Badge variant="secondary">Menunggu Pembayaran</Badge>}
-                </div> */}
-                </div>
-              </div>
-
-              {selectedPaymentMethod.payment_type === 'transfer_rekening' && (
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Bank:</span>
-                    <span className="font-medium">{selectedPaymentMethod.bank_name}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">No. Rekening:</span>
-                    <span className="font-medium">{selectedPaymentMethod.account_number}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Atas Nama:</span>
-                    <span className="font-medium">{selectedPaymentMethod.account_name}</span>
-                  </div>
-                </div>
-              )}
-
-              {selectedPaymentMethod.payment_type === 'qris' && (
-                <div className="space-y-2 text-sm">
-                  {selectedPaymentMethod.image_url && (
-                    <div className="w-full bg-white rounded-lg p-4 flex flex-col items-center justify-center">
-                      <img
-                        src={`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`}
-                        alt="QRIS"
-                        className="w-full h-auto max-w-[20rem] object-contain"
-                      />
-                      <div className="mt-4">
-                        <Button onClick={() => handleDownload(`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`)} variant="outline" className="w-full font-medium px-8 py-2 rounded-lg">
-                          Download QRIS
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  {selectedPaymentMethod.account_name && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Atas Nama:</span>
-                      <span className="font-medium">{selectedPaymentMethod.account_name}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Admin Info for QRIS and Transfer Rekening
-              {(selectedPaymentMethod.payment_type === 'qris' || selectedPaymentMethod.payment_type === 'transfer_rekening') && (
-                <div className="space-y-3 mt-4 pt-4 border-t">
-                  <p className="text-sm font-medium">Hubungi Admin untuk Konfirmasi Pembayaran:</p>
-                  {storeAssignedUsers && storeAssignedUsers.length > 0 ? (
-                    <div className="space-y-2">
-                      {storeAssignedUsers.map((user) => (
-                        <div key={user.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-medium">
-                              {user.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-medium text-sm">{user.username}</p>
-                              <p className="text-xs text-muted-foreground">{user.email}</p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSendToWA(user)}
-                            disabled={!user.no_wa}
-                          >
-                            <MessageCircle className="h-4 w-4 mr-2" />
-                            WA
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Tidak ada admin tersedia</p>
-                  )}
-                </div>
-              )} */}
-
-              {selectedPaymentMethod.payment_type === 'cutoff_hutang' && (
-                <div className="space-y-2 text-sm">
-                  <p className="text-muted-foreground">
-                    Pembayaran via cutoff/hutang. Silakan konfirmasi penerimaan barang setelah barang diterima.
-                  </p>
-                </div>
-              )}
-            </div>
-          </GlassCard>
-
-          {/* Admin Contact - Show for staff users (<=1 assigned store) */}
-          {storeAssignedUsers && storeAssignedUsers.length > 0 && (
-            <GlassCard className="glass-card p-6 col-span-4 md:col-span-2">
-              <h2 className="text-lg font-semibold mb-4">Kontak Admin</h2>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Hubungi admin untuk konfirmasi pembayaran atau bantuan:</p>
-                {storeAssignedUsers.map((user) => (
-                  <div key={user.id} className="flex flex-row items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-medium">
-                        {user.username.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex flex-col">
-                        <p className="font-medium text-sm">{user.username}</p>
-                        <p className="text-xs text-muted-foreground">{user.email}</p>
-                        {user.no_wa && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                            <FaWhatsapp className="h-3 w-3" />
-                            <span>{user.no_wa}</span>
-                          </div>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSendToWA(user)}
-                          disabled={!user.no_wa}
-                          className="mt-1 max-w-[150px]"
-                        >
-                          <FaWhatsapp color="green" className="h-4 w-4" />
-                          <span className="text-xs text-green-900">Kontak WA</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </GlassCard>
-          )}
-
           {/* Payment Amount */}
-          <GlassCard className="p-6 col-span-4">
+          <GlassCard className="p-6 col-span-4 md:col-span-2">
             <h2 className="text-lg font-semibold mb-4">Detail Pembayaran</h2>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
@@ -780,6 +630,155 @@ export default function PaymentDetail() {
                 </Button>
               </div>
             )}
+          </GlassCard>
+          {/* Admin Contact - Show for staff users (<=1 assigned store) */}
+          {storeAssignedUsers && storeAssignedUsers.length > 0 && (
+            <GlassCard className="glass-card p-6 col-span-4 md:col-span-2">
+              <h2 className="text-lg font-semibold mb-4">Kontak Admin</h2>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Hubungi admin untuk konfirmasi pembayaran atau bantuan:</p>
+                {storeAssignedUsers.map((user) => (
+                  <div key={user.id} className="flex flex-row items-center justify-between p-3 bg-muted rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-medium">
+                        {user.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
+                        <p className="font-medium text-sm">{user.username}</p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                        {user.no_wa && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                            <FaWhatsapp className="h-3 w-3" />
+                            <span>{user.no_wa}</span>
+                          </div>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSendToWA(user)}
+                          disabled={!user.no_wa}
+                          className="mt-1 max-w-[150px]"
+                        >
+                          <FaWhatsapp color="green" className="h-4 w-4" />
+                          <span className="text-xs text-green-900">Kontak WA</span>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
+
+          {/* Payment Method Details */}
+          <GlassCard className="p-6 col-span-4">
+            <h2 className="text-lg font-semibold mb-4">Metode Pembayaran</h2>
+            <div className="space-y-4">
+              <div className="flex items-center gap-1">
+                {selectedPaymentMethod.payment_type === 'qris' && (
+                  <QrCode className="h-10 w-10 text-primary" />
+                )}
+                {selectedPaymentMethod.payment_type === 'transfer_rekening' && (
+                  <CreditCard className="h-10 w-10 text-primary" />
+                )}
+                {selectedPaymentMethod.payment_type === 'cutoff_hutang' && (
+                  <Wallet className="h-10 w-10 text-primary" />
+                )}
+                <div className="flex items-center">
+                  {selectedPaymentMethod.payment_type === 'qris' && <span className="font-medium">QRIS</span>}
+                  {selectedPaymentMethod.payment_type === 'transfer_rekening' && <span className="font-medium">Transfer Rekening</span>}
+                  {selectedPaymentMethod.payment_type === 'cutoff_hutang' && <span className="font-medium">Cutoff/Hutang</span>}
+                  {/* <div className="flex items-center gap-1">
+                  Status: {transactionData.status === 'PAID' ? <Badge variant="secondary" className="text-green-700 font-bold">Dibayar</Badge> : <Badge variant="secondary">Menunggu Pembayaran</Badge>}
+                </div> */}
+                </div>
+              </div>
+
+              {selectedPaymentMethod.payment_type === 'transfer_rekening' && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Bank:</span>
+                    <span className="font-medium">{selectedPaymentMethod.bank_name}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">No. Rekening:</span>
+                    <span className="font-medium">{selectedPaymentMethod.account_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Atas Nama:</span>
+                    <span className="font-medium">{selectedPaymentMethod.account_name}</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedPaymentMethod.payment_type === 'qris' && (
+                <div className="space-y-2 text-sm">
+                  {selectedPaymentMethod.image_url && (
+                    <div className="w-full bg-white rounded-lg p-4 flex flex-col items-center justify-center">
+                      <img
+                        src={`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`}
+                        alt="QRIS"
+                        className="w-full h-auto max-w-[20rem] object-contain"
+                      />
+                      <div className="mt-4">
+                        <Button onClick={() => handleDownload(`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`)} variant="outline" className="w-full font-medium px-8 py-2 rounded-lg">
+                          Download QRIS
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {selectedPaymentMethod.account_name && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Atas Nama:</span>
+                      <span className="font-medium">{selectedPaymentMethod.account_name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Admin Info for QRIS and Transfer Rekening
+              {(selectedPaymentMethod.payment_type === 'qris' || selectedPaymentMethod.payment_type === 'transfer_rekening') && (
+                <div className="space-y-3 mt-4 pt-4 border-t">
+                  <p className="text-sm font-medium">Hubungi Admin untuk Konfirmasi Pembayaran:</p>
+                  {storeAssignedUsers && storeAssignedUsers.length > 0 ? (
+                    <div className="space-y-2">
+                      {storeAssignedUsers.map((user) => (
+                        <div key={user.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-medium">
+                              {user.username.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{user.username}</p>
+                              <p className="text-xs text-muted-foreground">{user.email}</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSendToWA(user)}
+                            disabled={!user.no_wa}
+                          >
+                            <MessageCircle className="h-4 w-4 mr-2" />
+                            WA
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Tidak ada admin tersedia</p>
+                  )}
+                </div>
+              )} */}
+
+              {selectedPaymentMethod.payment_type === 'cutoff_hutang' && (
+                <div className="space-y-2 text-sm">
+                  <p className="text-muted-foreground">
+                    Pembayaran via cutoff/hutang. Silakan konfirmasi penerimaan barang setelah barang diterima.
+                  </p>
+                </div>
+              )}
+            </div>
           </GlassCard>
         </div>
 

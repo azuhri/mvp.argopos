@@ -16,6 +16,7 @@ import { productService } from "@/lib/services/productService";
 import { Stock } from "@/lib/api";
 import { Item } from "@radix-ui/react-dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { set } from "date-fns";
 
 interface ProductStock {
   id: string;
@@ -144,18 +145,21 @@ export default function Store() {
 
   // Check if store is open and show modal if closed
   useEffect(() => {
-    if (operationalStatus && !operationalStatus.is_open && storeData) {
+    if (!storeData || storeDataLoading) return;
+    if (storeData) {
       setStoreInfo({
         storeName: storeData.location_name,
-        openTime: operationalStatus.store_open_time || storeData.time_open_store || '08:00',
-        closeTime: operationalStatus.store_close_time || storeData.time_close_store || '20:00',
-        pickupStart: operationalStatus.pickup_start_time || storeData.time_start_pickup || '09:00',
-        pickupEnd: operationalStatus.pickup_end_time || storeData.time_end_pickup || '18:00',
-        message: operationalStatus.message || 'Toko sedang tutup',
+        openTime: operationalStatus?.store_open_time || storeData.time_open_store || '08:00',
+        closeTime: operationalStatus?.store_close_time || storeData.time_close_store || '20:00',
+        pickupStart: operationalStatus?.pickup_start_time || storeData.time_start_pickup || '09:00',
+        pickupEnd: operationalStatus?.pickup_end_time || storeData.time_end_pickup || '18:00',
+        message: operationalStatus?.message || 'Toko sedang tutup',
       });
-      setStoreClosedModal(true);
+      if(operationalStatus && !operationalStatus.is_open) {
+        setStoreClosedModal(true);
+      }
     }
-  }, [operationalStatus, storeData]);
+  }, [operationalStatus, storeData, storeDataLoading]);
 
   // Update cart summary when storeData loads
   useEffect(() => {
@@ -261,8 +265,12 @@ export default function Store() {
     setSearch("");
   };
 
+ const openModalInfoStore = () => {
+  setStoreClosedModal(true)
+ }
+
   return (
-    <AppLayoutCommerce title={storeData?.location_name || config.appNameCommerce} locationCode={selectedLocationCode}>
+    <AppLayoutCommerce title={storeData?.location_name || config.appNameCommerce} locationCode={selectedLocationCode} openModalInfo={openModalInfoStore}>
       {/* Search & Filter */}
       <div className="flex flex-col gap-3 mb-3">
         <div className="relative flex-1">
@@ -391,13 +399,13 @@ export default function Store() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-orange-500" />
-              Toko Sedang Tutup
+              {operationalStatus && !operationalStatus.is_open ? "Toko Sedang Tutup" : "Toko Sedang Buka"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="text-center">
               <p className="text-lg font-medium mb-2">{storeInfo?.storeName}</p>
-              <p className="text-muted-foreground">{storeInfo?.message}</p>
+              <p className="text-muted-foreground">{operationalStatus && !operationalStatus.is_open ? storeInfo?.message : "Toko sedang buka. Silahkan berbelanja."}</p>
             </div>
 
             <div className="bg-muted/50 rounded-lg p-4 space-y-3">
@@ -422,10 +430,11 @@ export default function Store() {
                 </div>
               </div>
             </div>
-
+            
+            {operationalStatus && !operationalStatus.is_open &&
             <p className="text-sm text-center text-muted-foreground">
               Silakan kembali saat jam operasional toko.
-            </p>
+            </p>}
           </div>
           <div className="flex justify-end">
             <Button variant="outline" onClick={() => setStoreClosedModal(false)}>
