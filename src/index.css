@@ -119,6 +119,108 @@
 }
 
 @layer components {
+  .commerce-theme {
+    --background: 225 29% 96%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 232 60% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 226 68% 95%;
+    --secondary-foreground: 222 47% 16%;
+    --muted: 220 24% 93%;
+    --muted-foreground: 220 11% 42%;
+    --accent: 226 73% 95%;
+    --accent-foreground: 232 60% 33%;
+    --border: 220 22% 88%;
+    --input: 220 22% 88%;
+    --ring: 232 60% 33%;
+    --warning: 30 100% 50%;
+    --glass-bg: 0 0% 100% / 0.86;
+    --glass-border: 220 26% 90% / 0.85;
+    --glass-shadow: 226 51% 28% / 0.10;
+  }
+
+  .dark .commerce-theme {
+    --background: 224 34% 8%;
+    --foreground: 220 20% 96%;
+    --card: 224 28% 13%;
+    --card-foreground: 220 20% 96%;
+    --popover: 224 28% 13%;
+    --popover-foreground: 220 20% 96%;
+    --primary: 228 73% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 224 28% 17%;
+    --secondary-foreground: 220 20% 96%;
+    --muted: 224 28% 17%;
+    --muted-foreground: 220 12% 64%;
+    --accent: 228 44% 22%;
+    --accent-foreground: 228 88% 78%;
+    --border: 224 22% 21%;
+    --input: 224 22% 21%;
+    --ring: 228 73% 62%;
+    --glass-bg: 224 28% 13% / 0.82;
+    --glass-border: 224 22% 21% / 0.78;
+    --glass-shadow: 0 0% 0% / 0.28;
+  }
+
+  .commerce-surface {
+    @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(circle at 12% 8%, hsl(var(--primary) / 0.08), transparent 28rem),
+      linear-gradient(180deg, hsl(0 0% 100% / 0.78), hsl(var(--background)) 15rem);
+  }
+
+  .commerce-panel {
+    @apply border border-border/80 bg-card shadow-xl shadow-primary/5;
+    border-radius: 1.375rem;
+  }
+
+  .commerce-panel-soft {
+    @apply border border-border/70 bg-card/90 shadow-lg shadow-primary/5;
+    border-radius: 1.125rem;
+  }
+
+  .commerce-pill {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-bold text-secondary-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .commerce-pill-active {
+    @apply border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary hover:text-primary-foreground;
+  }
+
+  .commerce-orange-button {
+    @apply bg-[#ff7a00] text-white shadow-lg shadow-orange-500/25 hover:bg-[#f07100];
+  }
+
+  .commerce-hero-card {
+    background:
+      radial-gradient(circle at 5% 43%, rgba(101, 69, 96, 0.86) 0 0, rgba(101, 69, 96, 0.86) 11rem, transparent 11.15rem),
+      radial-gradient(circle at 93% 67%, rgba(255, 255, 255, 0.22) 0 0, rgba(255, 255, 255, 0.22) 9rem, transparent 9.1rem),
+      linear-gradient(135deg, #233089 0%, #23328f 50%, #303fb3 100%);
+  }
+
+  .commerce-hero-product {
+    filter: drop-shadow(0 24px 28px rgba(0, 0, 0, 0.25));
+  }
+
+  .commerce-product-visual {
+    background:
+      radial-gradient(circle at 20% 105%, rgba(119, 74, 86, 0.78) 0 0, rgba(119, 74, 86, 0.78) 4.8rem, transparent 4.9rem),
+      radial-gradient(circle at 100% 42%, rgba(255, 255, 255, 0.18) 0 0, rgba(255, 255, 255, 0.18) 5.5rem, transparent 5.6rem),
+      linear-gradient(135deg, #1b245d 0%, #2f3bc0 100%);
+  }
+
+  .commerce-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .commerce-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .glass {
     @apply bg-card/70 backdrop-blur-xl border border-border/50 shadow-lg;
   }

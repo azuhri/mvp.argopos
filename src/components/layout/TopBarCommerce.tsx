@@ -1,166 +1,249 @@
-import { CalendarIcon, Clock10Icon, Info, ShoppingBag } from "lucide-react";
+import { CalendarIcon, History, Search, ShoppingBag, StoreIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
+import { Link } from "react-router-dom";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ShoppingCart as ShoppingCartIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatCurrency } from "@/lib/mockData";
-import { getCartSummary, clearCart } from "@/lib/storefront";
+import { getCartSummary } from "@/lib/storefront";
 import { useState, useEffect } from "react";
 import config from "../../lib/config";
+import { cn } from "@/lib/utils";
 
 interface TopBarCommerceProps {
-    title: string;
-    locationCode: string;
-    productName?: string;
-    openModalInfo: () => void;
+  title: string;
+  locationCode: string;
+  productName?: string;
+  openModalInfo?: () => void;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
 }
 
-export function TopBarCommerce({ title, locationCode, productName, openModalInfo }: TopBarCommerceProps) {
-    const [cartSummary, setCartSummary] = useState(() => getCartSummary());
-    const navigate = useNavigate();
+function CommerceLogoMark({ className }: { className?: string }) {
+  return (
+    <div className={cn("relative flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] bg-[#18246c] shadow-lg shadow-primary/15", className)}>
+      <ShoppingBag className="h-7 w-7 text-white" strokeWidth={2.4} />
+      <span className="absolute -right-1 -top-1 h-6 w-6 rounded-full bg-[#ff8a12]" />
+      <span className="absolute bottom-3 h-3 w-7 rounded-b-full border-b-[5px] border-[#ffd23f]" />
+    </div>
+  );
+}
 
-    // Update cart summary when localStorage changes
-    useEffect(() => {
-        const handleStorageChange = () => {
-            setCartSummary(getCartSummary());
-        };
+function BrandBlock() {
+  return (
+    <Link to="/commerce" className="flex min-w-0 items-center gap-3">
+      <CommerceLogoMark />
+      <div className="min-w-0">
+        <p className="truncate text-xl font-extrabold leading-tight text-foreground md:text-[1.35rem]">
+          AMP Mart
+        </p>
+        <div className="mt-1 inline-flex rounded-full bg-[#fff0d7] px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide text-[#f06f00]">
+          Fresh Frozen
+        </div>
+      </div>
+    </Link>
+  );
+}
 
-        window.addEventListener('storage', handleStorageChange);
-        const interval = setInterval(handleStorageChange, 100);
+function SearchBox({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value?: string;
+  onChange?: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  if (!onChange) return null;
 
-        return () => {
-            window.removeEventListener('storage', handleStorageChange);
-            clearInterval(interval);
-        };
-    }, []);
+  return (
+    <div className={cn("relative", className)}>
+      <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#60708f]" />
+      <input
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder || "Cari produk..."}
+        className="h-12 w-full rounded-2xl border border-border bg-card px-12 text-[15px] font-medium text-foreground shadow-sm outline-none transition focus:border-primary/40 focus:ring-4 focus:ring-primary/10"
+      />
+    </div>
+  );
+}
 
-    const { items, total, totalItems } = cartSummary;
+export function TopBarCommerce({
+  title,
+  locationCode,
+  openModalInfo,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
+}: TopBarCommerceProps) {
+  const [cartSummary, setCartSummary] = useState(() => getCartSummary());
 
-    return (
-        <header className="h-20 flex items-center justify-between px-4 md:px-6 border-b border-border/40 glass-strong sticky top-0 z-30">
-            <div className="flex gap-2 items-center">
-                <Link to={`/commerce`} className="flex items-center gap-2">
-                    <div className="p-2 px-2 rounded-sm bg-primary flex items-center justify-center">
-                        <ShoppingBag className="h-10 w-10 text-primary-foreground" />
-                    </div>
-                    <h1 className="text-lg font-medium text-foreground">
-                        <div className="flex flex-col">
-                            <span className="text-secondary-foreground font-extrabold">{config.appNameCommerce}</span>
-                            <div className="flex">
-                                <Badge variant="secondary" size="sm" className="text-primary font-bold uppercase px-2 py-1 rounded-sm">
-                                    {title}
-                                </Badge>
-                            </div>
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setCartSummary(getCartSummary());
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    const interval = setInterval(handleStorageChange, 100);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const { items, total, totalItems } = cartSummary;
+  const showStorePill = Boolean(title && title !== config.appNameCommerce && title !== "Loading..." && title !== "Product Not Found");
+  const cartUrl = locationCode ? `/${locationCode}/commerce/cart` : "/commerce/cart";
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-card/95 px-3 py-3 shadow-sm backdrop-blur-2xl md:px-6">
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3">
+        <div className="flex min-h-[56px] items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3 md:flex-none">
+            <BrandBlock />
+          </div>
+
+          {showStorePill && (
+            <Link to="/commerce" className="commerce-pill hidden min-w-[150px] justify-start rounded-2xl md:inline-flex">
+              <StoreIcon className="h-4 w-4 text-primary" />
+              <span className="truncate">{title}</span>
+            </Link>
+          )}
+
+          <SearchBox
+            value={searchValue}
+            onChange={onSearchChange}
+            placeholder={searchPlaceholder}
+            className="hidden flex-1 md:block"
+          />
+
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="hidden h-12 rounded-2xl px-4 font-extrabold text-primary md:inline-flex"
+            >
+              <History className="h-4 w-4" />
+              Riwayat
+            </Button>
+
+            <ThemeToggle className="h-12 w-12 rounded-2xl bg-secondary text-primary" />
+
+            {openModalInfo && (
+              <Button
+                type="button"
+                size="icon"
+                variant="secondary"
+                onClick={openModalInfo}
+                className="inline-flex h-12 w-12 rounded-2xl text-primary"
+                aria-label="Info operasional toko"
+              >
+                <CalendarIcon className="h-5 w-5" />
+              </Button>
+            )}
+
+            <div className="relative">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="h-12 w-12 rounded-2xl bg-primary p-0 text-white shadow-lg shadow-primary/20 hover:bg-primary">
+                    <ShoppingCartIcon className="h-5 w-5" strokeWidth={2.4} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="commerce-panel-soft w-80 max-w-[calc(100vw-2rem)] p-0">
+                  <DropdownMenuItem className="block cursor-default p-0 focus:bg-transparent">
+                    <div className="w-full p-4">
+                      {totalItems === 0 ? (
+                        <div className="py-6 text-center">
+                          <ShoppingBag className="mx-auto mb-2 h-10 w-10 text-muted-foreground" />
+                          <h2 className="mb-1 text-base font-extrabold text-foreground">Keranjang Kosong</h2>
+                          <p className="text-sm text-muted-foreground">Belum ada produk di keranjang kamu</p>
                         </div>
-                    </h1>
-                </Link>
-            </div>
+                      ) : (
+                        <div className="mb-3 flex items-center justify-between">
+                          <h2 className="text-sm font-extrabold text-foreground">Keranjang ({totalItems})</h2>
+                          <Link to={cartUrl} className="text-xs font-bold text-primary hover:underline">
+                            Lihat Keranjang
+                          </Link>
+                        </div>
+                      )}
 
-            <div className="flex items-center gap-1">
-                <ThemeToggle />
-
-                {openModalInfo && (
-                    <Button size="sm" variant="secondary" onClick={openModalInfo}>
-                        <CalendarIcon size={20} />
-                    </Button>
-                )}
-
-                <div className="flex relative">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-9 w-9 rounded-lg bg-primary/10 hover:bg-primary/20">
-                                <span className="text-sm font-semibold text-primary">
-                                    <ShoppingCartIcon size={20} strokeWidth={2} />
-                                </span>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="glass-card w-80 max-w-[calc(100vw-2rem)]">
-                            <DropdownMenuItem className="text-primary text-sm focus:text-primary p-0">
-                                {/* Cart Items */}
-                                <div className="w-full p-2">
-                                    {totalItems === 0 ?
-                                        (<div className="text-center py-6">
-                                            <ShoppingBag className="h-10 w-10 text-muted-foreground mx-auto mb-1" />
-                                            <h2 className="text-lg font-semibold mb-1">Keranjang Kosong</h2>
-                                            <p className="text-muted-foreground mb-4">Belum ada produk di keranjang kamu</p>
-                                        </div>
-                                        ) : (<div className="flex items-center justify-between mb-3">
-                                            <h2 className="text-sm font-semibold">Keranjang ({totalItems})</h2>
-                                            <Link to={`/${locationCode}/commerce/cart`} className="text-xs text-primary hover:underline whitespace-nowrap">
-                                                Lihat Keranjang
-                                            </Link>
-                                        </div>)}
-                                    <div className="max-h-64 overflow-y-auto space-y-2 pr-2">
-                                        <AnimatePresence>
-                                            {items.map((item) => (
-                                                <motion.div
-                                                    key={item.productId}
-                                                    initial={{ opacity: 0, x: -20 }}
-                                                    animate={{ opacity: 1, x: 0 }}
-                                                    exit={{ opacity: 0, x: -20 }}
-                                                    className="glass-card p-3"
-                                                >
-                                                    <div className="flex gap-3 items-center">
-                                                        <div className="h-12 w-12 sm:h-16 sm:w-16 flex justify-center items-center rounded-lg bg-gradient-to-br from-primary/5 to-accent/5 flex-shrink-0">
-                                                            <img
-                                                                src={item.product.image_url || ''}
-                                                                alt={item.product.name}
-                                                                className="h-8 w-8 sm:h-12 sm:w-12 object-cover rounded"
-                                                            />
-                                                        </div>
-
-                                                        <div className="flex-1 min-w-0">
-                                                            <h3 className="font-medium text-xs sm:text-sm line-clamp-1">
-                                                                {item.product.name}
-                                                            </h3>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {item.product.category}
-                                                            </p>
-                                                            <div className="flex items-center justify-between mt-1">
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    x{item.qty}
-                                                                </span>
-                                                                <p className="text-xs sm:text-sm font-semibold text-primary">
-                                                                    {formatCurrency(item.subtotal)}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            ))}
-                                        </AnimatePresence>
-                                    </div>
-
-                                    {items.length > 0 && (
-                                        <div className="border-t pt-2 mt-2">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-xs text-muted-foreground">Total:</span>
-                                                <span className="text-sm font-semibold text-primary">
-                                                    {formatCurrency(total)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
+                      <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                        <AnimatePresence>
+                          {items.map((item) => (
+                            <motion.div
+                              key={item.productId}
+                              initial={{ opacity: 0, x: -16 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -16 }}
+                              className="rounded-2xl border border-border/80 bg-card p-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="commerce-product-visual flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl">
+                                  <img
+                                    src={item.product.image_url || ""}
+                                    alt={item.product.name}
+                                    className="h-12 w-12 object-contain"
+                                  />
                                 </div>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    {totalItems > 0 && (
-                        <p className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                            {totalItems}
-                        </p>
-                    )}
-                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="line-clamp-1 text-sm font-bold text-foreground">
+                                    {item.product.name}
+                                  </h3>
+                                  <div className="mt-1 flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold text-muted-foreground">
+                                      {item.qty} item
+                                    </span>
+                                    <p className="text-sm font-extrabold text-primary">
+                                      {formatCurrency(item.subtotal)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+                      </div>
+
+                      {items.length > 0 && (
+                        <div className="mt-3 border-t border-border pt-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-muted-foreground">Total</span>
+                            <span className="text-base font-extrabold text-primary">{formatCurrency(total)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {totalItems > 0 && (
+                <p className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ff7a00] px-1.5 text-[11px] font-extrabold text-white">
+                  {totalItems}
+                </p>
+              )}
             </div>
-        </header>
-    );
+          </div>
+        </div>
+
+        <SearchBox
+          value={searchValue}
+          onChange={onSearchChange}
+          placeholder={searchPlaceholder}
+          className="md:hidden"
+        />
+      </div>
+    </header>
+  );
 }

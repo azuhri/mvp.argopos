@@ -345,7 +345,7 @@ export default function PaymentDetail() {
       >
         <div className="flex min-h-[80vh] items-center justify-center px-4">
           <div className="w-full max-w-md">
-            <div className="rounded-2xl border bg-white p-8 shadow-lg">
+            <div className="commerce-panel p-8">
               <div className="flex flex-col items-center text-center">
                 <div className="mb-4 rounded-full bg-red-100 p-4">
                   <XCircle className="h-12 w-12 text-red-500" />
@@ -358,7 +358,7 @@ export default function PaymentDetail() {
                 <p className="mt-3 text-sm text-gray-500">
                   Transaksi dengan code:
                 </p>
-                <div className="my-4 w-full rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                <div className="my-4 w-full rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
                   <span className="text-lg font-mono font-semibold">{transactionData.transaction_code}</span>
                 </div>
                 <p className="text-sm text-gray-500">
@@ -370,7 +370,7 @@ export default function PaymentDetail() {
                   <Button
                     asChild
                     size="lg"
-                    className="w-full"
+                    className="commerce-orange-button w-full rounded-2xl font-extrabold"
                   >
                     <Link to={`/commerce`}>
                       Lanjut Belanja
@@ -387,27 +387,34 @@ export default function PaymentDetail() {
 
   return (
     <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-      <div className="max-w-[1800px] mx-auto px-4 py-2">
+      <div className="mx-auto w-full max-w-[1180px] space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row items-start gap-4 mb-6">
+        <div className="commerce-panel flex flex-col items-start gap-2 p-5 md:flex-row md:items-center md:justify-between">
           {/* <Button variant="outline" size="sm" asChild>
             <Link to={`/${locationCode}/commerce/cart`}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Kembali
             </Link>
           </Button> */}
-          <h1 className="text-2xl font-bold">Detail Pembayaran</h1>
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight">Detail Pembayaran</h1>
+            <p className="mt-1 text-sm font-semibold text-muted-foreground">
+              Pantau status order dan instruksi pembayaran dari {storeData.location_name}
+            </p>
+          </div>
         </div>
 
         {/* Countdown */}
         {(transactionData.status === 'WAITING_TO_PAYMENT') && (
-          <GlassCard className="p-6 mb-6">
+          <GlassCard className="!rounded-[1.25rem] !bg-card p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Clock className="h-6 w-6 text-orange-500" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff0d7] text-[#ff7a00]">
+                  <Clock className="h-6 w-6" />
+                </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Sisa waktu pembayaran</p>
-                  <p className="text-2xl font-bold text-orange-500">{formatTime(timeLeft)}</p>
+                  <p className="text-sm font-semibold text-muted-foreground">Sisa waktu pembayaran</p>
+                  <p className="text-2xl font-extrabold text-[#ff7a00]">{formatTime(timeLeft)}</p>
                 </div>
               </div>
               <Badge variant={timeLeft > 1800 ? "default" : "destructive"}>
@@ -418,12 +425,14 @@ export default function PaymentDetail() {
         )}
 
         {(transactionData.status === 'PAID') && (
-          <GlassCard className="p-6 mb-6">
+          <GlassCard className="!rounded-[1.25rem] !bg-card p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-6 w-6 text-green-500" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-50 text-green-600">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
                 <div>
-                  <span className="text-sm text-muted-foreground">Pembarayaran Telah Dikonfirmasi</span>
+                  <span className="text-sm font-semibold text-muted-foreground">Pembarayaran Telah Dikonfirmasi</span>
                 </div>
               </div>
               <Badge variant="default">
@@ -433,22 +442,22 @@ export default function PaymentDetail() {
           </GlassCard>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           {/* Product List */}
-          <GlassCard className="glass-card p-6 col-span-4">
-            <h2 className="text-lg font-semibold mb-4">Daftar Produk</h2>
+          <GlassCard className="col-span-4 !rounded-[1.25rem] !bg-card p-5">
+            <h2 className="mb-4 text-lg font-extrabold">Daftar Produk</h2>
             <div className="space-y-4 text-sm md:text-lg">
               {transactionData?.transaction_carts && transactionData.transaction_carts.length > 0 ? (
                 transactionData.transaction_carts.map((item) => (
-                  <div key={item.id} className="flex items-center gap-4 p-3 rounded-lg bg-muted/30">
+                  <div key={item.id} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-3">
                     {item.product_details?.image_path ? (
                       <img
                         src={`${config.endpointUrl}/${item.product_details.image_path}`}
                         alt={item.product_details.product_name || 'Product'}
-                        className="w-16 h-16 object-cover rounded-md"
+                        className="commerce-product-visual h-16 w-16 rounded-2xl object-contain p-1"
                       />
                     ) : (
-                      <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
                         <Package className="h-6 w-6 text-muted-foreground" />
                       </div>
                     )}
@@ -457,7 +466,7 @@ export default function PaymentDetail() {
                       <p className="text-sm text-muted-foreground">Qty: {item.qty}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(item.amount)}</p>
+                      <p className="font-extrabold text-green-600">{formatCurrency(item.amount)}</p>
                       <p className="text-xs text-muted-foreground">{formatCurrency(item.amount / item.qty)} / item</p>
                     </div>
                   </div>
@@ -469,8 +478,8 @@ export default function PaymentDetail() {
           </GlassCard>
 
           {/* Payment Amount */}
-          <GlassCard className="p-6 col-span-4 md:col-span-2">
-            <h2 className="text-lg font-semibold mb-4">Detail Pembayaran</h2>
+          <GlassCard className="col-span-4 !rounded-[1.25rem] !bg-card p-5 md:col-span-2">
+            <h2 className="mb-4 text-lg font-extrabold">Detail Pembayaran</h2>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground text-sm md:text-md">Order Status</span>
@@ -511,7 +520,7 @@ export default function PaymentDetail() {
 
             {/* Show pickup proof status if available */}
             {transactionData.path_proof_pickup && (
-              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+              <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-3">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
                   <div className="flex-1">
@@ -532,7 +541,7 @@ export default function PaymentDetail() {
 
             {/* Show confirmed state */}
             {confirmedReceipt && (
-              <div className="mt-4 p-4 px-2 bg-green-100 rounded-lg border border-green-300 text-center">
+              <div className="mt-4 rounded-2xl border border-green-300 bg-green-100 p-4 px-2 text-center">
                 <div className="flex items-center justify-center gap-2 text-green-800 font-semibold">
                   <CheckCircle className="h-6 w-6" />
                   <span>Konfirmasi penerimaan barang berhasil!</span>
@@ -542,7 +551,7 @@ export default function PaymentDetail() {
 
             {/* Show preparation message for PAID/PREPARING_PRODUCT status */}
             {(transactionData.status === 'PAID' || transactionData.status === 'PREPARING_PRODUCT') && (
-              <div className="mt-4 p-4 px-2 bg-blue-50 rounded-lg border border-blue-200 text-center">
+              <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 px-2 text-center">
                 <div className="flex items-center justify-center gap-2 text-blue-800">
                   <span className="text-xs font-medium">📦 Pesanan sedang dalam preparation. Mohon tunggu.</span>
                 </div>
@@ -553,7 +562,7 @@ export default function PaymentDetail() {
             {transactionData.path_proof_pickup && (transactionData.status === 'READY_TO_PICKUP' || transactionData.status === 'PAID') && (
               <div className="mt-4">
                 <p className="text-sm font-medium mb-2">Bukti Serah Terima:</p>
-                <div className="rounded-lg overflow-hidden border border-border bg-muted/20">
+                <div className="overflow-hidden rounded-2xl border border-border bg-muted/20">
                   {transactionData.path_proof_pickup ? (
                     <img
                       src={`${config.endpointUrl}/${transactionData.path_proof_pickup}`}
@@ -580,7 +589,7 @@ export default function PaymentDetail() {
 
             {/* Show waiting message if pickup proof not yet uploaded by admin */}
             {transactionData.status === 'READY_TO_PICKUP' && !transactionData.path_proof_pickup && (
-              <div className="mt-4 p-4 px-2 bg-amber-50 rounded-lg border border-amber-200 text-center">
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 px-2 text-center">
                 <div className="flex items-center justify-center gap-2 text-amber-800">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
                   <span className="text-sm font-medium">Menunggu admin mengupload bukti serah terima...</span>
@@ -590,7 +599,7 @@ export default function PaymentDetail() {
 
             {/* Show PAID status message - encouraging direct confirmation */}
             {transactionData.status === 'PAID' && !confirmedReceipt && (
-              <div className="mt-4 p-4 px-2 bg-green-50 rounded-lg border border-green-200 text-center">
+              <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 px-2 text-center">
                 <div className="flex items-center justify-center gap-2 text-green-800">
                   <span className="text-xs font-medium">💰 Pembayaran telah dikonfirmasi.</span>
                 </div>
@@ -606,13 +615,13 @@ export default function PaymentDetail() {
             {/* Show confirm receipt button - Customer confirms pickup themselves after seeing proof */}
             {(transactionData.status === 'READY_TO_PICKUP') && !confirmedReceipt && (
               <div className="mt-4 space-y-3">
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                <div className="rounded-2xl border border-border bg-muted/40 p-3 text-center">
                   <p className="text-xs text-gray-800 font-medium">
                     👆 Silakan konfirmasi pengambilan barang di bawah setelah Anda menerima barang
                   </p>
                 </div>
                 <Button
-                  className="w-full bg-primary hover:bg-primary text-white text-sm font-semibold py-3"
+                  className="commerce-orange-button w-full rounded-2xl py-3 text-sm font-extrabold text-white"
                   onClick={handleConfirmReceipt}
                   disabled={isConfirmingReceipt}
                 >
@@ -633,14 +642,14 @@ export default function PaymentDetail() {
           </GlassCard>
           {/* Admin Contact - Show for staff users (<=1 assigned store) */}
           {storeAssignedUsers && storeAssignedUsers.length > 0 && (
-            <GlassCard className="glass-card p-6 col-span-4 md:col-span-2">
-              <h2 className="text-lg font-semibold mb-4">Kontak Admin</h2>
+            <GlassCard className="col-span-4 !rounded-[1.25rem] !bg-card p-5 md:col-span-2">
+              <h2 className="mb-4 text-lg font-extrabold">Kontak Admin</h2>
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">Hubungi admin untuk konfirmasi pembayaran atau bantuan:</p>
                 {storeAssignedUsers.map((user) => (
-                  <div key={user.id} className="flex flex-row items-center justify-between p-3 bg-muted rounded-lg">
+                  <div key={user.id} className="flex flex-row items-center justify-between rounded-2xl border border-border bg-muted/35 p-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-medium">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary font-extrabold text-white">
                         {user.username.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex flex-col">
@@ -657,7 +666,7 @@ export default function PaymentDetail() {
                           size="sm"
                           onClick={() => handleSendToWA(user)}
                           disabled={!user.no_wa}
-                          className="mt-1 max-w-[150px]"
+                          className="mt-1 max-w-[150px] rounded-2xl font-bold"
                         >
                           <FaWhatsapp color="green" className="h-4 w-4" />
                           <span className="text-xs text-green-900">Kontak WA</span>
@@ -671,8 +680,8 @@ export default function PaymentDetail() {
           )}
 
           {/* Payment Method Details */}
-          <GlassCard className="p-6 col-span-4">
-            <h2 className="text-lg font-semibold mb-4">Metode Pembayaran</h2>
+          <GlassCard className="col-span-4 !rounded-[1.25rem] !bg-card p-5">
+            <h2 className="mb-4 text-lg font-extrabold">Metode Pembayaran</h2>
             <div className="space-y-4">
               <div className="flex items-center gap-1">
                 {selectedPaymentMethod.payment_type === 'qris' && (
@@ -714,14 +723,14 @@ export default function PaymentDetail() {
               {selectedPaymentMethod.payment_type === 'qris' && (
                 <div className="space-y-2 text-sm">
                   {selectedPaymentMethod.image_url && (
-                    <div className="w-full bg-white rounded-lg p-4 flex flex-col items-center justify-center">
+                    <div className="flex w-full flex-col items-center justify-center rounded-2xl bg-white p-4">
                       <img
                         src={`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`}
                         alt="QRIS"
                         className="w-full h-auto max-w-[20rem] object-contain"
                       />
                       <div className="mt-4">
-                        <Button onClick={() => handleDownload(`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`)} variant="outline" className="w-full font-medium px-8 py-2 rounded-lg">
+                        <Button onClick={() => handleDownload(`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`)} variant="outline" className="w-full rounded-2xl px-8 py-2 font-extrabold">
                           Download QRIS
                         </Button>
                       </div>
@@ -784,15 +793,15 @@ export default function PaymentDetail() {
 
         {/* Assigned Users */}
         {storeData.assigned_users && storeData.assigned_users.length > 0 && (
-          <GlassCard className="p-6 mt-6">
-            <h2 className="text-lg font-semibold mb-4">Admin Toko</h2>
+          <GlassCard className="mt-6 !rounded-[1.25rem] !bg-card p-5">
+            <h2 className="mb-4 text-lg font-extrabold">Admin Toko</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {storeData.assigned_users.map((user) => (
                 <motion.div
                   key={user.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between p-4 rounded-lg border"
+                  className="flex items-center justify-between rounded-2xl border p-4"
                 >
                   <div>
                     <p className="font-medium">{user.username}</p>

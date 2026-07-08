@@ -340,27 +340,37 @@ export default function StoreProductDetail() {
     ));
   };
 
+  const basePriceDisplay = Math.round(product.price * (1 + product.tax_percentage / 100));
+  const finalPriceDisplay = calculateFinalPrice({
+    base_price: product.price,
+    discount_price: product.discount_price,
+    tax_percentage: product.tax_percentage,
+  });
+  const cartUrl = locationCode ? `/${locationCode}/commerce/cart` : "/commerce/cart";
+
   return (
     <AppLayoutCommerce title={`${storeData.location_name}`} locationCode={locationCode || ''}>
-      <div className={`max-w-8xl mx-auto px-4 py-6 ${product.isOutOfStock ? 'grayscale' : ''}`}>
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-          <Link to={`/commerce`} className="hover:text-foreground">
-            Commerce
-          </Link>
-          <span>/</span>
-          <span className="text-foreground font-semibold">{product.name}</span>
+      <div className={`mx-auto w-full max-w-[1240px] space-y-6 ${product.isOutOfStock ? 'grayscale' : ''}`}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <Button variant="outline" size="sm" asChild className="w-fit rounded-2xl font-extrabold">
+            <Link to="/commerce">
+              <ArrowLeft className="h-4 w-4" />
+              Kembali Belanja
+            </Link>
+          </Button>
+          <div className="text-left md:text-right">
+            <p className="text-sm font-bold text-muted-foreground">{storeData.location_name}</p>
+            <p className="text-xs font-semibold text-muted-foreground">Kode produk: {product.product_code}</p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Product Images */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1fr)]">
           <div className="space-y-4">
-            {/* Main Image */}
-            <div className="relative aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-primary/5 to-accent/5">
-              {/* Skeleton Layer */}
+            <div className="commerce-panel overflow-hidden p-3 md:p-4">
+              <div className="commerce-product-visual relative aspect-square overflow-hidden rounded-[1.25rem]">
               {!mainImageLoaded && !mainImageError && (
                 <motion.div
-                  className="absolute inset-0 z-20 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 animate-pulse"
+                  className="absolute inset-0 z-20 animate-pulse bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200"
                   initial={{ opacity: 1 }}
                 />
               )}
@@ -370,7 +380,7 @@ export default function StoreProductDetail() {
                   key={currentImageIndex}
                   src={product.images[currentImageIndex]}
                   alt={product.name}
-                  className={`w-full h-full object-cover transition-opacity duration-400 ease-out ${mainImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  className={`h-full w-full object-contain p-8 transition-opacity duration-400 ease-out ${mainImageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   onLoad={handleMainImageLoad}
                   onError={handleMainImageError}
                   initial={{ opacity: 0, scale: 0.95, x: 50 }}
@@ -396,71 +406,66 @@ export default function StoreProductDetail() {
                 </div>
               )}
 
-              {/* Image Navigation */}
-              <motion.div className="absolute left-2 top-1/2 -translate-y-1/2 flex gap-2" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+              <motion.div className="absolute left-3 top-1/2 -translate-y-1/2 flex gap-2" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                  <Button variant="outline" size="sm" className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all" onClick={prevImage}>
+                  <Button variant="outline" size="icon" className="h-10 w-10 rounded-full bg-white/90 backdrop-blur hover:bg-white" onClick={prevImage}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                 </motion.div>
               </motion.div>
 
-              <motion.div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+              <motion.div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                  <Button variant="outline" size="sm" className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all" onClick={nextImage}>
+                  <Button variant="outline" size="icon" className="h-10 w-10 rounded-full bg-white/90 backdrop-blur hover:bg-white" onClick={nextImage}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </motion.div>
               </motion.div>
 
-              {/* Stock Badge */}
-              <motion.div className="absolute top-2 right-2" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                <Badge variant={product.stock > 5 ? "default" : "destructive"} className="bg-white/40 backdrop-blur">
-                  {product.stock > 5 ? `Stok: ${product.stock}` : "Habis"}
+              <motion.div className="absolute left-4 top-4" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                <Badge variant={product.stock > 5 ? "default" : "destructive"} className="rounded-full px-3 py-1 font-extrabold shadow-lg">
+                  {product.stock > 5 ? `Ready ${product.stock} pack` : "Habis"}
                 </Badge>
               </motion.div>
 
-              {/* Favorite Button */}
-              <motion.div className="absolute bottom-2 right-2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+              <motion.div className="absolute bottom-4 right-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
-                  <Button variant="outline" size="sm" className="bg-white/80 backdrop-blur hover:bg-white/90 transition-all">
+                  <Button variant="outline" size="icon" className="h-10 w-10 rounded-full bg-white/90 backdrop-blur hover:bg-white">
                     <Heart className="h-4 w-4" />
                   </Button>
                 </motion.div>
               </motion.div>
             </div>
+            </div>
 
-            {/* Thumbnail Gallery */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="commerce-scrollbar flex gap-3 overflow-x-auto pb-1">
               {product.images.map((image, index) => (
                 <motion.button
                   key={index}
                   onClick={() => handleThumbnailClick(index)}
-                  className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${selectedImage === index
+                  className={`commerce-panel-soft h-20 w-20 flex-shrink-0 overflow-hidden p-1 transition-all ${selectedImage === index
                     ? "border-primary scale-105"
-                    : "border-transparent hover:border-muted hover:scale-105"
+                    : "hover:border-muted hover:scale-105"
                     }`}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <div className="relative w-full h-full overflow-hidden rounded-lg">
+                  <div className="commerce-product-visual relative h-full w-full overflow-hidden rounded-xl">
                     {!thumbnailLoaded[index] && !thumbnailError[index] && (
-                      <div className="absolute inset-0 z-10 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 animate-pulse" />
+                      <div className="absolute inset-0 z-10 animate-pulse bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200" />
                     )}
                     {!thumbnailError[index] && (
                       <img
                         src={image}
                         alt={`${product.name} ${index + 1}`}
-                        className={`w-full h-full object-cover transition-opacity duration-300 ease-out ${thumbnailLoaded[index] ? 'opacity-100' : 'opacity-0'}`}
+                        className={`h-full w-full object-contain transition-opacity duration-300 ease-out ${thumbnailLoaded[index] ? 'opacity-100' : 'opacity-0'}`}
                         onLoad={() => handleThumbnailLoad(index)}
                         onError={() => handleThumbnailError(index)}
                       />
                     )}
                     {thumbnailError[index] && (
                       <div className="absolute inset-0 flex items-center justify-center bg-muted/30 z-10">
-                        <svg className="w-5 h-5 text-muted-foreground opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+                        <Package className="h-5 w-5 text-white/70" />
                       </div>
                     )}
                   </div>
@@ -469,67 +474,66 @@ export default function StoreProductDetail() {
             </div>
           </div>
 
-          {/* Product Information */}
-          <div className="space-y-6">
+          <div className="commerce-panel p-5 md:p-7">
             <div>
-              <div className="flex flex-col gap-1 mb-2">
-                <h1 className="text-2xl font-bold">{product.name}</h1>
-                <div>
-                  <span className="text-sm text-muted-foreground">code: </span>
-                  <Badge variant="secondary">{product.product_code}</Badge>
-                </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="rounded-full px-3 py-1 font-extrabold">
+                  {product.category}
+                </Badge>
+                <Badge variant="outline" className="rounded-full px-3 py-1 font-bold">
+                  {product.product_code}
+                </Badge>
               </div>
+              <h1 className="text-3xl font-extrabold leading-tight tracking-normal md:text-4xl">{product.name}</h1>
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1">
+                <div className="mt-4 flex items-center gap-1">
                   {renderStars(product.rating)}
-                  <span className="text-sm font-medium">{product.rating}</span>
+                  <span className="text-sm font-extrabold">{product.rating}</span>
                 </div>
-                <span className="text-sm text-muted-foreground">({product.sold} terjual)</span>
+                <span className="mt-4 text-sm font-semibold text-muted-foreground">({product.sold} terjual)</span>
               </div>
             </div>
 
-            {/* Price */}
-            <div className="space-y-3">
-              <div className="flex items-baseline gap-2">
-                <div className="flex md:flex-row flex-col gap-1">
-                  <p className={`font-semibold line-through text-xl ${product.discount_price > 0 ? 'text-xl text-destructive' : 'no-underline text-primary'}`}>
-                    Rp {Math.round(product.price * (1 + product.tax_percentage / 100)).toLocaleString("id-ID")}
+            <div className="mt-6 space-y-5">
+              <div className="flex flex-wrap items-end gap-3">
+                <p className="text-3xl font-extrabold text-green-600 md:text-4xl">
+                  Rp {finalPriceDisplay.toLocaleString("id-ID")}
+                </p>
+                {product.discount_price > 0 && (
+                  <p className="pb-1 text-base font-bold text-destructive line-through">
+                    Rp {basePriceDisplay.toLocaleString("id-ID")}
                   </p>
-                  {product.discount_price > 0 && (
-                    <p className="font-bold text-md text-success text-3xl font-bold text-primary">
-                      Rp {calculateFinalPrice({ base_price: product.price, discount_price: product.discount_price, tax_percentage: product.tax_percentage }).toLocaleString("id-ID")}
-                    </p>
-                  )}
-                </div>
-                <span className="text-sm text-muted-foreground">/pcs</span>
+                )}
+                <span className="pb-1 text-sm font-semibold text-muted-foreground">/pcs</span>
               </div>
-              <GlassCard className="p-4">
-                <h2 className="text-xl font-semibold mb-4">Deskripsi Produk</h2>
-                <p className="text-muted-foreground leading-relaxed">{product.description}</p>
-              </GlassCard>
+
+              <div className="rounded-2xl border border-border bg-muted/40 p-4">
+                <h2 className="mb-2 text-lg font-extrabold">Deskripsi Produk</h2>
+                <p className="leading-relaxed text-muted-foreground">{product.description}</p>
+              </div>
             </div>
 
-            {/* Quantity Selector */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium">Jumlah</label>
-              <div className="flex items-center gap-3">
-                <Button variant="outline" size="sm" onClick={() => handleQuantityChange(-1)} disabled={quantity <= 1}>
+            <div className="mt-6 space-y-3">
+              <label className="text-sm font-extrabold">Jumlah</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="grid h-12 grid-cols-[48px_64px_48px] overflow-hidden rounded-2xl border border-primary/15 bg-secondary">
+                <Button variant="ghost" className="h-full rounded-none text-primary hover:bg-primary/10" onClick={() => handleQuantityChange(-1)} disabled={quantity <= 1}>
                   <Minus className="h-4 w-4" />
                 </Button>
-                <div className="w-16 text-center font-medium">{quantity}</div>
-                <Button variant="outline" size="sm" onClick={() => handleQuantityChange(1)} disabled={quantity >= product.stock}>
+                <div className="flex items-center justify-center text-sm font-extrabold text-primary">{quantity}</div>
+                <Button variant="ghost" className="h-full rounded-none text-primary hover:bg-primary/10" onClick={() => handleQuantityChange(1)} disabled={quantity >= product.stock}>
                   <Plus className="h-4 w-4" />
                 </Button>
-                <span className="text-sm text-muted-foreground ml-2">Stok: {product.stock}</span>
+                </div>
+                <span className="text-sm font-bold text-muted-foreground">Stok: {product.stock} pack</span>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <Button size="lg" className="w-full btn-tap" onClick={handleAddToCart} disabled={isAddingToCart || product.stock === 0}>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <Button size="lg" className="h-12 w-full rounded-2xl font-extrabold btn-tap" onClick={handleAddToCart} disabled={isAddingToCart || product.stock === 0}>
                 {isAddingToCart ? (
                   <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                     Menambahkan...
                   </>
                 ) : (
@@ -540,10 +544,10 @@ export default function StoreProductDetail() {
                 )}
               </Button>
 
-              <Button variant="outline" size="lg" className="w-full btn-tap border-gray-900" onClick={handleBuyNow} disabled={isBuyingNow || product.stock === 0}>
+              <Button size="lg" className="commerce-orange-button h-12 w-full rounded-2xl font-extrabold btn-tap" onClick={handleBuyNow} disabled={isBuyingNow || product.stock === 0}>
                 {isBuyingNow ? (
                   <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                     Memproses...
                   </>
                 ) : (
@@ -555,12 +559,11 @@ export default function StoreProductDetail() {
               </Button>
             </div>
 
-            {/* Product Features */}
-            <div className="space-y-3">
-              <h3 className="font-medium">Fitur Produk</h3>
-              <div className="space-y-2">
+            <div className="mt-7 space-y-3">
+              <h3 className="font-extrabold">Fitur Produk</h3>
+              <div className="grid gap-2 sm:grid-cols-3">
                 {product.features.map((feature, index) => (
-                  <div key={index} className="flex items-center gap-2 text-sm">
+                  <div key={index} className="flex items-center gap-2 rounded-2xl bg-muted/40 px-3 py-2 text-sm font-bold">
                     <Check className="h-4 w-4 text-green-600" />
                     <span>{feature}</span>
                   </div>
@@ -570,44 +573,43 @@ export default function StoreProductDetail() {
           </div>
         </div>
 
-        {/* Cart Summary */}
-        <div className="space-y-6">
-          {items.length > 0 && (
-            <GlassCard className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Ringkasan Keranjang</h2>
+        {items.length > 0 && (
+          <div className="commerce-panel p-5 md:p-6">
+              <h2 className="mb-4 text-xl font-extrabold">Ringkasan Keranjang</h2>
               <div className="space-y-3">
                 {items.map((item) => (
-                  <div key={item.productId} className="flex items-center justify-between">
+                  <div key={item.productId} className="flex items-center justify-between gap-3 rounded-2xl border border-border p-3">
                     <div className="flex items-center gap-3">
-                      <img src={item.product.image_url} alt={item.product.name} className="w-12 h-12 rounded-lg object-cover" />
+                      <div className="commerce-product-visual h-12 w-12 overflow-hidden rounded-xl">
+                        <img src={item.product.image_url} alt={item.product.name} className="h-full w-full object-contain" />
+                      </div>
                       <div>
-                        <h4 className="font-medium text-sm">{item.product.name}</h4>
+                        <h4 className="text-sm font-extrabold">{item.product.name}</h4>
                         <p className="text-xs text-muted-foreground">{item.qty} × {formatCurrency(item.product.price)}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium">{formatCurrency(item.subtotal)}</p>
+                      <p className="font-extrabold text-green-600">{formatCurrency(item.subtotal)}</p>
                     </div>
                   </div>
                 ))}
                 <Separator />
-                <div className="flex items-center justify-between font-semibold">
+                <div className="flex items-center justify-between font-extrabold">
                   <span>Total ({totalItems} items)</span>
                   <span className="text-lg text-primary">{formatCurrency(total)}</span>
                 </div>
                 <div className="space-y-3">
-                  <Button asChild className="w-full btn-tap">
-                    <Link to={`/commerce/checkout`}>Checkout</Link>
+                  <Button asChild className="commerce-orange-button h-12 w-full rounded-2xl font-extrabold btn-tap">
+                    <Link to={cartUrl}>Checkout</Link>
                   </Button>
-                  <Button variant="outline" className="w-full" onClick={handleClearCart}>
+                  <Button variant="outline" className="h-12 w-full rounded-2xl font-extrabold" onClick={handleClearCart}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Kosongkan Keranjang
                   </Button>
                 </div>
               </div>
-            </GlassCard>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </AppLayoutCommerce>
   );

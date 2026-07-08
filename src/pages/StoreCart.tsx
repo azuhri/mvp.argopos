@@ -544,27 +544,34 @@ export default function StoreCart() {
 
   return (
     <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-      <div className="max-w-7xl mx-auto px-4 py-2">
+      <div className="mx-auto w-full max-w-[1180px] space-y-6">
         {/* Header */}
-        <div className="flex flex-col items-start gap-6 mb-4">
-          <Button variant="outline" size="sm" asChild>
+        <div className="commerce-panel flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-3">
+          <Button variant="outline" size="sm" asChild className="rounded-2xl font-extrabold">
             <Link to={`/commerce`}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
+              <ArrowLeft className="h-4 w-4" />
               Kembali Belanja
             </Link>
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Keranjang Belanja</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">Keranjang Belanja</h1>
             {storeData && (
-              <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+              <div className="mt-1 flex items-center gap-1 text-sm font-semibold text-muted-foreground">
                 <MapPin className="h-3 w-3" />
                 <span>{storeData.location_name} ({storeData.location_code})</span>
               </div>
             )}
           </div>
+          </div>
+          <div className="rounded-2xl bg-primary px-5 py-4 text-white">
+            <p className="text-sm font-semibold text-white/70">Total keranjang</p>
+            <p className="text-2xl font-extrabold">{formatCurrency(total)}</p>
+            <p className="text-xs font-medium text-white/65">{totalItems} item siap checkout</p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
             <div className="">
@@ -577,14 +584,14 @@ export default function StoreCart() {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <GlassCard className="p-4 md:p-5 my-2 rounded-2xl shadow-sm transition-all">
+                    <GlassCard className="my-3 !rounded-[1.25rem] !bg-card p-4 shadow-lg shadow-primary/5 transition-all md:p-5">
                       {/* Container Utama: CSS Grid di Mobile, Flex Row di Desktop */}
                       <div className="grid grid-cols-[1fr_auto] md:flex md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
 
                         {/* 1. Product Image & Info (Mobile: Atas Kiri | Desktop: Paling Kiri) */}
                         <div className="flex flex-col">
                           <div className="flex items-start gap-3 md:gap-4 min-w-0">
-                            <div className="w-24 h-24 md:w-30 md:h-30 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 flex-shrink-0 relative">
+                            <div className="commerce-product-visual relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl border border-border md:h-28 md:w-28">
                               {/* Skeleton - always behind image during loading */}
                               {(!imageLoaded[item.productId] && !imageError[item.productId]) && (
                                 <div className="absolute inset-0 z-10 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 animate-pulse" />
@@ -596,7 +603,7 @@ export default function StoreCart() {
                                   src={item.product.image_url}
                                   alt={item.product.name}
                                   className={`
-                                    w-full h-full object-cover
+                                    w-full h-full object-contain p-2
                                     transition-opacity duration-300 ease-out
                                     ${imageLoaded[item.productId] ? 'opacity-100' : 'opacity-0'}
                                   `}
@@ -615,21 +622,21 @@ export default function StoreCart() {
                               )}
                             </div>
                             <div className="flex flex-col min-w-0 pt-0.5 md:pt-0">
-                              <h3 className="font-semibold text-sm md:text-base leading-tight mb-1 truncate md:whitespace-normal">
+                              <h3 className="mb-1 truncate text-sm font-extrabold leading-tight text-foreground md:text-base md:whitespace-normal">
                                 {item.product.name}
                               </h3>
-                              <p className="text-xs md:text-sm font-semibold text-gray-500">
+                              <p className="text-xs font-bold text-green-600 md:text-sm">
                                 {formatCurrency(item.product.price)}
                               </p>
-                              <p className="text-xs md:text-sm font-medium text-yellow-500">
+                              <p className="text-xs font-semibold text-muted-foreground md:text-sm">
                                 <span className="text-xs">Available Stock: {findProductByid(item.productId)?.stock}</span>
                               </p>
                               <div className="flex mt-2 items-start md:items-center">
-                                <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100 shadow-sm">
+                                <div className="flex items-center gap-1 rounded-2xl border border-primary/15 bg-secondary p-1 shadow-sm">
                                   <Button
-                                    variant="outline"
+                                    variant="ghost"
                                     size="sm"
-                                    className="h-7 w-7 md:h-8 md:w-8 p-0 rounded-lg bg-white border-gray-200 hover:bg-gray-100 text-gray-600"
+                                    className="h-7 w-7 rounded-xl p-0 text-primary hover:bg-primary/10 md:h-8 md:w-8"
                                     onClick={() => handleUpdateQty(item.productId, item.qty - 1)}
                                     disabled={updating === item.productId || item.qty <= 1}
                                   >
@@ -639,13 +646,13 @@ export default function StoreCart() {
                                       <Minus className="h-3 w-3" />
                                     )}
                                   </Button>
-                                  <span className="w-6 md:w-8 text-center text-sm font-bold text-gray-800">
+                                  <span className="w-6 text-center text-sm font-extrabold text-primary md:w-8">
                                     {item.qty}
                                   </span>
                                   <Button
-                                    variant="outline"
+                                    variant="ghost"
                                     size="sm"
-                                    className="h-7 w-7 md:h-8 md:w-8 p-0 rounded-lg bg-white border-gray-200 hover:bg-gray-100 text-gray-600"
+                                    className="h-7 w-7 rounded-xl p-0 text-primary hover:bg-primary/10 md:h-8 md:w-8"
                                     onClick={() => handleUpdateQty(item.productId, item.qty + 1)}
                                     disabled={updating === item.productId || (item.product?.stock !== undefined && item.qty >= item.product.stock)}
                                   >
@@ -665,11 +672,11 @@ export default function StoreCart() {
 
                         {/* 3. Subtotal & Trash Button (Mobile: Bawah Kanan | Desktop: Paling Kanan) */}
                         {/* col-span-2 membuat elemen ini pindah ke baris baru khusus saat di layar HP */}
-                        <div className="col-span-2 flex items-center justify-end gap-3 md:gap-4 mt-2 md:mt-0 pt-3 md:pt-0 border-t-2  md:border-none">
+                        <div className="col-span-2 mt-2 flex items-center justify-end gap-3 border-t border-border pt-3 md:mt-0 md:border-none md:pt-0">
                           <div className="text-right">
-                            <p className="text-sm md:text-[15px] font-medium text-gray-900">
-                              <span className="text-xs text-foreground font-normal mr-1.5">Subtotal:</span>
-                              <span className="font-bold text-foreground">{formatCurrency(item.product.price * item.qty)}</span>
+                            <p className="text-sm font-medium text-foreground md:text-[15px]">
+                              <span className="mr-1.5 text-xs font-semibold text-muted-foreground">Subtotal:</span>
+                              <span className="font-extrabold text-foreground">{formatCurrency(item.product.price * item.qty)}</span>
                             </p>
                           </div>
 
@@ -694,19 +701,19 @@ export default function StoreCart() {
                 ))}
               </AnimatePresence>
             </div>
-            <GlassCard>
-              <h2 className="text-lg font-semibold mb-4">Ringkasan Belanja</h2>
+            <GlassCard className="!rounded-[1.25rem] !bg-card">
+              <h2 className="mb-4 text-lg font-extrabold">Ringkasan Belanja</h2>
 
               <div className="space-y-3 mb-4">
-                <div className="flex justify-between text-sm font-normal">
+                <div className="flex justify-between text-sm font-semibold">
                   <span>Subtotal <span className="text-xs font-medium italic">({totalItems} items without tax)</span></span>
                   <span>{formatCurrency(total - totalTax)}</span>
                 </div>
-                <div className="flex justify-between text-sm font-normal text-red-500">
+                <div className="flex justify-between text-sm font-semibold text-red-500">
                   <span>Tax</span>
                   <span>+{formatCurrency(totalTax)}</span>
                 </div>
-                <div className="flex justify-between text-md font-semibold">
+                <div className="flex justify-between text-lg font-extrabold">
                   <span>Total</span>
                   <span>{formatCurrency(total)}</span>
                 </div>
@@ -717,12 +724,12 @@ export default function StoreCart() {
 
           {/* Cart Summary */}
           <div className="lg:col-span-1">
-            <GlassCard className="p-6 sticky top-4">
+            <GlassCard className="sticky top-28 !rounded-[1.25rem] !bg-card p-5 shadow-xl shadow-primary/5">
               {/* <Separator className="my-4" /> */}
 
               {/* Customer Information Form */}
               <div className="mb-4">
-                <h3 className="font-medium mb-3">Informasi Customer</h3>
+                <h3 className="mb-3 text-lg font-extrabold">Informasi Customer</h3>
 
                 {/* Customer Type Toggle */}
                 <div className="flex items-center space-x-2 mb-4">
@@ -733,7 +740,7 @@ export default function StoreCart() {
                   />
                   <Label
                     htmlFor="internal-customer"
-                    className="cursor-pointer"
+                    className="cursor-pointer font-bold"
                   >
                     Internal Employee Buyer
                   </Label>
@@ -743,7 +750,7 @@ export default function StoreCart() {
                 {isInternalCustomer && (
                   <div className="space-y-3">
                     <div>
-                      <Label htmlFor="employee-code" className="text-sm mb-2 block">
+                      <Label htmlFor="employee-code" className="mb-2 block text-sm font-bold">
                         Employee Code / NIK
                       </Label>
                       <div className="relative">
@@ -778,7 +785,7 @@ export default function StoreCart() {
                 {!isInternalCustomer && (
                   <div className="space-y-3">
                     <div>
-                      <Label htmlFor="customer-nowa" className="text-sm mb-2 block">
+                      <Label htmlFor="customer-nowa" className="mb-2 block text-sm font-bold">
                         No WhatsApp
                       </Label>
                       <div className="relative">
@@ -803,7 +810,7 @@ export default function StoreCart() {
                     {!isExternalCustomerExists && (
                       <>
                         <div>
-                          <Label htmlFor="customer-name" className="text-sm mb-2 block">
+                          <Label htmlFor="customer-name" className="mb-2 block text-sm font-bold">
                             Nama Customer
                           </Label>
                           <Input
@@ -814,7 +821,7 @@ export default function StoreCart() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="customer-email" className="text-sm mb-2 block">
+                          <Label htmlFor="customer-email" className="mb-2 block text-sm font-bold">
                             Email
                           </Label>
                           <Input
@@ -835,7 +842,7 @@ export default function StoreCart() {
 
               {/* Payment Method Selection */}
               <div className="mb-4">
-                <h3 className="font-medium mb-3">Metode Pembayaran</h3>
+                <h3 className="mb-3 text-lg font-extrabold">Metode Pembayaran</h3>
                 {loadingPaymentMethods ? (
                   <div className="space-y-2">
                     <div className="h-12 bg-muted/50 rounded-md animate-pulse" />
@@ -850,9 +857,9 @@ export default function StoreCart() {
                       {filteredPaymentMethods.map((pm) => (
                         <div
                           key={pm.id}
-                          className={`flex items-center space-x-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${selectedPaymentMethod === pm.id
-                            ? 'border-primary bg-primary/5'
-                            : 'border-muted hover:border-muted-foreground/50'
+                          className={`flex cursor-pointer items-center space-x-3 rounded-2xl border-2 p-3 transition-all ${selectedPaymentMethod === pm.id
+                            ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10'
+                            : 'border-border bg-card hover:border-primary/30'
                             }`}
                           onClick={() => setSelectedPaymentMethod(pm.id)}
                         >
@@ -870,7 +877,7 @@ export default function StoreCart() {
                             <div className="flex-1">
                               <Label
                                 htmlFor={pm.id}
-                                className="font-medium cursor-pointer"
+                                className="cursor-pointer font-extrabold"
                               >
                                 {pm.payment_type === 'qris' && 'QRIS'}
                                 {pm.payment_type === 'transfer_rekening' && 'Transfer Rekening'}
@@ -901,16 +908,16 @@ export default function StoreCart() {
 
               <Separator className="my-4" />
 
-              <div className="flex justify-between items-center mb-6">
-                <span className="font-semibold">Total</span>
-                <span className="text-xl font-bold text-primary">
+              <div className="mb-6 flex items-center justify-between rounded-2xl bg-primary px-4 py-3 text-white">
+                <span className="font-extrabold">Total</span>
+                <span className="text-xl font-extrabold">
                   {formatCurrency(total)}
                 </span>
               </div>
 
               <div className="space-y-3">
                 <Button
-                  className="w-full"
+                  className="commerce-orange-button h-12 w-full rounded-2xl font-extrabold"
                   size="lg"
                   disabled={!selectedPaymentMethod || isCreatingTransaction}
                   onClick={handleCreateTransaction}
@@ -926,7 +933,7 @@ export default function StoreCart() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="w-full"
+                  className="h-12 w-full rounded-2xl font-extrabold"
                   onClick={handleClearCart}
                   disabled={isCreatingTransaction}
                 >
@@ -940,7 +947,7 @@ export default function StoreCart() {
 
       {/* Pickup Time Alert Modal */}
       <Dialog open={pickupTimeAlert?.show || false} onOpenChange={() => setPickupTimeAlert(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="commerce-panel max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-orange-500" />
@@ -950,12 +957,12 @@ export default function StoreCart() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="bg-muted/50 rounded-lg p-4">
+            <div className="rounded-2xl bg-muted/50 p-4">
 
               <div className="flex items-center gap-3">
                 <Clock className="h-5 w-5 text-green-600" />
                 <div>
-                  <p className="text-sm font-medium">Waktu Pengambilan Tersedia</p>
+                  <p className="text-sm font-extrabold">Waktu Pengambilan Tersedia</p>
                   <p className="text-sm text-muted-foreground">
                     {pickupTimeAlert?.pickupStart} - {pickupTimeAlert?.pickupEnd}
                   </p>
@@ -969,13 +976,13 @@ export default function StoreCart() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="my-2" onClick={() => {
+            <Button variant="outline" className="my-2 rounded-2xl font-extrabold" onClick={() => {
                 setPickupTimeAlert(null);
                 setSkipPickupTimeCheck(false);
               }}>
               Tutup
             </Button>
-            <Button onClick={() => {
+            <Button className="commerce-orange-button rounded-2xl font-extrabold" onClick={() => {
               setSkipPickupTimeCheck(true);
               handleCreateTransaction();
             }}>
