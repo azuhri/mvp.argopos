@@ -12,11 +12,10 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
     proxy: {
-      '/api': {
-        target: 'http://103.154.215.122:3010',
+      "/api": {
+        target: "http://103.154.215.122:3010/backend/celestia",
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },
