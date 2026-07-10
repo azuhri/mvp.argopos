@@ -349,7 +349,7 @@ Components:
 Features:
 - Fetch transactions with `WAITING_TO_PAYMENT` status
 - Display transaction details (code, customer, amount, payment method)
-- Approve button calls `PUT /api/v1/transactions/:id/approve-payment`
+- Approve button calls `PUT //transactions/:id/approve-payment`
 - Loading states and error handling
 - Responsive design (mobile card view, desktop table view)
 

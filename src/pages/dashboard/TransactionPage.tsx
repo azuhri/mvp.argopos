@@ -196,7 +196,7 @@ export default function TransactionPage() {
 
   const handleMarkReadyPickup = async (tx: Transaction) => {
     try {
-      const res = await fetch(`${config.apiUrl}/api/v1/transactions/${tx.id}/mark-ready-pickup`, {
+      const res = await fetch(`${config.apiUrl}//transactions/${tx.id}/mark-ready-pickup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

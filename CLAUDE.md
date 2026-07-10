@@ -69,7 +69,7 @@ src/
 
 ### API Configuration
 - Base URL: `VITE_API_URL` from `.env` (default: `http://localhost:8090/backend/celestia`)
-- All endpoints prefixed with `/api/v1`
+- All endpoints prefixed with `/`
 - Backend: Separate Golang service (`be.argo.commerce.apps`)
 
 ### Theme

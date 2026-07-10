@@ -543,7 +543,7 @@ class ApiClient {
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
     this.axiosInstance = axios.create({
-      baseURL: `${this.baseURL}/api/v1`,
+      baseURL: `${this.baseURL}/`,
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json',

@@ -38,7 +38,7 @@ export default function PaymentSuccess() {
     queryKey: ['transaction', transactionId],
     queryFn: async () => {
       if (!transactionId) return null;
-      const response = await fetch(`${config.apiUrl}/api/v1/transactions/${transactionId}`);
+      const response = await fetch(`${config.apiUrl}//transactions/${transactionId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch transaction data');
       }

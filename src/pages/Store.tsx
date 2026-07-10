@@ -117,7 +117,7 @@ export default function Store() {
   const { data: storeData, error, isLoading: storeDataLoading } = useQuery({
     queryKey: ['store', selectedLocationCode],
     queryFn: async () => {
-      const endpoint = `${config.apiUrl}/api/v1/${selectedLocationCode}/store`;
+      const endpoint = `${config.apiUrl}/${selectedLocationCode}/store`;
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error('Failed to fetch store data');

@@ -63,8 +63,8 @@ Created complete transaction module following existing domain patterns:
 
 **File:** `be.argo.commerce.apps/internal/app/router.go`
 - Registered transaction routes:
-  - Protected routes: `/api/v1/transactions/*`
-  - Public route: `/api/v1/transactions/:id/approve-payment` for email approval
+  - Protected routes: `//transactions/*`
+  - Public route: `//transactions/:id/approve-payment` for email approval
 
 ## Frontend Changes (React)
 
@@ -160,15 +160,15 @@ Created complete transaction module following existing domain patterns:
 ## API Endpoints
 
 ### Transaction API (Protected)
-- `POST /api/v1/transactions/` - Create new transaction
-- `GET /api/v1/transactions/` - List transactions with filters (status, customer_id, payment_method_id, date_range, page, page_size, sort_by, sort_order)
-- `GET /api/v1/transactions/:id` - Get transaction by ID
-- `PUT /api/v1/transactions/:id` - Update transaction
-- `POST /api/v1/transactions/:id/approve-payment` - Approve payment (set status to PAID)
-- `POST /api/v1/transactions/:id/approve-delivery` - Approve delivery (set status to PREPARING_PRODUCT)
+- `POST //transactions/` - Create new transaction
+- `GET //transactions/` - List transactions with filters (status, customer_id, payment_method_id, date_range, page, page_size, sort_by, sort_order)
+- `GET //transactions/:id` - Get transaction by ID
+- `PUT //transactions/:id` - Update transaction
+- `POST //transactions/:id/approve-payment` - Approve payment (set status to PAID)
+- `POST //transactions/:id/approve-delivery` - Approve delivery (set status to PREPARING_PRODUCT)
 
 ### Transaction API (Public)
-- `GET /api/v1/transactions/:id/approve-payment` - Public route for email-based payment approval
+- `GET //transactions/:id/approve-payment` - Public route for email-based payment approval
 
 ## Database Schema Changes
 

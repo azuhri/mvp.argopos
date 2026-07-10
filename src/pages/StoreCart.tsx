@@ -115,7 +115,7 @@ export default function StoreCart() {
   const { data: storeData, error } = useQuery({
     queryKey: ['store', locationCode],
     queryFn: async () => {
-      const endpoint = `${config.apiUrl}/api/v1/${locationCode}/store`;
+      const endpoint = `${config.apiUrl}/${locationCode}/store`;
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error('Failed to fetch store data');
@@ -131,7 +131,7 @@ export default function StoreCart() {
     queryKey: ['paymentMethods', storeData?.location_id],
     queryFn: async () => {
       if (!storeData?.location_id) return [];
-      const endpoint = `${config.apiUrl}/api/v1/stores/${storeData.location_id}/payment-methods`;
+      const endpoint = `${config.apiUrl}//stores/${storeData.location_id}/payment-methods`;
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error('Failed to fetch payment methods');
@@ -283,7 +283,7 @@ export default function StoreCart() {
     setIsValidatingEmployee(true);
 
     try {
-      const response = await fetch(`${config.apiUrl}/api/v1/users/check-valid-employee`, {
+      const response = await fetch(`${config.apiUrl}//users/check-valid-employee`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -327,7 +327,7 @@ export default function StoreCart() {
     setIsValidatingExternal(true);
 
     try {
-      const response = await fetch(`${config.apiUrl}/api/v1/transactions/check-customer-by-no-wa`, {
+      const response = await fetch(`${config.apiUrl}//transactions/check-customer-by-no-wa`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -445,7 +445,7 @@ export default function StoreCart() {
       }
 
       // Create transaction via API
-      const response = await fetch(`${config.apiUrl}/api/v1/transactions`, {
+      const response = await fetch(`${config.apiUrl}//transactions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

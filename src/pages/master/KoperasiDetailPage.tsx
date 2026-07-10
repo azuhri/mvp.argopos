@@ -338,7 +338,7 @@ export default function KoperasiDetailPage() {
 
   const handleMarkReadyPickup = async (tx: Transaction) => {
     try {
-      const res = await fetch(`${config.apiUrl}/api/v1/transactions/${tx.id}/mark-ready-pickup`, {
+      const res = await fetch(`${config.apiUrl}//transactions/${tx.id}/mark-ready-pickup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -547,7 +547,7 @@ export default function KoperasiDetailPage() {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${config.apiUrl}/api/v1/stores/payment-methods`, {
+        const response = await fetch(`${config.apiUrl}//stores/payment-methods`, {
           method: 'POST',
           headers,
           body: formData,
@@ -635,7 +635,7 @@ export default function KoperasiDetailPage() {
 
     try {
       const token = localStorage.getItem('argopos.auth.token');
-      const response = await fetch(`${config.apiUrl}/api/v1/transactions/required/${approvingTransactionId}/approve-payment`, {
+      const response = await fetch(`${config.apiUrl}//transactions/required/${approvingTransactionId}/approve-payment`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

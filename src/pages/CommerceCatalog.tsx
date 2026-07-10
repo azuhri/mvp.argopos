@@ -50,7 +50,7 @@ export default function CommerceCatalog() {
   const { data: storeData, error } = useQuery({
     queryKey: ['store', locationCode],
     queryFn: async () => {
-      const endpoint = `${config.apiUrl}/api/v1/${locationCode}/store`;
+      const endpoint = `${config.apiUrl}/${locationCode}/store`;
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error('Failed to fetch store data');

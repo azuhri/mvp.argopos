@@ -93,7 +93,7 @@ export default function PaymentDetail() {
   const { data: storeData, isLoading } = useQuery({
     queryKey: ['store', locationCode],
     queryFn: async () => {
-      const endpoint = `${config.apiUrl}/api/v1/${locationCode}/store`;
+      const endpoint = `${config.apiUrl}/${locationCode}/store`;
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error('Failed to fetch store data');
@@ -109,7 +109,7 @@ export default function PaymentDetail() {
     queryKey: ['paymentMethods', storeData?.location_id],
     queryFn: async () => {
       if (!storeData?.location_id) return [];
-      const endpoint = `${config.apiUrl}/api/v1/stores/${storeData.location_id}/payment-methods`;
+      const endpoint = `${config.apiUrl}//stores/${storeData.location_id}/payment-methods`;
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error('Failed to fetch payment methods');
@@ -125,7 +125,7 @@ export default function PaymentDetail() {
     queryKey: ['storeAssignedUsers', storeData?.location_id],
     queryFn: async () => {
       if (!storeData?.location_id) return [];
-      const endpoint = `${config.apiUrl}/api/v1/stores/${storeData.location_id}/assigned-users`;
+      const endpoint = `${config.apiUrl}//stores/${storeData.location_id}/assigned-users`;
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error('Failed to fetch store assigned users');
@@ -141,7 +141,7 @@ export default function PaymentDetail() {
     queryKey: ['transaction', transactionId],
     queryFn: async () => {
       if (!transactionId) return null;
-      const endpoint = `${config.apiUrl}/api/v1/transactions/${transactionId}`;
+      const endpoint = `${config.apiUrl}//transactions/${transactionId}`;
       console.log('Fetching transaction from:', endpoint);
       const response = await fetch(endpoint);
       if (!response.ok) {
@@ -241,7 +241,7 @@ export default function PaymentDetail() {
 
     try {
       console.log('Confirming receipt for transaction:', transactionId);
-      const response = await fetch(`${config.apiUrl}/api/v1/transactions/${transactionId}/confirm-receipt`, {
+      const response = await fetch(`${config.apiUrl}//transactions/${transactionId}/confirm-receipt`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
