@@ -66,6 +66,10 @@ interface OperationalStatus {
 }
 
 export default function Store() {
+  const [shouldRedirectToAnalytics] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(localStorage.getItem("umami.auth"));
+  });
   const [search, setSearch] = useState("");
   const [selectedLocationCode, setSelectedLocationCode] = useState("");
   const [cartSummary, setCartSummary] = useState(() => getCartSummary([]));
@@ -79,6 +83,12 @@ export default function Store() {
     message: string;
   } | null>(null);
 
+  useEffect(() => {
+    if (shouldRedirectToAnalytics) {
+      window.location.replace("/analytics");
+    }
+  }, [shouldRedirectToAnalytics]);
+
   // Fetch list of stores
   const { data: storeList, isLoading: storesLoading } = useQuery({
     queryKey: ['stores'],
@@ -86,6 +96,7 @@ export default function Store() {
       const listStores = await locationService.getListStore();
       return listStores as Location[];
     },
+    enabled: !shouldRedirectToAnalytics,
   });
 
   useEffect(() => {
@@ -125,7 +136,7 @@ export default function Store() {
       const result = await response.json();
       return result.data as StoreData;
     },
-    enabled: !!selectedLocationCode,
+    enabled: !!selectedLocationCode && !shouldRedirectToAnalytics,
   });
 
   // Fetch operational status when storeData is loaded
@@ -139,7 +150,7 @@ export default function Store() {
       }
       return response.data as OperationalStatus;
     },
-    enabled: !!storeData?.location_id,
+    enabled: !!storeData?.location_id && !shouldRedirectToAnalytics,
     refetchInterval: 60000, // Check every minute
   });
 
@@ -268,6 +279,10 @@ export default function Store() {
  const openModalInfoStore = () => {
   setStoreClosedModal(true)
  }
+
+  if (shouldRedirectToAnalytics) {
+    return null;
+  }
 
   return (
     <AppLayoutCommerce title={storeData?.location_name || config.appNameCommerce} locationCode={selectedLocationCode} openModalInfo={openModalInfoStore}>
