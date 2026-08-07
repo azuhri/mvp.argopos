@@ -33,7 +33,8 @@ export function ProtectedRoute({
   }
 
   if (!user) {
-    return <Navigate to="/auth/sign-in" replace state={{ from: location.pathname }} />;
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to="/auth/sign-in" replace state={{ from: returnTo }} />;
   }
 
   // Check menu permissions if menuKey is provided

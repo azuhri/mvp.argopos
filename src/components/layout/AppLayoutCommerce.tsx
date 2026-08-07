@@ -1,36 +1,37 @@
 import { ReactNode } from "react";
-import { BottomNav } from "./BottomNav";
 import { TopBarCommerce } from "./TopBarCommerce";
-import { motion } from "framer-motion";
-import { useState } from "react";
+
 interface AppLayoutProps {
   children: ReactNode;
   title: string;
   locationCode: string;
-  openModalInfo: () => void;
+  openModalInfo?: () => void;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
 }
 
-export function AppLayoutCommerce({ children, title, locationCode, openModalInfo }: AppLayoutProps) {
-  const [storeClosedModal, setStoreClosedModal] = useState(false);
+export function AppLayoutCommerce({
+  children,
+  title,
+  locationCode,
+  openModalInfo,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
+}: AppLayoutProps) {
   return (
-    <div className="min-h-screen bg-background">
-      <motion.div
-        initial={false}
-        animate={{ marginLeft: 0 }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="flex flex-col min-h-screen hidden md:block"
-        style={{ marginLeft: undefined }} // overridden by motion
-      >
-        <TopBarCommerce title={title} locationCode={locationCode} openModalInfo={openModalInfo} />
-        <main className="flex-1 py-5 px-2 md:p-6">
-          {children}
-        </main>
-      </motion.div>
-
-      {/* Mobile layout without sidebar margin */}
-      <div className="flex flex-col min-h-screen md:hidden">
-        <TopBarCommerce title={title} locationCode={locationCode} openModalInfo={openModalInfo} />
-        <main className="flex-1 py-5 px-2 md:p-6 pb-20 md:pb-6">
+    <div className="commerce-theme commerce-surface min-h-screen">
+      <div className="flex min-h-screen flex-col">
+        <TopBarCommerce
+          title={title}
+          locationCode={locationCode}
+          openModalInfo={openModalInfo}
+          searchValue={searchValue}
+          onSearchChange={onSearchChange}
+          searchPlaceholder={searchPlaceholder}
+        />
+        <main className="flex-1 px-3 py-4 pb-24 md:px-6 md:py-6 md:pb-6 lg:py-7">
           {children}
         </main>
       </div>

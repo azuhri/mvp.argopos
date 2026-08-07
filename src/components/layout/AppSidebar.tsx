@@ -1,17 +1,11 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ShoppingBag,
-  Snowflake,
-} from "lucide-react";
-import { config } from "@/lib/config";
-import { useAuth } from "@/lib/auth";
-import { NAV_GROUPS_MENUS, getFilteredNavigation, type NavItemConfig } from "@/lib/navigation";
-import { Separator } from "../ui/separator";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { CommerceBrand } from "@/components/shared/CommerceBrand";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { getFilteredNavigation } from "@/lib/navigation";
 import { userService } from "@/lib/services/userService";
 
 interface SidebarProps {
@@ -19,128 +13,120 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
+const formatRole = (role?: string) =>
+  role?.replace(/_/g, " ") ?? "User";
+
 export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const { canRead, user } = useAuth();
 
-  // Fetch full user data to get assigned_stores
   const { data: fullUser } = useQuery({
-    queryKey: ['current-user'],
+    queryKey: ["current-user"],
     queryFn: () => userService.getCurrentUser(),
   });
 
   const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
   const visibleGroups = getFilteredNavigation(assignedStoresCount)
-    .map(group => ({
+    .map((group) => ({
       ...group,
-      listMenus: group.listMenus.filter(item => {
-        // Check if user has read permission for this menu
-        if (!canRead(item.key)) {
-          return false;
-        }
-        // For super_admin group, only show if user is super_admin
-        if (group.role === 'super_admin' && user?.role !== 'super_admin') {
-          return false;
-        }
+      listMenus: group.listMenus.filter((item) => {
+        if (!canRead(item.key)) return false;
+        if (group.role === "super_admin" && user?.role !== "super_admin") return false;
         return true;
       }),
     }))
-    .filter(group => group.listMenus.length > 0);
+    .filter((group) => group.listMenus.length > 0);
+
+  const userInitial = user?.username?.charAt(0).toUpperCase() || "U";
 
   return (
     <motion.aside
       initial={false}
-      animate={{ width: collapsed ? 72 : 260 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="hidden md:flex flex-col h-screen fixed left-0 top-0 z-40 glass-strong border-r border-border/40"
+      animate={{ width: collapsed ? 76 : 260 }}
+      transition={{ duration: 0.24, ease: "easeInOut" }}
+      className="fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-border bg-sidebar shadow-[4px_0_18px_rgba(7,26,79,0.04)] md:flex"
+      aria-label="Navigasi utama"
     >
-      
-      {/* Logo */}
-      <div className="flex items-center h-16 px-4 py-4 border-b border-border/40">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="h-9 w-9 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <ShoppingBag className="h-5 w-5 text-primary-foreground" />
-          </div>
-          {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="font-bold text-lg tracking-tight text-foreground whitespace-nowrap"
-            >
-              {config.appName}
-            </motion.span>
-          )}
-        </div>
+      <div className={cn("flex h-[72px] shrink-0 items-center border-b border-border px-4", collapsed && "justify-center px-2")}>
+        <CommerceBrand
+          compact={collapsed}
+          to="/dashboard"
+          ariaLabel="AMP Mart Admin, buka dashboard"
+          subtitle="Commerce admin"
+        />
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 py-4 px-3 my-4">
-        {visibleGroups.map((group) => (
-          <div key={group.group}>
-            {!collapsed && (
-              <div className="mt-2 px-3">
-                <p className="mb-2 text-[0.6rem] font-normal text-muted-foreground uppercase tracking-wide">
-                  {group.group} FEATURES
+      <nav className="flex-1 overflow-y-auto px-3 py-5">
+        <div className="space-y-6">
+          {visibleGroups.map((group) => (
+            <section key={group.group} aria-label={group.group}>
+              {!collapsed && (
+                <p className="mb-2 px-3 text-[11px] font-semibold uppercase text-muted-foreground">
+                  {group.group}
                 </p>
-                <Separator className="mb-2" />
+              )}
+
+              <div className="space-y-1">
+                {group.listMenus.map((item) => {
+                  const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+
+                  return (
+                    <NavLink
+                      key={item.key}
+                      to={item.path}
+                      title={collapsed ? item.label : undefined}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "relative flex h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold transition-colors",
+                        collapsed && "justify-center px-0",
+                        isActive
+                          ? "bg-[#071a4f] text-white shadow-sm dark:bg-[#e30613]"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                      )}
+                    >
+                      {isActive && !collapsed && (
+                        <motion.span
+                          layoutId="sidebar-active"
+                          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-[#e30613]"
+                          transition={{ type: "spring", bounce: 0.12, duration: 0.4 }}
+                        />
+                      )}
+                      <item.icon className="relative z-10 h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                      {!collapsed && (
+                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-10 truncate">
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </NavLink>
+                  );
+                })}
               </div>
-            )}
-
-            <div className="">
-              {group.listMenus.map((item) => {
-                const isActive = location.pathname.startsWith(item.path);
-
-                return (
-                  <NavLink
-                    key={item.key}
-                    to={item.path}
-                    className={cn(
-                      "relative my-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "text-primary"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
-                    )}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="sidebar-active"
-                        className="absolute inset-0 rounded-lg bg-accent border border-primary/10"
-                        transition={{
-                          type: "spring",
-                          bounce: 0.15,
-                          duration: 0.5,
-                        }}
-                      />
-                    )}
-
-                    <item.icon className="h-5 w-5 flex-shrink-0 relative z-10" />
-
-                    {!collapsed && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="relative z-10 whitespace-nowrap"
-                      >
-                        {item.label}
-                      </motion.span>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+            </section>
+          ))}
+        </div>
       </nav>
 
-      {/* Collapse toggle */}
-      <div className="p-3 border-t border-border/40">
-        <button
-          onClick={onToggle}
-          className="w-full flex items-center justify-center h-9 rounded-lg bg-secondary hover:bg-accent transition-colors btn-tap"
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
+      <div className="shrink-0 border-t border-border p-3">
+        <div className={cn("flex items-center gap-2", collapsed && "flex-col")}>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#071a4f] text-sm font-bold text-white dark:bg-[#e30613]">
+            {userInitial}
+          </div>
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">{user?.username || "User"}</p>
+              <p className="truncate text-xs capitalize text-muted-foreground">{formatRole(user?.role)}</p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
+            title={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
     </motion.aside>
   );

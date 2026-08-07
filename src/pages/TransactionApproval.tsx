@@ -1,150 +1,188 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CircleAlert,
+  CreditCard,
+  Loader2,
+  ReceiptText,
+} from "lucide-react";
 import { toast } from "sonner";
-import { GlassCard } from "@/components/shared/GlassCard";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, Loader2, Package } from "lucide-react";
-import { motion } from "framer-motion";
-import { apiClient } from "@/lib/api";
-import type { Transaction } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { apiClient, type Transaction } from "@/lib/api";
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount);
 
 export default function TransactionApproval() {
   const { transactionId } = useParams<{ transactionId: string }>();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [approving, setApproving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchTransaction = useCallback(async () => {
     if (!transactionId) {
-      setError("Transaction ID is required");
+      setError("ID transaksi tidak tersedia.");
       setLoading(false);
       return;
     }
 
-    fetchTransaction();
-  }, [transactionId]);
-
-  const fetchTransaction = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await apiClient.getTransaction(transactionId!);
-      if (response.success && response.data) {
-        setTransaction(response.data);
-        // After fetching, proceed with approval
-        approvePayment(response.data);
+      const response = await apiClient.getTransaction(transactionId);
+      if (!response.success || !response.data) {
+        throw new Error(response.message || "Transaksi tidak ditemukan.");
       }
-    } catch (err) {
-      console.error("Failed to fetch transaction:", err);
-      setError("Transaction not found");
-      setLoading(false);
-    }
-  };
-
-  const approvePayment = async (tx?: Transaction) => {
-    try {
-      await apiClient.approveTransactionPayment(transactionId!);
-      if (tx) setTransaction(tx);
-      setSuccess(true);
-      toast.success("Payment approved successfully");
-    } catch (err) {
-      setError("Failed to approve payment. The transaction may not exist or is already approved.");
-      toast.error("Failed to approve payment");
+      setTransaction(response.data);
+    } catch (requestError) {
+      setError((requestError as Error).message || "Transaksi tidak dapat dimuat.");
     } finally {
       setLoading(false);
     }
+  }, [transactionId]);
+
+  useEffect(() => {
+    void fetchTransaction();
+  }, [fetchTransaction]);
+
+  const handleApprove = async () => {
+    if (!transactionId || !transaction || transaction.status !== "WAITING_TO_PAYMENT") return;
+
+    setApproving(true);
+    setError(null);
+    try {
+      const response = await apiClient.approveTransactionPayment(transactionId);
+      if (!response.success) {
+        throw new Error(response.message || "Pembayaran gagal dikonfirmasi.");
+      }
+      setTransaction((current) => current ? { ...current, status: "PAID" } : current);
+      toast.success("Pembayaran berhasil dikonfirmasi");
+    } catch (requestError) {
+      const message = (requestError as Error).message || "Pembayaran gagal dikonfirmasi.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setApproving(false);
+    }
   };
 
-  const handleGoToDashboard = () => {
-    navigate("/transactions");
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+  const isPaid = transaction?.status === "PAID";
+  const canApprove = transaction?.status === "WAITING_TO_PAYMENT";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 flex items-center justify-center p-4">
-      <GlassCard className="max-w-md w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-8 text-center"
-        >
-          {loading ? (
-            <>
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="h-16 w-16 text-primary animate-spin" />
-                <h2 className="text-xl font-semibold">Processing Approval...</h2>
-                <p className="text-muted-foreground">Please wait while we process the payment approval.</p>
+    <AppLayout title="Konfirmasi Pembayaran">
+      <div className="mx-auto w-full max-w-3xl space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/transactions")}>
+          <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+          Kembali ke transaksi
+        </Button>
+
+        <Card className="rounded-lg">
+          <CardHeader className="border-b border-border">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <ReceiptText className="h-5 w-5 text-primary" aria-hidden="true" />
+                  Verifikasi pembayaran
+                </CardTitle>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Periksa transaksi sebelum mengubah status pembayaran.
+                </p>
               </div>
-              {transaction && (
-                <div className="mt-6 p-4 bg-muted/50 rounded-lg text-left space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Transaction Code</span>
-                  </div>
-                  <p className="font-mono font-semibold text-lg">{transaction.transaction_code}</p>
-                  <div className="pt-2 border-t border-border">
-                    <span className="text-sm text-muted-foreground">Customer</span>
-                    <p className="font-medium">{transaction.customer_name || "N/A"}</p>
-                  </div>
-                  <div className="pt-2 border-t border-border">
-                    <span className="text-sm text-muted-foreground">Total Amount</span>
-                    <p className="font-semibold text-primary">{formatCurrency(transaction.total_amount)}</p>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : success ? (
-            <div className="flex flex-col items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-green-600">Payment Approved!</h2>
-              <div className="w-full p-4 bg-green-50 rounded-lg space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Transaction Code</span>
-                  <span className="font-mono font-medium">{transaction?.transaction_code}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Customer</span>
-                  <span className="font-medium">{transaction?.customer_name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Amount</span>
-                  <span className="font-semibold text-green-600">{transaction && formatCurrency(transaction.total_amount)}</span>
-                </div>
-              </div>
-              <Button onClick={handleGoToDashboard} className="w-full mt-4">
-                Go to Transactions
-              </Button>
+              {transaction ? (
+                <Badge variant={isPaid ? "default" : canApprove ? "secondary" : "outline"}>
+                  {transaction.status.replaceAll("_", " ")}
+                </Badge>
+              ) : null}
             </div>
-          ) : (
-            <div className="flex flex-col items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
-                <XCircle className="h-8 w-8 text-red-600" />
+          </CardHeader>
+
+          <CardContent className="p-5 sm:p-6">
+            {loading ? (
+              <div className="flex min-h-52 flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Loader2 className="h-7 w-7 animate-spin" aria-hidden="true" />
+                <p className="text-sm">Memuat transaksi...</p>
               </div>
-              <h2 className="text-xl font-semibold text-red-600">Approval Failed</h2>
-              <p className="text-muted-foreground">
-                {error || "An error occurred while approving the payment."}
-              </p>
-              <div className="flex gap-2 w-full mt-4">
-                <Button variant="outline" onClick={() => window.location.reload()} className="flex-1">
-                  Retry
-                </Button>
-                <Button onClick={handleGoToDashboard} className="flex-1">
-                  Go to Dashboard
+            ) : error && !transaction ? (
+              <div className="flex min-h-52 flex-col items-center justify-center gap-3 text-center">
+                <CircleAlert className="h-8 w-8 text-destructive" aria-hidden="true" />
+                <p className="max-w-md text-sm text-muted-foreground">{error}</p>
+                <Button variant="outline" onClick={() => void fetchTransaction()}>
+                  Muat ulang
                 </Button>
               </div>
-            </div>
-          )}
-        </motion.div>
-      </GlassCard>
-    </div>
+            ) : transaction ? (
+              <div className="space-y-6">
+                <dl className="grid gap-4 rounded-lg border border-border bg-muted/25 p-4 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">Kode transaksi</dt>
+                    <dd className="mt-1 break-all font-mono text-sm font-semibold">
+                      {transaction.transaction_code || transaction.id}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">Customer</dt>
+                    <dd className="mt-1 text-sm font-semibold">{transaction.customer_name || "Customer"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">Store</dt>
+                    <dd className="mt-1 text-sm font-semibold">{transaction.location_name || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">Total pembayaran</dt>
+                    <dd className="mt-1 text-lg font-bold text-primary">
+                      {formatCurrency(transaction.total_amount)}
+                    </dd>
+                  </div>
+                </dl>
+
+                {isPaid ? (
+                  <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="font-semibold">Pembayaran sudah dikonfirmasi</p>
+                      <p className="mt-1 text-sm text-emerald-800">
+                        Customer telah dijadwalkan menerima email detail transaksi.
+                      </p>
+                    </div>
+                  </div>
+                ) : canApprove ? (
+                  <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="max-w-md text-sm text-muted-foreground">
+                      Konfirmasi hanya setelah nominal dan bukti pembayaran sesuai.
+                    </p>
+                    <Button onClick={handleApprove} disabled={approving}>
+                      {approving ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <CreditCard className="mr-2 h-4 w-4" aria-hidden="true" />
+                      )}
+                      Konfirmasi pembayaran
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                    Transaksi dengan status ini tidak dapat dikonfirmasi dari halaman approval.
+                  </div>
+                )}
+
+                {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+    </AppLayout>
   );
 }

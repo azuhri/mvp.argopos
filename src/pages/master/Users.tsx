@@ -245,7 +245,7 @@ export default function MasterUsers() {
               placeholder="Cari user..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-card/70 backdrop-blur border-border/50"
+              className="pl-9 bg-card border-border"
             />
           </div>
           <div className="flex gap-2">
@@ -434,7 +434,7 @@ export default function MasterUsers() {
             </Dialog>
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="btn-tap w-full sm:w-auto">
+                <Button className="admin-accent-button btn-tap w-full sm:w-auto">
                   <Plus size={16} className="mr-1" /> Tambah User
                 </Button>
               </DialogTrigger>

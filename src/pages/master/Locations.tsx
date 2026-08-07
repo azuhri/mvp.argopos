@@ -276,7 +276,7 @@ export default function MasterLocations() {
               placeholder="Cari lokasi..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-card/70 backdrop-blur border-border/50"
+              className="pl-9 bg-card border-border"
             />
           </div>
           <Dialog open={isCreateOpen} onOpenChange={(open) => {
@@ -288,7 +288,7 @@ export default function MasterLocations() {
     }
   }}>
             <DialogTrigger asChild>
-              <Button className="btn-tap w-full sm:w-auto" onClick={() => {
+              <Button className="admin-accent-button btn-tap w-full sm:w-auto" onClick={() => {
                 console.log('Tambah Lokasi button clicked!');
               }}>
                 <Plus className="h-4 w-4 mr-1" /> Tambah Lokasi

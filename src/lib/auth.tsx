@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiClient, type User, type AccessRole } from "./api";
+import { apiClient, type User, type AccessRole, type LoginResponse } from "./api";
 import { accessRoleService } from "./services/accessRoleService";
 
 export type PermissionMode = "hidden" | "read" | "write";
@@ -17,10 +17,11 @@ export type MenuKey =
   | "master_locations"
   | "master_roles"
   | "master_stock"
+  | "master_stock_mutations"
   | "master_products"
   | "master_stores";
 
-export type RoleName = "super_admin" | "staff_internal" | "sales_external";
+export type RoleName = "super_admin" | "admin" | "staff_internal" | "sales_external";
 
 export interface AuthUser {
   id: string;
@@ -71,7 +72,7 @@ const LOGIN_USERS: Array<AuthUser & { password: string }> = [
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ ok: boolean; message?: string; data?: any }>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; message?: string; data?: LoginResponse }>;
   logout: () => void;
   getPermission: (menuKey: MenuKey) => PermissionMode;
   canRead: (menuKey: MenuKey) => boolean;
@@ -85,7 +86,7 @@ function usePermissions(roleId?: string) {
     queryFn: async () => {
       if (!roleId) return {};
       try {
-        const result = await accessRoleService.getRolePermissions(roleId as any);
+        const result = await accessRoleService.getRolePermissions(roleId);
         console.log('Fetched permissions for roleId:', roleId, result);
         return result;
       } catch (err) {

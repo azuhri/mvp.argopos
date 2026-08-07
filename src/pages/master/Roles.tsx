@@ -298,7 +298,7 @@ export default function MasterRoles() {
             placeholder="Cari role..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-card/70 backdrop-blur border-border/50"
+            className="pl-9 bg-card border-border"
           />
         </div>
         <div className="flex gap-2">
@@ -311,7 +311,7 @@ export default function MasterRoles() {
     }
   }}>
             <DialogTrigger asChild>
-              <Button className="btn-tap">
+              <Button className="admin-accent-button btn-tap">
                 <Plus className="h-4 w-4 mr-1" /> Tambah Role
               </Button>
             </DialogTrigger>

@@ -1,5 +1,33 @@
 import { apiClient, type Location, type CreateLocationRequest, type UpdateLocationRequest, type LocationListResponse, type ApiResponse } from '@/lib/api';
 
+export type LocationStatus = 'active' | 'inactive';
+
+const inactiveLocationStatuses = new Set(['inactive', 'disabled', 'off', 'false', '0']);
+
+export function getLocationStatus(
+  location: Pick<Location, 'status' | 'is_active'>,
+): LocationStatus {
+  const normalizedStatus = location.status?.toString().trim().toLowerCase();
+  if (normalizedStatus && inactiveLocationStatuses.has(normalizedStatus)) {
+    return 'inactive';
+  }
+  if (normalizedStatus === 'active') return 'active';
+  return location.is_active === false ? 'inactive' : 'active';
+}
+
+export function isLocationActive(
+  location: Pick<Location, 'status' | 'is_active'>,
+): boolean {
+  return getLocationStatus(location) === 'active';
+}
+
+export function createLocationStatusPayload(status: LocationStatus) {
+  return {
+    status,
+    is_active: status === 'active',
+  };
+}
+
 export class LocationService {
   // Create location
   async createLocation(location: CreateLocationRequest): Promise<Location> {

@@ -5,14 +5,13 @@ import { useQuery } from "@tanstack/react-query";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
 import CardProduct from "@/components/shared/CardProduct";
 import { Button } from "@/components/ui/button";
-import { Loader2, Package, ArrowLeft, ShoppingCart, Search, ShoppingBag } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Package, ArrowLeft, Search, ShoppingBag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ProductCardSkeleton, LoadingSpinner, Skeleton } from "@/components/shared/SkeletonLoader";
 import { addToCart, getCartSummary } from "@/lib/storefront";
 import { toast } from "sonner";
 import { config } from "@/lib/config";
-import { log } from "console";
+import { PendingPaymentSection } from "@/components/commerce/PendingPaymentSection";
 
 interface ProductStock {
   id: string;
@@ -41,7 +40,6 @@ interface StoreData {
 export default function CommerceCatalog() {
   const { locationCode } = useParams<{ locationCode: string }>();
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
   const [cartSummary, setCartSummary] = useState(() => getCartSummary([]));
   const [isLoading, setIsLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
@@ -165,8 +163,10 @@ export default function CommerceCatalog() {
 
   return (
     <AppLayoutCommerce title={storeData.location_name} locationCode={locationCode}>
+      <PendingPaymentSection locationCode={locationCode} />
+
       {/* Search & Filter */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="mb-6 mt-5 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           {isLoading ? (
             <Skeleton variant="text" className="w-full h-8" />

@@ -338,13 +338,13 @@ export default function UsersManagement() {
               placeholder="Search users by username or email..."
               value={search}
               onChange={(e) => handleSearch(e.target.value)}
-              className="pl-9 bg-card/70 backdrop-blur border-border/50"
+              className="pl-9 bg-card border-border"
               autoComplete="off"
             />
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="btn-tap">
+              <Button className="admin-accent-button btn-tap">
                 <Plus size={16} className="mr-2" /> Add User
               </Button>
             </DialogTrigger>

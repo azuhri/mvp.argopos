@@ -196,7 +196,7 @@ export default function TransactionPage() {
 
   const handleMarkReadyPickup = async (tx: Transaction) => {
     try {
-      const res = await fetch(`${config.apiUrl}//transactions/${tx.id}/mark-ready-pickup`, {
+      const res = await fetch(`${config.apiUrl}/transactions/${tx.id}/mark-ready-pickup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -505,7 +505,7 @@ export default function TransactionPage() {
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 z-10" />
                     <Input
-                      className="pl-9 bg-card/70 backdrop-blur border-2 border-border/50"
+                      className="pl-9 bg-card border border-border"
                       placeholder="Search by code, customer, or payment code"
                       value={search}
                       onChange={(e) => {

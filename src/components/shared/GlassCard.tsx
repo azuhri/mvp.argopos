@@ -17,7 +17,7 @@ export function GlassCard({ children, className, hover = false, delay = 0 }: Gla
       transition={{ duration: 0.4, delay, ease: "easeOut" }}
       className={cn(
         hover ? "glass-card-hover" : "glass-card",
-        "p-6",
+        "p-5",
         className
       )}
     >

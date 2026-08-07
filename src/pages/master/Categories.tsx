@@ -135,7 +135,7 @@ export default function Categories() {
               placeholder="Search categories..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-card/70 backdrop-blur border-border/50"
+              className="pl-9 bg-card border-border"
             />
           </div>
           

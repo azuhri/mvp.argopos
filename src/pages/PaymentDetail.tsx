@@ -1,36 +1,60 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Clock, QrCode, CreditCard, Wallet, MessageCircle, Copy, CheckCircle, Package, CheckCircle2, Phone, XCircle } from "lucide-react";
-import { GlassCard } from "@/components/shared/GlassCard";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Banknote,
+  Check,
+  CheckCircle2,
+  Clock3,
+  Copy,
+  CreditCard,
+  Download,
+  ImageOff,
+  MapPin,
+  MessageCircle,
+  Package,
+  QrCode,
+  ReceiptText,
+  ShieldCheck,
+  Store,
+  Wallet,
+  XCircle,
+} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
 import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
-import { useQuery } from "@tanstack/react-query";
-import { config } from "@/lib/config";
-import { toast } from "sonner";
-import { formatCurrency } from "@/lib/mockData";
-import { useAuth } from "@/lib/auth";
-import { userService } from "@/lib/services/userService";
-import { FaWhatsapp } from "react-icons/fa";
-import { badgeOderStatus, getStatusBadgeKey } from "@/lib/utils";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-
-interface StoreData {
-  location_id: string;
-  location_name: string;
-  location_code: string;
-  assigned_users?: StoreAssignedUser[];
-  payment_methods?: PaymentMethod[];
-}
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { config } from "@/lib/config";
+import { formatCurrency } from "@/lib/mockData";
+import { getStatusBadgeKey } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  readPendingPayments,
+  removePendingPayment,
+  upsertPendingPayment,
+} from "@/lib/pendingPaymentStorage";
+import {
+  getRemainingPaymentSeconds,
+  parsePaymentExpiry,
+} from "@/lib/paymentExpiry";
+import { getTransactionItemCount } from "@/lib/transactionPresentation";
 
 interface StoreAssignedUser {
   id: string;
   username: string;
   email: string;
   no_wa: string;
+}
+
+interface StoreData {
+  location_id: string;
+  location_name: string;
+  location_code: string;
+  assigned_users?: StoreAssignedUser[];
 }
 
 interface PaymentMethod {
@@ -68,750 +92,649 @@ interface Transaction {
   total_item: number;
   created_at: string;
   updated_at: string;
+  expires_at?: string;
   transaction_code?: string;
   transaction_carts?: TransactionCart[];
-  // Pickup proof fields
   path_proof_pickup?: string;
   pickup_at?: string;
+}
+
+function formatTime(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  return [hours, minutes, secs].map((value) => value.toString().padStart(2, "0")).join(":");
+}
+
+function getPaymentMethodLabel(paymentType?: string) {
+  if (paymentType === "qris") return "QRIS";
+  if (paymentType === "transfer_rekening") return "Transfer Rekening";
+  if (paymentType === "cutoff_hutang") return "Cutoff / Hutang";
+  return "Metode pembayaran";
+}
+
+function resolveAssetUrl(path?: string) {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  return `${config.endpointUrl}/${path.replace(/^\/+/, "")}`;
+}
+
+function PaymentMethodIcon({ paymentType }: { paymentType?: string }) {
+  if (paymentType === "qris") return <QrCode className="h-5 w-5" />;
+  if (paymentType === "transfer_rekening") return <CreditCard className="h-5 w-5" />;
+  if (paymentType === "cutoff_hutang") return <Wallet className="h-5 w-5" />;
+  return <Banknote className="h-5 w-5" />;
+}
+
+function getStatusMessage(status: string) {
+  if (status === "WAITING_TO_PAYMENT") return "Selesaikan pembayaran sebelum waktu berakhir.";
+  if (status === "PAID") return "Pembayaran sudah diverifikasi dan pesanan segera diproses.";
+  if (status === "PREPARING_PRODUCT") return "Outlet sedang menyiapkan produk pesanan Anda.";
+  if (status === "READY_TO_PICKUP") return "Pesanan siap diambil di outlet.";
+  if (status === "COMPLETED") return "Pesanan telah diterima dan transaksi selesai.";
+  return "Status transaksi diperbarui secara otomatis.";
+}
+
+function persistPendingTransaction(
+  transaction: Transaction,
+  storeData: StoreData,
+  locationCode?: string,
+  expiresAt = transaction.expires_at,
+) {
+  if (transaction.status !== "WAITING_TO_PAYMENT") return false;
+
+  return upsertPendingPayment({
+    transaction_id: transaction.id,
+    transaction_code: transaction.transaction_code || transaction.id,
+    location_code: storeData.location_code || locationCode || "",
+    location_name: storeData.location_name,
+    total_amount: Number(transaction.total_amount),
+    status: "WAITING_TO_PAYMENT",
+    created_at: transaction.created_at,
+    expires_at: expiresAt || "",
+  });
 }
 
 export default function PaymentDetail() {
   const { locationCode, transactionId } = useParams<{ locationCode: string; transactionId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
-
-  // Transaction timeout in hours from env (default: 6 hours)
-  const timeoutHours = config.trxLifetime;
-  const [timeLeft, setTimeLeft] = useState(timeoutHours * 60 * 60); // Convert hours to seconds
-  const [codeTrx, setCodeTrx] = useState<string>("");
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [isSavingForLater, setIsSavingForLater] = useState(false);
+  const [recoveryExpiry, setRecoveryExpiry] = useState<{
+    transactionId: string;
+    expiresAt?: string;
+  } | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false);
   const [confirmedReceipt, setConfirmedReceipt] = useState(false);
   const [copied, setCopied] = useState<Record<string, boolean>>({});
 
-  // Fetch store data
-  const { data: storeData, isLoading } = useQuery({
-    queryKey: ['store', locationCode],
+  const { data: storeData, isLoading: storeLoading } = useQuery({
+    queryKey: ["store", locationCode],
     queryFn: async () => {
-      const endpoint = `${config.apiUrl}/${locationCode}/store`;
-      const response = await fetch(endpoint);
-      if (!response.ok) {
-        throw new Error('Failed to fetch store data');
-      }
+      const response = await fetch(`${config.apiUrl}/${locationCode}/store`);
+      if (!response.ok) throw new Error("Failed to fetch store data");
       const result = await response.json();
       return result.data as StoreData;
     },
-    enabled: !!locationCode,
+    enabled: Boolean(locationCode),
   });
 
-  // Fetch payment methods
   const { data: paymentMethods } = useQuery({
-    queryKey: ['paymentMethods', storeData?.location_id],
+    queryKey: ["paymentMethods", storeData?.location_id],
     queryFn: async () => {
       if (!storeData?.location_id) return [];
-      const endpoint = `${config.apiUrl}//stores/${storeData.location_id}/payment-methods`;
-      const response = await fetch(endpoint);
-      if (!response.ok) {
-        throw new Error('Failed to fetch payment methods');
-      }
+      const response = await fetch(`${config.apiUrl}/stores/${storeData.location_id}/payment-methods`);
+      if (!response.ok) throw new Error("Failed to fetch payment methods");
       const result = await response.json();
       return result.data as PaymentMethod[];
     },
-    enabled: !!storeData?.location_id,
+    enabled: Boolean(storeData?.location_id),
   });
 
-  // Fetch store assigned users (admin info)
   const { data: storeAssignedUsers } = useQuery({
-    queryKey: ['storeAssignedUsers', storeData?.location_id],
+    queryKey: ["storeAssignedUsers", storeData?.location_id],
     queryFn: async () => {
       if (!storeData?.location_id) return [];
-      const endpoint = `${config.apiUrl}//stores/${storeData.location_id}/assigned-users`;
-      const response = await fetch(endpoint);
-      if (!response.ok) {
-        throw new Error('Failed to fetch store assigned users');
-      }
+      const response = await fetch(`${config.apiUrl}/stores/${storeData.location_id}/assigned-users`);
+      if (!response.ok) throw new Error("Failed to fetch assigned users");
       const result = await response.json();
       return result.data as StoreAssignedUser[];
     },
-    enabled: !!storeData?.location_id,
+    enabled: Boolean(storeData?.location_id),
   });
 
-  // Fetch transaction data with polling every 5 seconds
-  const { data: transactionData, error: transactionError } = useQuery({
-    queryKey: ['transaction', transactionId],
+  const {
+    data: transactionData,
+    error: transactionError,
+    isLoading: transactionLoading,
+    refetch: refetchTransaction,
+  } = useQuery({
+    queryKey: ["transaction", transactionId],
     queryFn: async () => {
       if (!transactionId) return null;
-      const endpoint = `${config.apiUrl}//transactions/${transactionId}`;
-      console.log('Fetching transaction from:', endpoint);
-      const response = await fetch(endpoint);
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Failed to fetch transaction:', errorData);
-        throw new Error('Failed to fetch transaction data');
+      const response = await fetch(`${config.apiUrl}/transactions/${transactionId}`);
+      if (response.status === 404) removePendingPayment(transactionId);
+      if (!response.ok) throw new Error("Gagal memuat data transaksi");
+      const result = await response.json() as { data?: Transaction };
+      if (!result.data || typeof result.data !== "object") {
+        throw new Error("Respons transaksi tidak valid");
       }
-      const result = await response.json();
-      console.log('Transaction data:', result);
-      return result.data as Transaction;
+      return result.data;
     },
-    enabled: !!transactionId,
+    enabled: Boolean(transactionId),
     refetchInterval: (query) => {
-      const data = query.state.data as Transaction | undefined;
-
-      return data?.status === 'REJECTED' ? false : 5000;
+      const transaction = query.state.data as Transaction | undefined;
+      return transaction && ["REJECTED", "COMPLETED"].includes(transaction.status) ? false : 5000;
     },
   });
+  const transactionStatus = transactionData?.status;
+  const canonicalExpiresAt = parsePaymentExpiry(transactionData?.expires_at) === null
+    ? undefined
+    : transactionData?.expires_at;
+  const transactionExpiresAt = canonicalExpiresAt || (
+    recoveryExpiry?.transactionId === transactionId
+      ? recoveryExpiry.expiresAt
+      : undefined
+  );
 
-  // Set selected payment method from transaction data
   useEffect(() => {
-    if (paymentMethods && transactionData?.payment_method_id) {
-      const method = paymentMethods.find(pm => pm.id === transactionData.payment_method_id);
-      setSelectedPaymentMethod(method || null);
+    if (!transactionId) {
+      setRecoveryExpiry(null);
+      return;
     }
-  }, [paymentMethods, transactionData]);
 
-  // Set codeTrx from transaction data
+    const pendingPayment = readPendingPayments().find(
+      (item) => item.transaction_id === transactionId,
+    );
+    setRecoveryExpiry({
+      transactionId,
+      expiresAt: pendingPayment?.expires_at,
+    });
+  }, [transactionId]);
+
   useEffect(() => {
-    if (transactionData?.nominal_code) {
-      setCodeTrx(transactionData.nominal_code);
+    if (!paymentMethods || !transactionData?.payment_method_id) return;
+    setSelectedPaymentMethod(
+      paymentMethods.find((method) => method.id === transactionData.payment_method_id) || null,
+    );
+  }, [paymentMethods, transactionData?.payment_method_id]);
+
+  useEffect(() => {
+    if (transactionStatus !== "WAITING_TO_PAYMENT") {
+      setTimeLeft(null);
+      return;
     }
-  }, [transactionData]);
 
-  // Calculate time left based on transaction created_at
+    const updateCountdown = () => {
+      setTimeLeft(getRemainingPaymentSeconds(transactionExpiresAt));
+    };
+    updateCountdown();
+    const timer = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(timer);
+  }, [transactionExpiresAt, transactionStatus]);
+
   useEffect(() => {
-    if (!transactionData?.created_at) return;
+    if (!transactionData || !storeData) return;
+    persistPendingTransaction(
+      transactionData,
+      storeData,
+      locationCode,
+      transactionExpiresAt,
+    );
+  }, [locationCode, storeData, transactionData, transactionExpiresAt]);
 
-    const createdAt = new Date(transactionData.created_at);
-    const now = new Date();
-    const diffMs = now.getTime() - createdAt.getTime();
-    const diffSeconds = Math.floor(diffMs / 1000);
-    const maxSeconds = timeoutHours * 60 * 60; // Configurable timeout in hours
+  useEffect(() => {
+    if (!transactionId || !transactionStatus) return;
 
-    const remainingSeconds = maxSeconds - diffSeconds;
-
-    if (remainingSeconds <= 0) {
-      // Time is up - API will auto-reject on next fetch
-      setTimeLeft(0);
-    } else {
-      setTimeLeft(remainingSeconds);
+    if (transactionStatus !== "WAITING_TO_PAYMENT") {
+      removePendingPayment(transactionId);
+      return;
     }
-  }, [transactionData, timeoutHours]);
 
-  // Countdown timer
-  useEffect(() => {
-    if (timeLeft <= 0) return;
+    const expiresAt = parsePaymentExpiry(transactionExpiresAt);
+    if (expiresAt === null) return;
 
-    const timer = setInterval(() => {
-      setTimeLeft(prev => prev - 1);
-    }, 1000);
+    const delay = expiresAt - Date.now();
+    if (delay <= 0) {
+      removePendingPayment(transactionId);
+      return;
+    }
 
-    return () => clearInterval(timer);
-  }, [timeLeft]);
+    const timeout = window.setTimeout(
+      () => removePendingPayment(transactionId),
+      Math.min(delay + 50, 2_147_483_647),
+    );
+    return () => window.clearTimeout(timeout);
+  }, [transactionExpiresAt, transactionId, transactionStatus]);
 
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const handlePayLater = async () => {
+    if (!transactionData || !storeData) return;
+
+    setIsSavingForLater(true);
+    try {
+      let transaction = transactionData;
+      let expiresAt = transactionExpiresAt;
+
+      if (parsePaymentExpiry(expiresAt) === null) {
+        const refreshed = await refetchTransaction();
+        if (refreshed.data) {
+          transaction = refreshed.data;
+          expiresAt = parsePaymentExpiry(refreshed.data.expires_at) === null
+            ? expiresAt
+            : refreshed.data.expires_at;
+        }
+      }
+
+      if (transaction.status !== "WAITING_TO_PAYMENT") {
+        toast.info("Status transaksi sudah berubah. Silakan periksa detail pembayaran terbaru.");
+        return;
+      }
+
+      if (parsePaymentExpiry(expiresAt) === null) {
+        toast.error("Batas waktu pembayaran belum tersedia. Coba lagi setelah data tersinkronisasi.");
+        return;
+      }
+
+      const isPersisted = persistPendingTransaction(
+        transaction,
+        storeData,
+        locationCode,
+        expiresAt,
+      );
+      if (!isPersisted) {
+        toast.error("Pembayaran tertunda belum dapat disimpan di browser ini.");
+        return;
+      }
+
+      window.scrollTo({ top: 0, left: 0 });
+      navigate(locationCode ? `/${locationCode}/commerce` : "/commerce");
+    } finally {
+      setIsSavingForLater(false);
+    }
   };
 
-  const totalWithCode = transactionData ? transactionData.total_amount : 0;
-
-  const handleSendToWA = (user: StoreAssignedUser) => {
-    if (!user.no_wa) {
-      toast.error('Nomor WA tidak tersedia');
+  const handleSendToWA = (admin: StoreAssignedUser) => {
+    if (!admin.no_wa || !transactionData) {
+      toast.error("Nomor WhatsApp admin tidak tersedia");
       return;
     }
 
     const message = encodeURIComponent(
-      `Halo ${user.username},\n\nSaya ingin mengirim bukti pembayaran untuk order di ${storeData?.location_name} dengan transaction code: ${transactionData?.transaction_code}.\n\nTotal Pembayaran: ${formatCurrency(totalWithCode)}\nCode Trx: ${transactionData.payment_code}\n\nMohon verifikasi pembayaran saya. Terima kasih!`
+      `Halo ${admin.username}, saya ingin mengirim bukti pembayaran untuk transaksi ${transactionData.transaction_code || transactionData.id} di ${storeData?.location_name}. Total pembayaran ${formatCurrency(transactionData.total_amount)}. Mohon bantu verifikasi, terima kasih.`,
     );
-
-    const waNumber = user.no_wa.replace(/^0/, '62').replace(/\+/g, '');
-    const waUrl = `https://wa.me/${waNumber}?text=${message}`;
-    window.open(waUrl, '_blank');
+    const waNumber = admin.no_wa.replace(/^0/, "62").replace(/\+/g, "");
+    window.open(`https://wa.me/${waNumber}?text=${message}`, "_blank", "noopener,noreferrer");
   };
 
   const handleConfirmReceipt = async () => {
-    if (!transactionId) {
-      toast.error('Transaction ID tidak ditemukan');
-      return;
-    }
-
+    if (!transactionId) return;
     setIsConfirmingReceipt(true);
 
     try {
-      console.log('Confirming receipt for transaction:', transactionId);
-      const response = await fetch(`${config.apiUrl}//transactions/${transactionId}/confirm-receipt`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await fetch(`${config.apiUrl}/transactions/${transactionId}/confirm-receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
-
-      console.log('Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error('Gagal mengkonfirmasi penerimaan barang');
-      }
-
-      const result = await response.json();
-      console.log('Success response:', result);
+      if (!response.ok) throw new Error("Gagal mengkonfirmasi penerimaan barang");
 
       setConfirmedReceipt(true);
-      toast.success('✅ Terima kasih! Konfirmasi penerimaan barang berhasil recorded');
-
-      // Navigate after a short delay to show success
-      setTimeout(() => {
+      toast.success("Penerimaan barang berhasil dikonfirmasi");
+      window.setTimeout(() => {
         navigate(`/${locationCode}/commerce/payment-success/${transactionId}`);
-      }, 1500);
-    } catch (error) {
-      console.error('Error in handleConfirmReceipt:', error);
-      toast.error('Gagal mengkonfirmasi penerimaan barang');
+      }, 1200);
+    } catch {
+      toast.error("Gagal mengkonfirmasi penerimaan barang");
     } finally {
       setIsConfirmingReceipt(false);
     }
   };
 
-  const handleCopyCode = (key: string, textToCopy: string) => {
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(prev => ({ ...prev, [key]: true }));
-    toast.success(key + ' disalin!');
-    setTimeout(() => setCopied(prev => ({ ...prev, [key]: false })), 2000);
+  const handleCopy = async (key: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied((current) => ({ ...current, [key]: true }));
+      toast.success("Berhasil disalin");
+      window.setTimeout(() => setCopied((current) => ({ ...current, [key]: false })), 1800);
+    } catch {
+      toast.error("Tidak dapat menyalin data");
+    }
   };
 
-  const handleDownload = (url) => {
+  const handleDownload = (url: string) => {
     const anchor = document.createElement("a");
-
-    const fileName = url.split("/").pop();
-
     anchor.href = url;
-    anchor.download = fileName;
-
+    anchor.download = url.split("/").pop() || "qris";
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
   };
 
-  const handleMarkAsPaid = () => {
-    // TODO: Implement API call to mark as paid
-    toast.success('Pembayaran berhasil dikonfirmasi!');
-    navigate(`/${locationCode}/commerce/payment-success`);
-  };
-
-  if (isLoading || !transactionData || !selectedPaymentMethod) {
+  if (storeLoading || transactionLoading) {
     return (
-      <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-        <div className="flex items-center justify-center min-h-screen">
+      <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
+        <div className="flex min-h-[60vh] items-center justify-center">
           <LoadingSpinner />
         </div>
       </AppLayoutCommerce>
     );
   }
 
-  if (transactionError) {
+  if (transactionError || !transactionData || !storeData) {
     return (
-      <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-        <div className="flex flex-col items-center justify-center min-h-screen text-center px-4">
-          <p className="text-red-500 mb-4">Gagal memuat data transaksi</p>
-          <p className="text-muted-foreground mb-4 text-sm">{transactionError.message}</p>
-          <Button asChild>
-            <Link to={`/${locationCode}/commerce/cart`}>Kembali ke Keranjang</Link>
+      <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
+        <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-md bg-red-50 text-[#e30613]">
+            <AlertCircle className="h-7 w-7" />
+          </div>
+          <h1 className="text-xl font-extrabold text-[#071a4f]">Transaksi tidak dapat dimuat</h1>
+          <p className="mt-2 text-sm text-slate-500">Periksa kembali tautan transaksi atau kembali ke katalog.</p>
+          <Button asChild className="mt-6 rounded-md bg-[#071a4f] hover:bg-[#102866]">
+            <Link to="/commerce">Kembali ke katalog</Link>
           </Button>
         </div>
       </AppLayoutCommerce>
     );
   }
 
-  if (!storeData) {
+  if (transactionData.status === "REJECTED") {
     return (
-      <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-        <div className="flex flex-col items-center justify-center min-h-screen text-center">
-          <p className="text-muted-foreground mb-4">Data store tidak ditemukan</p>
-          <Button asChild>
-            <Link to={`/${locationCode}/commerce/cart`}>Kembali ke Keranjang</Link>
-          </Button>
-        </div>
-      </AppLayoutCommerce>
-    );
-  }
-
-  if (transactionData && transactionData.status === 'REJECTED') {
-    return (
-      <AppLayoutCommerce
-        title={config.appNameCommerce}
-        locationCode={locationCode || ''}
-      >
-        <div className="flex min-h-[80vh] items-center justify-center px-4">
-          <div className="w-full max-w-md">
-            <div className="rounded-2xl border bg-white p-8 shadow-lg">
-              <div className="flex flex-col items-center text-center">
-                <div className="mb-4 rounded-full bg-red-100 p-4">
-                  <XCircle className="h-12 w-12 text-red-500" />
-                </div>
-
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Transaksi Dibatalkan
-                </h1>
-
-                <p className="mt-3 text-sm text-gray-500">
-                  Transaksi dengan code:
-                </p>
-                <div className="my-4 w-full rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
-                  <span className="text-lg font-mono font-semibold">{transactionData.transaction_code}</span>
-                </div>
-                <p className="text-sm text-gray-500">
-                  Telah dibatalkan oleh sistem, karena melewati batas waktu pembayaran. Silakan kembali ke keranjang untuk melakukan pemesanan ulang.
-                </p>
-
-
-                <div className="mt-8 flex w-full flex-col gap-3">
-                  <Button
-                    asChild
-                    size="lg"
-                    className="w-full"
-                  >
-                    <Link to={`/commerce`}>
-                      Lanjut Belanja
-                    </Link>
-                  </Button>
-                </div>
-              </div>
+      <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
+        <div className="mx-auto flex min-h-[65vh] max-w-lg items-center justify-center">
+          <div className="commerce-panel w-full p-6 text-center md:p-8">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-md bg-red-50 text-[#e30613]">
+              <XCircle className="h-9 w-9" />
             </div>
+            <h1 className="text-2xl font-extrabold text-[#071a4f]">Transaksi dibatalkan</h1>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              Batas waktu pembayaran telah berakhir. Buat pesanan baru untuk melanjutkan pembelian.
+            </p>
+            <div className="mt-5 rounded-md bg-slate-50 px-4 py-3 font-mono text-sm font-bold text-[#071a4f]">
+              {transactionData.transaction_code || transactionData.id}
+            </div>
+            <Button asChild className="commerce-orange-button mt-6 h-11 w-full rounded-md font-extrabold">
+              <Link to="/commerce">Kembali berbelanja</Link>
+            </Button>
           </div>
         </div>
       </AppLayoutCommerce>
     );
   }
 
+  const admins = storeAssignedUsers?.length ? storeAssignedUsers : storeData.assigned_users || [];
+  const items = transactionData.transaction_carts || [];
+  const totalItems = getTransactionItemCount(transactionData.total_item, items);
+  const isWaiting = transactionData.status === "WAITING_TO_PAYMENT";
+  const isReadyToPickup = transactionData.status === "READY_TO_PICKUP";
+  const qrisUrl = selectedPaymentMethod?.image_url
+    ? selectedPaymentMethod.image_url.startsWith("http")
+      ? selectedPaymentMethod.image_url
+      : `${config.endpointUrl}/public/${selectedPaymentMethod.image_url.replace(/^\/+/, "")}`
+    : "";
+
   return (
-    <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-      <div className="max-w-[1800px] mx-auto px-4 py-2">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row items-start gap-4 mb-6">
-          {/* <Button variant="outline" size="sm" asChild>
-            <Link to={`/${locationCode}/commerce/cart`}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Kembali
-            </Link>
-          </Button> */}
-          <h1 className="text-2xl font-bold">Detail Pembayaran</h1>
+    <AppLayoutCommerce title={storeData.location_name} locationCode={locationCode || ""}>
+      <div className="mx-auto w-full max-w-[1180px] space-y-6">
+        <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-end md:justify-between">
+          <div>
+            <Button variant="ghost" size="sm" asChild className="mb-3 -ml-3 rounded-md font-bold text-slate-600">
+              <Link to="/commerce">
+                <ArrowLeft className="h-4 w-4" />
+                Kembali ke katalog
+              </Link>
+            </Button>
+            <h1 className="text-2xl font-extrabold text-[#071a4f] md:text-3xl">Detail pembayaran</h1>
+            <p className="mt-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-500">
+              <MapPin className="h-4 w-4 text-[#e30613]" />
+              {storeData.location_name}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-sm font-bold text-slate-400">
+            <span>1. Keranjang</span>
+            <span aria-hidden="true">/</span>
+            <span className="text-[#071a4f]">2. Pembayaran</span>
+            <span aria-hidden="true">/</span>
+            <span>3. Selesai</span>
+          </div>
         </div>
 
-        {/* Countdown */}
-        {(transactionData.status === 'WAITING_TO_PAYMENT') && (
-          <GlassCard className="p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Clock className="h-6 w-6 text-orange-500" />
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`commerce-panel flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-5 ${
+            isWaiting ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${isWaiting ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+              {isWaiting ? <Clock3 className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+            </span>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-extrabold text-[#071a4f]">{getStatusMessage(transactionData.status)}</p>
+                <StatusBadge status={getStatusBadgeKey(transactionData.status)} />
+              </div>
+              <p className="mt-1 text-xs font-medium text-slate-600">Status diperbarui otomatis setiap 5 detik.</p>
+            </div>
+          </div>
+          {isWaiting && (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-stretch">
+              <div className="min-w-[168px] rounded-md border border-amber-200 bg-white px-4 py-3 text-left md:text-right">
+                <p className="text-xs font-bold text-amber-700">Sisa waktu pembayaran</p>
+                <p
+                  className="mt-0.5 font-mono text-2xl font-extrabold text-[#e30613]"
+                  data-testid="payment-countdown"
+                >
+                  {timeLeft === null ? "--:--:--" : formatTime(timeLeft)}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-auto min-h-11 rounded-md border-amber-300 bg-white px-4 font-extrabold text-[#071a4f] hover:bg-amber-100"
+                onClick={handlePayLater}
+                disabled={isSavingForLater || (timeLeft !== null && timeLeft <= 0)}
+              >
+                {isSavingForLater ? <LoadingSpinner size="sm" /> : <ArrowLeft className="h-4 w-4" />}
+                {isSavingForLater ? "Menyimpan..." : "Bayar nanti"}
+              </Button>
+            </div>
+          )}
+        </motion.section>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-6">
+            <section className="commerce-panel overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-4 md:px-5">
+                <Package className="h-5 w-5 text-[#e30613]" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Sisa waktu pembayaran</p>
-                  <p className="text-2xl font-bold text-orange-500">{formatTime(timeLeft)}</p>
+                  <h2 className="font-extrabold text-[#071a4f]">Produk pesanan</h2>
+                  <p className="text-xs font-medium text-slate-500" data-testid="transaction-item-count">
+                    {totalItems} item dalam transaksi
+                  </p>
                 </div>
               </div>
-              <Badge variant={timeLeft > 1800 ? "default" : "destructive"}>
-                {timeLeft > 1800 ? `Aktif (${timeoutHours} jam)` : "Segera Expired"}
-              </Badge>
-            </div>
-          </GlassCard>
-        )}
-
-        {(transactionData.status === 'PAID') && (
-          <GlassCard className="p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-6 w-6 text-green-500" />
-                <div>
-                  <span className="text-sm text-muted-foreground">Pembarayaran Telah Dikonfirmasi</span>
-                </div>
-              </div>
-              <Badge variant="default">
-                PAID
-              </Badge>
-            </div>
-          </GlassCard>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-          {/* Product List */}
-          <GlassCard className="glass-card p-6 col-span-4">
-            <h2 className="text-lg font-semibold mb-4">Daftar Produk</h2>
-            <div className="space-y-4 text-sm md:text-lg">
-              {transactionData?.transaction_carts && transactionData.transaction_carts.length > 0 ? (
-                transactionData.transaction_carts.map((item) => (
-                  <div key={item.id} className="flex items-center gap-4 p-3 rounded-lg bg-muted/30">
-                    {item.product_details?.image_path ? (
-                      <img
-                        src={`${config.endpointUrl}/${item.product_details.image_path}`}
-                        alt={item.product_details.product_name || 'Product'}
-                        className="w-16 h-16 object-cover rounded-md"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center">
-                        <Package className="h-6 w-6 text-muted-foreground" />
+              {items.length > 0 ? (
+                <div className="divide-y divide-slate-100 px-4 md:px-5">
+                  {items.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 py-4">
+                      <div className="commerce-product-visual flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200">
+                        {item.product_details?.image_path ? (
+                          <img
+                            src={resolveAssetUrl(item.product_details.image_path)}
+                            alt={item.product_details.product_name || "Produk"}
+                            className="h-full w-full object-contain p-1.5"
+                          />
+                        ) : (
+                          <ImageOff className="h-5 w-5 text-slate-300" />
+                        )}
                       </div>
-                    )}
-                    <div className="flex-1">
-                      <h4 className="font-medium">{item.product_details?.product_name || `Product #${item.product_stock_id}`}</h4>
-                      <p className="text-sm text-muted-foreground">Qty: {item.qty}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-sm font-extrabold text-[#071a4f]">
+                          {item.product_details?.product_name || `Produk #${item.product_stock_id}`}
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-slate-500">{item.qty} item</p>
+                      </div>
+                      <p className="text-sm font-extrabold text-[#071a4f]">{formatCurrency(item.amount)}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{formatCurrency(item.amount)}</p>
-                      <p className="text-xs text-muted-foreground">{formatCurrency(item.amount / item.qty)} / item</p>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               ) : (
-                <p className="text-center text-muted-foreground py-4">Tidak ada item pesanan</p>
+                <p className="px-5 py-8 text-center text-sm text-slate-500">Detail produk tidak tersedia.</p>
               )}
-            </div>
-          </GlassCard>
+            </section>
 
-          {/* Payment Amount */}
-          <GlassCard className="p-6 col-span-4 md:col-span-2">
-            <h2 className="text-lg font-semibold mb-4">Detail Pembayaran</h2>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm md:text-md">Order Status</span>
-                <div className="flex items-center gap-0">
+            <section className="commerce-panel p-4 md:p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#eef2fb] text-[#071a4f]">
+                  <PaymentMethodIcon paymentType={selectedPaymentMethod?.payment_type} />
+                </span>
+                <div>
+                  <h2 className="font-extrabold text-[#071a4f]">{getPaymentMethodLabel(selectedPaymentMethod?.payment_type)}</h2>
+                  <p className="text-xs font-medium text-slate-500">Metode pembayaran transaksi</p>
+                </div>
+              </div>
+
+              {!selectedPaymentMethod && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  Detail metode pembayaran tidak tersedia. Hubungi admin outlet untuk bantuan.
+                </div>
+              )}
+
+              {selectedPaymentMethod?.payment_type === "transfer_rekening" && (
+                <dl className="divide-y divide-slate-100 rounded-md border border-slate-200 px-4">
+                  <div className="flex justify-between gap-4 py-3 text-sm"><dt className="text-slate-500">Bank</dt><dd className="font-bold text-[#071a4f]">{selectedPaymentMethod.bank_name}</dd></div>
+                  <div className="flex items-center justify-between gap-4 py-3 text-sm">
+                    <dt className="text-slate-500">Nomor rekening</dt>
+                    <dd className="flex items-center gap-1 font-bold text-[#071a4f]">
+                      {selectedPaymentMethod.account_number}
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md" onClick={() => handleCopy("account", selectedPaymentMethod.account_number)} title="Salin nomor rekening">
+                        {copied.account ? <Check className="h-4 w-4 text-emerald-700" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4 py-3 text-sm"><dt className="text-slate-500">Atas nama</dt><dd className="font-bold text-[#071a4f]">{selectedPaymentMethod.account_name}</dd></div>
+                </dl>
+              )}
+
+              {selectedPaymentMethod?.payment_type === "qris" && qrisUrl && (
+                <div className="rounded-md border border-slate-200 bg-white p-4 text-center">
+                  <img src={qrisUrl} alt="Kode QRIS pembayaran" className="mx-auto aspect-square w-full max-w-[280px] object-contain" />
+                  <Button variant="outline" className="mt-4 rounded-md font-bold" onClick={() => handleDownload(qrisUrl)}>
+                    <Download className="h-4 w-4" />
+                    Unduh QRIS
+                  </Button>
+                </div>
+              )}
+
+              {selectedPaymentMethod?.payment_type === "cutoff_hutang" && (
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900">
+                  Pembayaran dicatat melalui cutoff internal. Konfirmasikan penerimaan setelah barang diterima.
+                </div>
+              )}
+            </section>
+
+            {admins.length > 0 && (
+              <section className="commerce-panel p-4 md:p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <Store className="h-5 w-5 text-[#e30613]" />
+                  <div>
+                    <h2 className="font-extrabold text-[#071a4f]">Bantuan outlet</h2>
+                    <p className="text-xs font-medium text-slate-500">Kirim bukti pembayaran melalui WhatsApp.</p>
+                  </div>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {admins.map((admin) => (
+                    <div key={admin.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-[#071a4f]">{admin.username}</p>
+                        <p className="truncate text-xs text-slate-500">{admin.no_wa || admin.email}</p>
+                      </div>
+                      <Button variant="outline" size="sm" className="shrink-0 rounded-md border-emerald-200 font-bold text-emerald-700 hover:bg-emerald-50" onClick={() => handleSendToWA(admin)} disabled={!admin.no_wa}>
+                        <MessageCircle className="h-4 w-4" />
+                        WhatsApp
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+
+          <aside>
+            <div className="commerce-panel sticky top-24 overflow-hidden">
+              <div className="bg-[#071a4f] px-5 py-4 text-white">
+                <div className="flex items-center gap-2">
+                  <ReceiptText className="h-5 w-5 text-white/80" />
+                  <h2 className="font-extrabold">Ringkasan transaksi</h2>
+                </div>
+                <p className="mt-1 text-xs font-medium text-white/65">{transactionData.transaction_code || transactionData.id}</p>
+              </div>
+              <div className="space-y-4 p-5">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-slate-500">Status</span>
                   <StatusBadge status={getStatusBadgeKey(transactionData.status)} />
                 </div>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm md:text-md">Transaction Code</span>
-                <div className="flex items-center gap-0">
-                  <span className="font-bold text-xs text-primary">{transactionData.transaction_code}</span>
-                  <Button variant="ghost" size="xs" onClick={() => handleCopyCode('transaction code', transactionData.transaction_code)}>
-                    {copied['transaction code'] ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-slate-500">Kode transaksi</span>
+                  <span className="flex min-w-0 items-center gap-1 font-mono font-bold text-[#071a4f]">
+                    <span className="truncate">{transactionData.transaction_code || transactionData.id}</span>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-md" onClick={() => handleCopy("transaction", transactionData.transaction_code || transactionData.id)} title="Salin kode transaksi">
+                      {copied.transaction ? <Check className="h-4 w-4 text-emerald-700" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3 text-sm"><span className="text-slate-500">Subtotal</span><span className="font-bold">{formatCurrency(transactionData.base_amount)}</span></div>
+                <div className="flex justify-between gap-3 text-sm"><span className="text-slate-500">Kode unik</span><span className="font-bold">{transactionData.payment_code || transactionData.nominal_code}</span></div>
+                <Separator />
+                <div>
+                  <p className="text-xs font-bold text-slate-500">Total pembayaran</p>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-2xl font-extrabold text-[#071a4f]">{formatCurrency(transactionData.total_amount)}</p>
+                    <Button variant="outline" size="icon" className="h-9 w-9 rounded-md" onClick={() => handleCopy("total", transactionData.total_amount.toString())} title="Salin total pembayaran">
+                      {copied.total ? <Check className="h-4 w-4 text-emerald-700" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                {transactionData.path_proof_pickup && (
+                  <div className="border-t border-slate-200 pt-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-emerald-800">
+                      <ShieldCheck className="h-4 w-4" />
+                      Bukti serah terima
+                    </div>
+                    <img
+                      src={resolveAssetUrl(transactionData.path_proof_pickup)}
+                      alt="Bukti serah terima"
+                      className="max-h-56 w-full rounded-md border border-slate-200 object-contain"
+                    />
+                  </div>
+                )}
+
+                {isReadyToPickup && !transactionData.path_proof_pickup && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900">
+                    Admin sedang menyiapkan bukti serah terima.
+                  </div>
+                )}
+
+                {confirmedReceipt && (
+                  <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Penerimaan berhasil dikonfirmasi.
+                  </div>
+                )}
+
+                {isReadyToPickup && !confirmedReceipt && (
+                  <Button className="commerce-orange-button h-auto min-h-11 w-full rounded-md py-3 font-extrabold" onClick={handleConfirmReceipt} disabled={isConfirmingReceipt}>
+                    {isConfirmingReceipt ? <LoadingSpinner size="sm" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {isConfirmingReceipt ? "Memproses..." : "Konfirmasi barang diterima"}
                   </Button>
-                </div>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground text-sm md:text-md">Subtotal</span>
-                <span className="font-semibold">{formatCurrency(transactionData?.base_amount || 0)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground text-sm md:text-md">Nominal Code (Unik)</span>
-                <div className="flex items-center gap-0">
-                  <span className="font-semibold">{transactionData.payment_code}</span>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex justify-between items-center">
-                <span className="font-semibold">Total Pembayaran</span>
-                <div className="flex items-center gap-0">
-                  <span className="font-bold text-primary">{formatCurrency(totalWithCode)}</span>
-                  <Button variant="ghost" size="xs" onClick={() => handleCopyCode('total harga', totalWithCode.toString())}>
-                    {copied['total harga'] ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
+                )}
+
               </div>
             </div>
-
-            {/* Show pickup proof status if available */}
-            {transactionData.path_proof_pickup && (
-              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-green-800 text-sm">✅ Bukti Serah Terima Telah Diupload</p>
-                    <p className="text-xs text-green-600 mt-1">
-                      Diupload pada: {transactionData.pickup_at ? new Date(transactionData.pickup_at).toLocaleString('id-ID', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }) : '-'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Show confirmed state */}
-            {confirmedReceipt && (
-              <div className="mt-4 p-4 px-2 bg-green-100 rounded-lg border border-green-300 text-center">
-                <div className="flex items-center justify-center gap-2 text-green-800 font-semibold">
-                  <CheckCircle className="h-6 w-6" />
-                  <span>Konfirmasi penerimaan barang berhasil!</span>
-                </div>
-              </div>
-            )}
-
-            {/* Show preparation message for PAID/PREPARING_PRODUCT status */}
-            {(transactionData.status === 'PAID' || transactionData.status === 'PREPARING_PRODUCT') && (
-              <div className="mt-4 p-4 px-2 bg-blue-50 rounded-lg border border-blue-200 text-center">
-                <div className="flex items-center justify-center gap-2 text-blue-800">
-                  <span className="text-xs font-medium">📦 Pesanan sedang dalam preparation. Mohon tunggu.</span>
-                </div>
-              </div>
-            )}
-
-            {/* Show pickup proof image if available */}
-            {transactionData.path_proof_pickup && (transactionData.status === 'READY_TO_PICKUP' || transactionData.status === 'PAID') && (
-              <div className="mt-4">
-                <p className="text-sm font-medium mb-2">Bukti Serah Terima:</p>
-                <div className="rounded-lg overflow-hidden border border-border bg-muted/20">
-                  {transactionData.path_proof_pickup ? (
-                    <img
-                      src={`${config.endpointUrl}/${transactionData.path_proof_pickup}`}
-                      alt="Bukti Serah Terima"
-                      className="w-full h-auto max-h-64 object-contain"
-                    />
-                  ) : (
-                    <img
-                      src={`${config.endpointUrl}/${transactionData.path_proof_pickup}`}
-                      alt="Bukti Serah Terima"
-                      className="w-full h-auto max-h-64 object-contain"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                      }}
-                    />
-                  )}
-                  <div className="hidden p-4 text-center text-sm text-muted-foreground">
-                    Bukti serah terima tersedia
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Show waiting message if pickup proof not yet uploaded by admin */}
-            {transactionData.status === 'READY_TO_PICKUP' && !transactionData.path_proof_pickup && (
-              <div className="mt-4 p-4 px-2 bg-amber-50 rounded-lg border border-amber-200 text-center">
-                <div className="flex items-center justify-center gap-2 text-amber-800">
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-                  <span className="text-sm font-medium">Menunggu admin mengupload bukti serah terima...</span>
-                </div>
-              </div>
-            )}
-
-            {/* Show PAID status message - encouraging direct confirmation */}
-            {transactionData.status === 'PAID' && !confirmedReceipt && (
-              <div className="mt-4 p-4 px-2 bg-green-50 rounded-lg border border-green-200 text-center">
-                <div className="flex items-center justify-center gap-2 text-green-800">
-                  <span className="text-xs font-medium">💰 Pembayaran telah dikonfirmasi.</span>
-                </div>
-              </div>
-            )}
-
-            {/* {selectedPaymentMethod.payment_type !== 'cutoff_hutang' && transactionData.status === 'WAITING_TO_PAYMENT' && (
-              <Button className="w-full mt-4" onClick={handleMarkAsPaid}>
-                Konfirmasi Pembayaran
-              </Button>
-            )} */}
-
-            {/* Show confirm receipt button - Customer confirms pickup themselves after seeing proof */}
-            {(transactionData.status === 'READY_TO_PICKUP') && !confirmedReceipt && (
-              <div className="mt-4 space-y-3">
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                  <p className="text-xs text-gray-800 font-medium">
-                    👆 Silakan konfirmasi pengambilan barang di bawah setelah Anda menerima barang
-                  </p>
-                </div>
-                <Button
-                  className="w-full bg-primary hover:bg-primary text-white text-sm font-semibold py-3"
-                  onClick={handleConfirmReceipt}
-                  disabled={isConfirmingReceipt}
-                >
-                  {isConfirmingReceipt ? (
-                    <>
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                      Memproses...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-5 w-5 mr-2" />
-                      Konfirmasi Barang Sudah Diterima
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </GlassCard>
-          {/* Admin Contact - Show for staff users (<=1 assigned store) */}
-          {storeAssignedUsers && storeAssignedUsers.length > 0 && (
-            <GlassCard className="glass-card p-6 col-span-4 md:col-span-2">
-              <h2 className="text-lg font-semibold mb-4">Kontak Admin</h2>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Hubungi admin untuk konfirmasi pembayaran atau bantuan:</p>
-                {storeAssignedUsers.map((user) => (
-                  <div key={user.id} className="flex flex-row items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-medium">
-                        {user.username.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex flex-col">
-                        <p className="font-medium text-sm">{user.username}</p>
-                        <p className="text-xs text-muted-foreground">{user.email}</p>
-                        {user.no_wa && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                            <FaWhatsapp className="h-3 w-3" />
-                            <span>{user.no_wa}</span>
-                          </div>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSendToWA(user)}
-                          disabled={!user.no_wa}
-                          className="mt-1 max-w-[150px]"
-                        >
-                          <FaWhatsapp color="green" className="h-4 w-4" />
-                          <span className="text-xs text-green-900">Kontak WA</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </GlassCard>
-          )}
-
-          {/* Payment Method Details */}
-          <GlassCard className="p-6 col-span-4">
-            <h2 className="text-lg font-semibold mb-4">Metode Pembayaran</h2>
-            <div className="space-y-4">
-              <div className="flex items-center gap-1">
-                {selectedPaymentMethod.payment_type === 'qris' && (
-                  <QrCode className="h-10 w-10 text-primary" />
-                )}
-                {selectedPaymentMethod.payment_type === 'transfer_rekening' && (
-                  <CreditCard className="h-10 w-10 text-primary" />
-                )}
-                {selectedPaymentMethod.payment_type === 'cutoff_hutang' && (
-                  <Wallet className="h-10 w-10 text-primary" />
-                )}
-                <div className="flex items-center">
-                  {selectedPaymentMethod.payment_type === 'qris' && <span className="font-medium">QRIS</span>}
-                  {selectedPaymentMethod.payment_type === 'transfer_rekening' && <span className="font-medium">Transfer Rekening</span>}
-                  {selectedPaymentMethod.payment_type === 'cutoff_hutang' && <span className="font-medium">Cutoff/Hutang</span>}
-                  {/* <div className="flex items-center gap-1">
-                  Status: {transactionData.status === 'PAID' ? <Badge variant="secondary" className="text-green-700 font-bold">Dibayar</Badge> : <Badge variant="secondary">Menunggu Pembayaran</Badge>}
-                </div> */}
-                </div>
-              </div>
-
-              {selectedPaymentMethod.payment_type === 'transfer_rekening' && (
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Bank:</span>
-                    <span className="font-medium">{selectedPaymentMethod.bank_name}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">No. Rekening:</span>
-                    <span className="font-medium">{selectedPaymentMethod.account_number}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Atas Nama:</span>
-                    <span className="font-medium">{selectedPaymentMethod.account_name}</span>
-                  </div>
-                </div>
-              )}
-
-              {selectedPaymentMethod.payment_type === 'qris' && (
-                <div className="space-y-2 text-sm">
-                  {selectedPaymentMethod.image_url && (
-                    <div className="w-full bg-white rounded-lg p-4 flex flex-col items-center justify-center">
-                      <img
-                        src={`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`}
-                        alt="QRIS"
-                        className="w-full h-auto max-w-[20rem] object-contain"
-                      />
-                      <div className="mt-4">
-                        <Button onClick={() => handleDownload(`${config.endpointUrl}/public/${selectedPaymentMethod.image_url}`)} variant="outline" className="w-full font-medium px-8 py-2 rounded-lg">
-                          Download QRIS
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  {selectedPaymentMethod.account_name && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Atas Nama:</span>
-                      <span className="font-medium">{selectedPaymentMethod.account_name}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Admin Info for QRIS and Transfer Rekening
-              {(selectedPaymentMethod.payment_type === 'qris' || selectedPaymentMethod.payment_type === 'transfer_rekening') && (
-                <div className="space-y-3 mt-4 pt-4 border-t">
-                  <p className="text-sm font-medium">Hubungi Admin untuk Konfirmasi Pembayaran:</p>
-                  {storeAssignedUsers && storeAssignedUsers.length > 0 ? (
-                    <div className="space-y-2">
-                      {storeAssignedUsers.map((user) => (
-                        <div key={user.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-medium">
-                              {user.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-medium text-sm">{user.username}</p>
-                              <p className="text-xs text-muted-foreground">{user.email}</p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSendToWA(user)}
-                            disabled={!user.no_wa}
-                          >
-                            <MessageCircle className="h-4 w-4 mr-2" />
-                            WA
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Tidak ada admin tersedia</p>
-                  )}
-                </div>
-              )} */}
-
-              {selectedPaymentMethod.payment_type === 'cutoff_hutang' && (
-                <div className="space-y-2 text-sm">
-                  <p className="text-muted-foreground">
-                    Pembayaran via cutoff/hutang. Silakan konfirmasi penerimaan barang setelah barang diterima.
-                  </p>
-                </div>
-              )}
-            </div>
-          </GlassCard>
+          </aside>
         </div>
-
-        {/* Assigned Users */}
-        {storeData.assigned_users && storeData.assigned_users.length > 0 && (
-          <GlassCard className="p-6 mt-6">
-            <h2 className="text-lg font-semibold mb-4">Admin Toko</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {storeData.assigned_users.map((user) => (
-                <motion.div
-                  key={user.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between p-4 rounded-lg border"
-                >
-                  <div>
-                    <p className="font-medium">{user.username}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSendToWA(user)}
-                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    WA
-                  </Button>
-                </motion.div>
-              ))}
-            </div>
-          </GlassCard>
-        )}
       </div>
     </AppLayoutCommerce>
   );

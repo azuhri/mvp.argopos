@@ -138,13 +138,13 @@ export default function StockManagement() {
             placeholder="Search stocks..." 
             value={search} 
             onChange={(e) => setSearch(e.target.value)} 
-            className="pl-9 bg-card/70 backdrop-blur border-border/50" 
+            className="pl-9 bg-card border-border"
           />
         </div>
 
         <div className="flex gap-2 flex-wrap">
           <Select value={sortBy} onValueChange={(value: any) => handleSortChange(value)}>
-            <SelectTrigger className="w-40 bg-card/70 backdrop-blur border-border/50">
+            <SelectTrigger className="w-40 bg-card border-border">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
@@ -159,7 +159,7 @@ export default function StockManagement() {
             variant="outline"
             size="icon"
             onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-            className="bg-card/70 backdrop-blur border-border/50"
+            className="bg-card border-border"
           >
             <ArrowUpDown className="h-4 w-4" />
           </Button>

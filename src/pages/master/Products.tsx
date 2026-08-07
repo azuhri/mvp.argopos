@@ -17,6 +17,23 @@ import { type Product, type CreateProductRequest, type UpdateProductRequest } fr
 import { config } from "@/lib/config";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { ProductImageCropDialog } from "@/components/master/ProductImageCropDialog";
+import {
+  getProductImageValidationError,
+  PRODUCT_COLLECTION_BATCH_MAX_BYTES,
+  PRODUCT_COLLECTION_IMAGE_MAX_BYTES,
+  PRODUCT_MAIN_IMAGE_MAX_BYTES,
+  readFileAsDataUrl,
+} from "@/lib/productImageCrop";
+
+type ProductCropTarget = "main" | "collection";
+
+interface ProductCropRequest {
+  file: File;
+  target: ProductCropTarget;
+  current: number;
+  total: number;
+}
 
 // Helper function for currency formatting
 const formatCurrency = (amount: number) => {
@@ -26,6 +43,9 @@ const formatCurrency = (amount: number) => {
     minimumFractionDigits: 0,
   }).format(amount);
 };
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
 
 export default function Products() {
   const [search, setSearch] = useState("");
@@ -56,6 +76,7 @@ export default function Products() {
   const [newImageCollectionFiles, setNewImageCollectionFiles] = useState<File[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageCollectionPreviews, setImageCollectionPreviews] = useState<string[]>([]);
+  const [cropQueue, setCropQueue] = useState<ProductCropRequest[]>([]);
 
   // Existing images state for editing
   const [existingMainImage, setExistingMainImage] = useState<string | null>(null);
@@ -100,73 +121,70 @@ export default function Products() {
   // File handling functions
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file size (max 10MB)
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        toast.error('Image file size must be less than 10MB');
-        e.target.value = ''; // Clear the input
-        return;
-      }
+    e.target.value = "";
+    if (!file) return;
 
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-      if (!validTypes.includes(file.type)) {
-        toast.error('Please upload a valid image file (JPEG, PNG, or WebP)');
-        e.target.value = ''; // Clear the input
-        return;
-      }
-
-      setNewImageFile(file);
-      const reader = new FileReader();
-      reader.onload = (e) => setImagePreview(e.target?.result as string);
-      reader.readAsDataURL(file);
-      setNewImagePath(file.name);
+    const validationError = getProductImageValidationError(
+      file,
+      PRODUCT_MAIN_IMAGE_MAX_BYTES,
+    );
+    if (validationError) {
+      toast.error(validationError);
+      return;
     }
+
+    setCropQueue([{ file, target: "main", current: 1, total: 1 }]);
   };
 
   const handleImageCollectionFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    e.target.value = "";
     const validFiles = files.filter(file => {
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-      const isValidType = allowedTypes.includes(file.type);
-      const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB per file
-
-      if (!isValidType) {
-        toast.error(`File ${file.name} is not a valid image type`);
-      }
-      if (!isValidSize) {
-        toast.error(`File ${file.name} is too large (max 5MB per file)`);
-      }
-
-      return isValidType && isValidSize;
+      const validationError = getProductImageValidationError(
+        file,
+        PRODUCT_COLLECTION_IMAGE_MAX_BYTES,
+      );
+      if (validationError) toast.error(validationError);
+      return !validationError;
     });
 
     // Check total size of all files (max 20MB total)
     const totalSize = validFiles.reduce((sum, file) => sum + file.size, 0);
-    const maxTotalSize = 20 * 1024 * 1024; // 20MB total
-
-    if (totalSize > maxTotalSize) {
-      toast.error('Total size of all images must be less than 20MB');
-      e.target.value = ''; // Clear the input
+    if (totalSize > PRODUCT_COLLECTION_BATCH_MAX_BYTES) {
+      toast.error('Total ukuran gambar dalam satu batch maksimal 20 MB');
       return;
     }
 
-    setNewImageCollectionFiles(validFiles);
-    setNewImageCollectionUrl(validFiles.map(f => f.name).join(', '));
+    setCropQueue(
+      validFiles.map((file, index) => ({
+        file,
+        target: "collection",
+        current: index + 1,
+        total: validFiles.length,
+      })),
+    );
+  };
 
-    // Create previews
-    const previews: string[] = [];
-    validFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        previews.push(e.target?.result as string);
-        if (previews.length === validFiles.length) {
-          setImageCollectionPreviews(previews);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+  const handleCropConfirm = async (croppedFile: File) => {
+    const activeCrop = cropQueue[0];
+    if (!activeCrop) return;
+
+    const preview = await readFileAsDataUrl(croppedFile);
+
+    if (activeCrop.target === "main") {
+      setNewImageFile(croppedFile);
+      setImagePreview(preview);
+      setNewImagePath(croppedFile.name);
+    } else {
+      setNewImageCollectionFiles((currentFiles) => {
+        const nextFiles = [...currentFiles, croppedFile];
+        setNewImageCollectionUrl(nextFiles.map((file) => file.name).join(', '));
+        return nextFiles;
+      });
+      setImageCollectionPreviews((currentPreviews) => [...currentPreviews, preview]);
+    }
+
+    setCropQueue((currentQueue) => currentQueue.slice(1));
   };
 
   const removeImageFile = () => {
@@ -207,23 +225,29 @@ export default function Products() {
       resetForm();
       await queryClient.invalidateQueries({ queryKey: ['products'] });
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to create product");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "Failed to create product"));
     },
   });
 
   // Update product mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, product }: { id: string; product: UpdateProductRequest }) =>
-      productService.updateProduct(id, product, newImageFile || undefined, newImageCollectionFiles),
+      productService.updateProduct(
+        id,
+        product,
+        newImageFile || undefined,
+        newImageCollectionFiles,
+        imagesToDelete,
+      ),
     onSuccess: async () => {
       toast.success("Product updated successfully");
       setIsCreateOpen(false);
       resetForm();
       await queryClient.invalidateQueries({ queryKey: ['products'] });
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update product");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "Failed to update product"));
     },
   });
 
@@ -237,8 +261,8 @@ export default function Products() {
       // Also refetch current data for immediate update
       refetch();
     },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to delete product");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "Failed to delete product"));
     },
   });
 
@@ -254,6 +278,7 @@ export default function Products() {
     setNewImageCollectionFiles([]);
     setImagePreview(null);
     setImageCollectionPreviews([]);
+    setCropQueue([]);
     setExistingMainImage(null);
     setExistingCollectionImages([]);
     setImagesToDelete([]);
@@ -368,18 +393,19 @@ export default function Products() {
 
   const products = productsData?.products || [];
   const meta = productsData?.meta || { page: 1, page_size: 10, total: 0, total_pages: 0 };
+  const activeCrop = cropQueue[0] ?? null;
 
   return (
     <AppLayout title="Products">
       <div className="flex flex-col lg:flex-row gap-3 mb-6">
         <div className="relative flex-1">
           <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 z-10" />
-          <Input placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-card/70 backdrop-blur border-border/50" />
+          <Input placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-card border-border" />
         </div>
 
         <div className="flex gap-2 flex-wrap">
           <Select value={filter} onValueChange={(value: "all" | "product_code") => setFilter(value)}>
-            <SelectTrigger className="w-48 bg-card/70 backdrop-blur border-border/50">
+            <SelectTrigger className="w-48 bg-card border-border">
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue placeholder="Filter by" />
             </SelectTrigger>
@@ -390,7 +416,7 @@ export default function Products() {
           </Select>
 
           <Select value={sortBy} onValueChange={(value: "product_name" | "base_price") => setSortBy(value)}>
-            <SelectTrigger className="w-48 bg-card/70 backdrop-blur border-border/50">
+            <SelectTrigger className="w-48 bg-card border-border">
               <Settings className="h-4 w-4 mr-2" />
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
@@ -401,7 +427,7 @@ export default function Products() {
           </Select>
 
           <Select value={sortOrder} onValueChange={(value: "asc" | "desc") => setSortOrder(value)}>
-            <SelectTrigger className="w-32 bg-card/70 backdrop-blur border-border/50">
+            <SelectTrigger className="w-32 bg-card border-border">
               <SelectValue placeholder="Order" />
             </SelectTrigger>
             <SelectContent>
@@ -418,7 +444,7 @@ export default function Products() {
             }
           }}>
             <DialogTrigger asChild>
-              <Button className="btn-tap">
+              <Button className="admin-accent-button btn-tap">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Product
               </Button>
@@ -499,7 +525,7 @@ export default function Products() {
                     <div className="flex-1">
                       <input
                         type="file"
-                        accept="image/jpeg,image/jpg,image/png"
+                        accept="image/jpeg,image/png,image/webp"
                         onChange={handleImageFileChange}
                         className="hidden"
                         id="image_path"
@@ -519,7 +545,7 @@ export default function Products() {
                             <p className="text-xs text-muted-foreground">
                               {editingProduct ? 'Replace Image' : 'Upload Image'}
                             </p>
-                            <p className="text-[10px] text-muted-foreground">PNG, JPG (max 10MB)</p>
+                            <p className="text-[10px] text-muted-foreground">JPG, PNG, WebP · crop 1:1</p>
                           </div>
                         )}
                       </label>
@@ -544,7 +570,7 @@ export default function Products() {
                   <div className="space-y-4">
                     <input
                       type="file"
-                      accept="image/jpeg,image/jpg,image/png"
+                      accept="image/jpeg,image/png,image/webp"
                       multiple
                       onChange={handleImageCollectionFilesChange}
                       className="hidden"
@@ -559,7 +585,7 @@ export default function Products() {
                         <p className="text-xs text-muted-foreground">
                           {editingProduct ? 'Add More Images' : 'Click to upload images'}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">PNG, JPG (max 5MB each)</p>
+                        <p className="text-[10px] text-muted-foreground">Maks. 5 MB/file · crop 1:1</p>
                       </div>
                     </label>
 
@@ -891,6 +917,15 @@ export default function Products() {
           </div>
         </div>
       </GlassCard>
+
+      <ProductImageCropDialog
+        file={activeCrop?.file ?? null}
+        open={Boolean(activeCrop)}
+        current={activeCrop?.current}
+        total={activeCrop?.total}
+        onCancel={() => setCropQueue([])}
+        onConfirm={handleCropConfirm}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>

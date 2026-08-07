@@ -12,6 +12,23 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ProductImageCropDialog } from "@/components/master/ProductImageCropDialog";
+import {
+  getProductImageValidationError,
+  PRODUCT_COLLECTION_BATCH_MAX_BYTES,
+  PRODUCT_COLLECTION_IMAGE_MAX_BYTES,
+  PRODUCT_MAIN_IMAGE_MAX_BYTES,
+  readFileAsDataUrl,
+} from "@/lib/productImageCrop";
+
+type ProductCropTarget = "main" | "collection";
+
+interface ProductCropRequest {
+  file: File;
+  target: ProductCropTarget;
+  current: number;
+  total: number;
+}
 
 interface ProductFormData {
   category: string;
@@ -53,6 +70,7 @@ export default function CreateProduct() {
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cropQueue, setCropQueue] = useState<ProductCropRequest[]>([]);
 
   const handleInputChange = (field: keyof ProductFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -64,29 +82,19 @@ export default function CreateProduct() {
 
   const handleCatalogImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setErrors(prev => ({ ...prev, catalogImage: "Please select an image file" }));
-        return;
-      }
+    e.target.value = "";
+    if (!file) return;
 
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, catalogImage: "Image size should be less than 5MB" }));
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          catalogImage: file,
-          catalogPreview: reader.result as string,
-        }));
-      };
-      reader.readAsDataURL(file);
+    const validationError = getProductImageValidationError(
+      file,
+      PRODUCT_MAIN_IMAGE_MAX_BYTES,
+    );
+    if (validationError) {
+      setErrors(prev => ({ ...prev, catalogImage: validationError }));
+      return;
     }
+
+    setCropQueue([{ file, target: "main", current: 1, total: 1 }]);
   };
 
   const removeCatalogImage = () => {
@@ -102,6 +110,7 @@ export default function CreateProduct() {
 
   const handleCarouselImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    e.target.value = "";
     if (files.length === 0) return;
 
     // Validate max 5 images
@@ -110,41 +119,62 @@ export default function CreateProduct() {
       return;
     }
 
-    // Validate each file
     const validFiles: File[] = [];
-    const previews: string[] = [];
 
     for (const file of files) {
-      if (!file.type.startsWith('image/')) {
-        setErrors(prev => ({ ...prev, carouselImages: "All files must be images" }));
-        return;
-      }
-
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, carouselImages: "Image size should be less than 5MB" }));
+      const validationError = getProductImageValidationError(
+        file,
+        PRODUCT_COLLECTION_IMAGE_MAX_BYTES,
+      );
+      if (validationError) {
+        setErrors(prev => ({ ...prev, carouselImages: validationError }));
         return;
       }
 
       validFiles.push(file);
     }
 
-    // Read files for previews
-    Promise.all(
-      validFiles.map(file => {
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-      })
-    ).then(newPreviews => {
+    const totalSize = validFiles.reduce((sum, file) => sum + file.size, 0);
+    if (totalSize > PRODUCT_COLLECTION_BATCH_MAX_BYTES) {
+      setErrors(prev => ({
+        ...prev,
+        carouselImages: "Total ukuran gambar dalam satu batch maksimal 20 MB",
+      }));
+      return;
+    }
+
+    setCropQueue(
+      validFiles.map((file, index) => ({
+        file,
+        target: "collection",
+        current: index + 1,
+        total: validFiles.length,
+      })),
+    );
+  };
+
+  const handleCropConfirm = async (croppedFile: File) => {
+    const activeCrop = cropQueue[0];
+    if (!activeCrop) return;
+
+    const preview = await readFileAsDataUrl(croppedFile);
+    if (activeCrop.target === "main") {
       setFormData(prev => ({
         ...prev,
-        carouselImages: [...prev.carouselImages, ...validFiles],
-        carouselPreviews: [...prev.carouselPreviews, ...newPreviews],
+        catalogImage: croppedFile,
+        catalogPreview: preview,
+      }));
+      setErrors(prev => ({ ...prev, catalogImage: "" }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        carouselImages: [...prev.carouselImages, croppedFile],
+        carouselPreviews: [...prev.carouselPreviews, preview],
       }));
       setErrors(prev => ({ ...prev, carouselImages: "" }));
-    });
+    }
+
+    setCropQueue(currentQueue => currentQueue.slice(1));
   };
 
   const removeCarouselImage = (index: number) => {
@@ -192,7 +222,7 @@ export default function CreateProduct() {
         name: formData.name,
         description: formData.description,
         basePrice: Number(formData.basePrice),
-        image: formData.image,
+        image: formData.catalogImage,
       });
 
       toast.success("Product created successfully!");
@@ -327,12 +357,12 @@ export default function CreateProduct() {
                       Click to upload or drag and drop
                     </p>
                     <p className="text-xs text-muted-foreground mb-4">
-                      PNG, JPG, GIF up to 5MB
+                      JPEG, PNG, atau WebP · crop 1:1
                     </p>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       onChange={handleCatalogImageChange}
                       className="hidden"
                       id="catalog-upload"
@@ -389,7 +419,7 @@ export default function CreateProduct() {
                       <div className="border-2 border-dashed border-border/50 rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/webp"
                           multiple
                           onChange={handleCarouselImagesChange}
                           className="hidden"
@@ -420,11 +450,11 @@ export default function CreateProduct() {
                       Click to upload carousel images
                     </p>
                     <p className="text-xs text-muted-foreground mb-4">
-                      PNG, JPG, GIF up to 5MB each, max 5 images
+                      Maks. 5 MB/file · crop 1:1 · maksimal 5 gambar
                     </p>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       multiple
                       onChange={handleCarouselImagesChange}
                       className="hidden"
@@ -477,6 +507,15 @@ export default function CreateProduct() {
             </Button>
           </div>
         </form>
+
+        <ProductImageCropDialog
+          file={cropQueue[0]?.file ?? null}
+          open={cropQueue.length > 0}
+          current={cropQueue[0]?.current}
+          total={cropQueue[0]?.total}
+          onCancel={() => setCropQueue([])}
+          onConfirm={handleCropConfirm}
+        />
       </div>
     </AppLayout>
   );

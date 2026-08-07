@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Product } from "@/types/product";
 import { Button } from "../ui/button";
-import { Star } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Minus, Package, Plus, ShoppingCart } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { StatusBadge } from "./StatusBadge";
+import { getCartSummary, removeFromCart, updateCartQty } from "@/lib/storefront";
 
 export default function CardProduct({ product, handleAddToCart, urlDetail, disabled }: {
   product: Product & { product_stock_id?: string },
@@ -24,6 +23,7 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [cartQty, setCartQty] = useState(0);
 
   const calculateFinalPrice = (stock: {
     base_price: number;
@@ -36,6 +36,15 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
     const price = discountPrice > 0 ? discountPrice : basePrice;
     const tax = price * (taxPercentage / 100);
     return Math.round(price + tax);
+  };
+
+  const syncCartQty = useCallback(() => {
+    const item = getCartSummary().items.find((entry) => entry.productId === product.id);
+    setCartQty(item?.qty || 0);
+  }, [product.id]);
+
+  const dispatchCartChange = () => {
+    window.dispatchEvent(new Event("storage"));
   };
 
   useEffect(() => {
@@ -58,34 +67,86 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
     );
   }, [product.price, product.discount_price]);
 
-  return <React.Fragment>
-    <Link
-      key={product.id}
-      to={disabled ? "#" : urlDetail}
-      className={`block ${disabled ? 'pointer-events-none opacity-50' : ''}`}
-      onClick={(e) => disabled && e.preventDefault()}
-    >
-      <div className="aspect-square bg-gradient-to-br from-primary/5 to-accent/5 rounded-lg mb-3 flex items-center justify-center relative overflow-hidden">
-        {/* Skeleton Layer - Full coverage, z-10 */}
-        {!imageLoaded && !imageError && (
-          <motion.div
-            className="absolute inset-0 z-20 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 animate-pulse"
-            initial={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-          />
-        )}
+  useEffect(() => {
+    syncCartQty();
 
-        {/* Image Layer - Full opacity transition */}
-        {!imageError && (
-          <div className="relative">
+    const handleStorageChange = () => syncCartQty();
+    window.addEventListener("storage", handleStorageChange);
+    const interval = setInterval(handleStorageChange, 500);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [syncCartQty]);
+
+  const taxPercentage = product.tax_percentage || 0;
+  const basePriceWithTax = Math.round((product.price || 0) * (1 + taxPercentage / 100));
+  const finalPrice = calculateFinalPrice({
+    base_price: product.price || 0,
+    discount_price: product.discount_price || 0,
+    tax_percentage: taxPercentage
+  });
+  const hasDiscount = discountPercentage > 0;
+
+  const handleIncrement = () => {
+    handleAddToCart(
+      product.id,
+      product.name,
+      finalPrice,
+      product.image_url || "",
+      product.product_stock_id || product.id,
+      product.stock,
+      taxPercentage
+    );
+    setTimeout(() => {
+      syncCartQty();
+      dispatchCartChange();
+    }, 0);
+  };
+
+  const handleDecrement = () => {
+    const nextQty = cartQty - 1;
+    if (nextQty <= 0) {
+      removeFromCart(product.id);
+    } else {
+      updateCartQty(product.id, nextQty);
+    }
+    syncCartQty();
+    dispatchCartChange();
+  };
+
+  return (
+    <React.Fragment>
+      <Link
+        key={product.id}
+        to={disabled ? "#" : urlDetail}
+        className={`block ${disabled ? "pointer-events-none opacity-60" : ""}`}
+        onClick={(event) => disabled && event.preventDefault()}
+      >
+        <div className="commerce-product-visual relative flex aspect-[4/3] min-h-[132px] items-center justify-center overflow-hidden rounded-t-lg border-b border-slate-200 sm:min-h-[150px]">
+          {!imageLoaded && !imageError && (
+            <motion.div
+              className="absolute inset-0 z-20 animate-pulse bg-slate-100"
+              initial={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            />
+          )}
+
+          {hasDiscount && (
+            <div className="absolute left-2.5 top-2.5 z-30 rounded-md bg-[#e30613] px-2 py-1 text-[10px] font-extrabold text-white">
+              -{discountPercentage}%
+            </div>
+          )}
+
+          {!imageError && (
             <img
               src={product.image_url}
               alt={product.name}
               className={`
-                h-full w-full object-cover
-                transition-opacity duration-300 ease-out
-                ${imageLoaded ? 'opacity-100' : 'opacity-0'}
-                ${product.stock === 0 ? 'grayscale' : ''}
+                relative z-10 h-[84%] w-[84%] object-contain p-2 transition-opacity duration-300 ease-out
+                ${imageLoaded ? "opacity-100" : "opacity-0"}
+                ${product.stock === 0 ? "grayscale" : ""}
               `}
               onLoad={() => setImageLoaded(true)}
               onError={() => {
@@ -93,99 +154,103 @@ export default function CardProduct({ product, handleAddToCart, urlDetail, disab
                 setImageError(true);
               }}
             />
-          </div>
-        )}
+          )}
 
-        {/* Error State */}
-        {imageError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted/30 z-10">
-            <svg className="w-8 h-8 text-muted-foreground opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-        )}
+          {imageError && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-100">
+              <Package className="h-9 w-9 text-slate-300" />
+            </div>
+          )}
 
-        {/* Closed overlay */}
-        {disabled && (
-          <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-30">
-            <span className="text-white text-xs font-medium bg-destructive px-2 py-1 rounded">
-              TUTUP
-            </span>
+          <div className="absolute bottom-2.5 left-2.5 z-30 rounded-md border border-emerald-200 bg-white/95 px-2 py-1 text-[10px] font-extrabold text-emerald-700">
+            Stok {product.stock} {product.unit}
           </div>
-        )}
-      </div>
-    </Link>
-    <div className="space-y-2 p-3 pb-4 pt-0">
-      <div>
-        {discountPercentage > 0 && (
-          <div className="top-0 left-0">
-            <Badge variant="outline" className={`text-[10px] font-bold ${discountPercentage > 0 ? 'bg-green-200 text-green-800 border-green-300' : ''}`}>
-              Discount {discountPercentage > 0 ? `${discountPercentage}%` : ''}
-            </Badge>
-          </div>
-        )}
-        <h3 className={`font-medium text-sm sm:text-lg line-clamp-2 ${disabled ? '' : 'group-hover:text-primary'} transition-colors`}>
-          {product.name}
-        </h3>
-        <p className="text-xs text-muted-foreground">{product.category}</p>
-      </div>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex md:flex-row items-start flex-col">
-            <p className={`font-semibold line-through text-md ${product.discount_price > 0 ? 'text-xs text-destructive' : 'no-underline text-primary'}`}>
-              Rp {Math.round(product.price * (1 + product.tax_percentage / 100)).toLocaleString("id-ID")}
+          {disabled && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#071a4f]/70">
+              <span className="rounded-md bg-white px-3 py-1.5 text-xs font-extrabold text-[#071a4f]">
+                Toko tutup
+              </span>
+            </div>
+          )}
+        </div>
+      </Link>
+
+      <div className="flex min-h-[174px] flex-col p-3">
+        <div className="min-h-[48px]">
+          {product.category && (
+            <p className="mb-1 line-clamp-1 text-[10px] font-bold uppercase text-slate-400">{product.category}</p>
+          )}
+          <Link
+            to={disabled ? "#" : urlDetail}
+            onClick={(event) => disabled && event.preventDefault()}
+            className={`line-clamp-2 text-sm font-extrabold leading-snug text-[#071a4f] ${disabled ? "pointer-events-none" : "hover:text-[#e30613]"}`}
+          >
+            {product.name}
+          </Link>
+        </div>
+
+        <div className="mt-2.5">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <p className="text-base font-extrabold text-[#071a4f] sm:text-lg">
+              Rp {finalPrice.toLocaleString("id-ID")}
             </p>
-            {product.discount_price > 0 && (
-              <p className={`font-semibold text-md text-success`}>
-                Rp {calculateFinalPrice({
-                  base_price: product.price,
-                  discount_price: product.discount_price,
-                  tax_percentage: product.tax_percentage
-                }).toLocaleString("id-ID")}
+            {hasDiscount && (
+              <p className="text-[11px] font-semibold text-slate-400 line-through">
+                Rp {basePriceWithTax.toLocaleString("id-ID")}
               </p>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Stok: {product.stock} {product.unit}
-          </p>
+          <p className="mt-1 text-[11px] font-medium text-slate-500">Harga sudah termasuk pajak</p>
         </div>
-        <div className="flex items-center gap-1">
-          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-          <span className="text-xs">4.5</span>
+
+        <div className="mt-auto pt-3">
+          {product.stock > 0 && !disabled ? (
+            cartQty > 0 ? (
+              <div className="grid h-10 grid-cols-[40px_1fr_40px] items-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-full rounded-none text-[#071a4f] hover:bg-slate-200"
+                  onClick={handleDecrement}
+                  aria-label="Kurangi jumlah"
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <span className="text-center text-sm font-extrabold text-[#071a4f]">{cartQty}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-full rounded-none text-[#071a4f] hover:bg-slate-200"
+                  onClick={handleIncrement}
+                  disabled={cartQty >= product.stock}
+                  aria-label="Tambah jumlah"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                className="h-10 w-full rounded-md bg-[#071a4f] text-sm font-extrabold text-white hover:bg-[#102866]"
+                onClick={handleIncrement}
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Tambah
+              </Button>
+            )
+          ) : product.stock > 0 && disabled ? (
+            <Button size="sm" disabled className="h-10 w-full rounded-md">
+              Toko tutup
+            </Button>
+          ) : (
+            <Button size="sm" disabled className="h-10 w-full rounded-md">
+              Stok Habis
+            </Button>
+          )}
         </div>
       </div>
-
-      {product.stock > 0 && !disabled ? (
-        <Button
-          size="sm"
-          className="w-full btn-tap"
-          onClick={() => handleAddToCart(
-            product.id,
-            product.name,
-            calculateFinalPrice({
-              base_price: product.price,
-              discount_price: product.discount_price,
-              tax_percentage: product.tax_percentage
-            }),
-            product.image_url || '',
-            product.product_stock_id || product.id,
-            product.stock,
-            product.tax_percentage
-          )}
-        >
-          + Keranjang
-        </Button>
-      ) : product.stock > 0 && disabled ? (
-        <Button size="sm" disabled className="w-full">
-          Tutup
-        </Button>
-      ) : (
-        <Button size="sm" disabled className="w-full">
-          Stok Habis
-        </Button>
-      )}
-    </div>
-
-  </React.Fragment>;
+    </React.Fragment>
+  );
 }

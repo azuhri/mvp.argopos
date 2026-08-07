@@ -1,4 +1,5 @@
 import {
+  ArrowRightLeft,
   Building2,
   LayoutDashboard,
   MapPin,
@@ -53,6 +54,7 @@ export const NAV_GROUPS_MENUS: NavGroupConfig[] = [
       { key: "master_products", path: "/master/products", label: "Product Management", icon: PackageOpenIcon },
       { key: "master_locations", path: "/master/locations", label: "Location Management", icon: MapPin },
       { key: "master_stock", path: "/master/stocks", label: "Stock Management", icon: Warehouse },
+      { key: "master_stock_mutations", path: "/master/stock-mutations", label: "Stock Mutations", icon: ArrowRightLeft },
       { key: "master_stores", path: "/master/stores", label: "Store Management", icon: Store },
       { key: "master_roles", path: "/master/roles", label: "Role Management", icon: ShieldCheck },
     ],

@@ -13,6 +13,33 @@ export interface ApiResponse<T> {
   };
 }
 
+export function normalizeApiResponse<T>(response: unknown): ApiResponse<T> {
+  if (
+    typeof response === 'object' &&
+    response !== null &&
+    'success' in response &&
+    typeof response.success === 'boolean'
+  ) {
+    return response as ApiResponse<T>;
+  }
+
+  if (typeof response === 'object' && response !== null && 'data' in response) {
+    const responseWithData = response as { data: T; message?: unknown; meta?: ApiResponse<T>['meta'] };
+    return {
+      success: true,
+      ...(typeof responseWithData.message === 'string' && { message: responseWithData.message }),
+      data: responseWithData.data,
+      ...(responseWithData.meta && { meta: responseWithData.meta }),
+    };
+  }
+
+  return {
+    success: true,
+    message: 'Success',
+    data: response as T,
+  };
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -88,6 +115,8 @@ export interface Location {
   longitude?: number;
   latitude?: number;
   type: 'warehouse' | 'store';
+  status?: string;
+  is_active?: boolean;
   created_by?: string;
   updated_by?: string;
   updated_at?: string;
@@ -152,6 +181,7 @@ export interface Transaction {
   total_item: number;
   created_by?: string;
   created_at: string;
+  expires_at?: string;
   customer_name?: string;
   payment_type?: string;
   customer_email?: string;
@@ -382,6 +412,8 @@ export interface CreateLocationRequest {
   longitude?: number | null;
   latitude?: number | null;
   type: 'warehouse' | 'store';
+  status?: string;
+  is_active?: boolean;
   created_by?: string;
 }
 
@@ -391,6 +423,8 @@ export interface UpdateLocationRequest {
   longitude?: number | null;
   latitude?: number | null;
   type?: 'warehouse' | 'store';
+  status?: string;
+  is_active?: boolean;
   updated_by?: string;
 }
 
@@ -491,6 +525,109 @@ export interface TransferStockRequest {
   to_location_id: string;
   product_id: string;
   quantity: number;
+}
+
+export interface PaginationMeta {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+}
+
+export interface StockMutation {
+  id: string;
+  product_stock_id: string;
+  type: 'in' | 'out';
+  quantity: number;
+  movement_type: string;
+  description: string;
+  stock_before?: number;
+  stock_after?: number;
+  reference_type: string;
+  reference_id?: string;
+  transfer_request_id?: string;
+  created_by?: string;
+  created_at: string;
+  location?: Location;
+  from_location?: Location;
+  to_location?: Location;
+  product?: Product;
+}
+
+export interface StockMutationFilters {
+  page?: number;
+  page_size?: number;
+  start_date?: string;
+  end_date?: string;
+  location_id?: string;
+  movement_type?: string;
+  type?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
+export interface StockMutationListResponse {
+  mutations: StockMutation[];
+  meta: PaginationMeta;
+}
+
+export type StockTransferRequestStatus =
+  | 'requested'
+  | 'source_approved'
+  | 'source_rejected'
+  | 'completed'
+  | 'cancelled';
+
+export interface StockTransferRequest {
+  id: string;
+  movement_type: 'distribution' | 'transfer';
+  from_location_id: string;
+  to_location_id: string;
+  master_product_id: string;
+  source_product_stock_id?: string;
+  destination_product_stock_id?: string;
+  quantity: number;
+  status: StockTransferRequestStatus;
+  notes: string;
+  rejection_reason: string;
+  requested_by?: string;
+  source_approved_by?: string;
+  source_approved_at?: string;
+  destination_received_by?: string;
+  destination_received_at?: string;
+  rejected_by?: string;
+  rejected_at?: string;
+  created_at: string;
+  updated_at: string;
+  from_location?: Location;
+  to_location?: Location;
+  master_product?: Product;
+}
+
+export interface StockTransferRequestFilters {
+  page?: number;
+  page_size?: number;
+  start_date?: string;
+  end_date?: string;
+  location_id?: string;
+  to_location_id?: string;
+  movement_type?: string;
+  status?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
+export interface StockTransferRequestListResponse {
+  requests: StockTransferRequest[];
+  meta: PaginationMeta;
+}
+
+export interface CreateStockTransferRequest {
+  movement_type: 'distribution' | 'transfer';
+  from_location_id: string;
+  to_location_id: string;
+  master_product_id: string;
+  source_product_stock_id?: string;
+  quantity: number;
+  notes?: string;
 }
 
 export interface SyncProductsRequest {
@@ -617,12 +754,7 @@ class ApiClient {
     // );
     this.axiosInstance.interceptors.response.use(
       (response) => {
-        const responseData = response.data;
-
-        if (responseData && typeof responseData === 'object' && 'success' in responseData) {
-          return responseData;
-        }
-        return response.data;
+        return normalizeApiResponse(response.data);
       },
       (error) => {
         if (error.response?.status === 401) {
@@ -1024,6 +1156,63 @@ class ApiClient {
 
   async getStock(id: string): Promise<ApiResponse<Stock>> {
     return this.request<Stock>(`/stocks/${id}`);
+  }
+
+  async getStockMutations(filters: StockMutationFilters = {}): Promise<ApiResponse<StockMutationListResponse>> {
+    const params = new URLSearchParams();
+    if (filters.page) params.set('page', filters.page.toString());
+    if (filters.page_size) params.set('page_size', filters.page_size.toString());
+    if (filters.start_date) params.set('start_date', filters.start_date);
+    if (filters.end_date) params.set('end_date', filters.end_date);
+    if (filters.location_id) params.set('location_id', filters.location_id);
+    if (filters.movement_type) params.set('movement_type', filters.movement_type);
+    if (filters.type) params.set('type', filters.type);
+    if (filters.sort_order) params.set('sort_order', filters.sort_order);
+
+    const query = params.toString();
+    return this.request<StockMutationListResponse>(`/stocks/mutations${query ? `?${query}` : ''}`);
+  }
+
+  async getStockTransferRequests(filters: StockTransferRequestFilters = {}): Promise<ApiResponse<StockTransferRequestListResponse>> {
+    const params = new URLSearchParams();
+    if (filters.page) params.set('page', filters.page.toString());
+    if (filters.page_size) params.set('page_size', filters.page_size.toString());
+    if (filters.start_date) params.set('start_date', filters.start_date);
+    if (filters.end_date) params.set('end_date', filters.end_date);
+    if (filters.location_id) params.set('location_id', filters.location_id);
+    if (filters.to_location_id) params.set('to_location_id', filters.to_location_id);
+    if (filters.movement_type) params.set('movement_type', filters.movement_type);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.sort_order) params.set('sort_order', filters.sort_order);
+
+    const query = params.toString();
+    return this.request<StockTransferRequestListResponse>(`/stocks/transfer-requests${query ? `?${query}` : ''}`);
+  }
+
+  async createStockTransferRequest(request: CreateStockTransferRequest): Promise<ApiResponse<StockTransferRequest>> {
+    return this.request<StockTransferRequest>('/stocks/transfer-requests', {
+      method: 'POST',
+      data: request,
+    });
+  }
+
+  async approveStockTransferSource(id: string): Promise<ApiResponse<StockTransferRequest>> {
+    return this.request<StockTransferRequest>(`/stocks/transfer-requests/${id}/approve-source`, {
+      method: 'POST',
+    });
+  }
+
+  async rejectStockTransferRequest(id: string, reason: string): Promise<ApiResponse<StockTransferRequest>> {
+    return this.request<StockTransferRequest>(`/stocks/transfer-requests/${id}/reject`, {
+      method: 'POST',
+      data: { reason },
+    });
+  }
+
+  async receiveStockTransferRequest(id: string): Promise<ApiResponse<StockTransferRequest>> {
+    return this.request<StockTransferRequest>(`/stocks/transfer-requests/${id}/receive`, {
+      method: 'POST',
+    });
   }
 
   async createStock(stock: CreateStockRequest): Promise<ApiResponse<Stock>> {

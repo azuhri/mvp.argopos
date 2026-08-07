@@ -1,14 +1,28 @@
-import { useParams, Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CheckCircle, ShoppingBag, Home, ArrowLeft, Package } from "lucide-react";
-import { GlassCard } from "@/components/shared/GlassCard";
-import { Button } from "@/components/ui/button";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  ImageOff,
+  PackageCheck,
+  ReceiptText,
+  ShoppingBag,
+} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
+import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { config } from "@/lib/config";
 import { formatCurrency } from "@/lib/mockData";
-import { useQuery } from "@tanstack/react-query";
+import { getStatusBadgeKey } from "@/lib/utils";
+import { removePendingPayment } from "@/lib/pendingPaymentStorage";
 
 interface TransactionCart {
+  id?: string;
   product_stock_id: string;
   amount: number;
   qty: number;
@@ -22,6 +36,7 @@ interface TransactionData {
   id: string;
   transaction_code: string;
   status: string;
+  payment_code?: string;
   nominal_code: string;
   base_amount: number;
   total_amount: number;
@@ -30,149 +45,180 @@ interface TransactionData {
   transaction_carts: TransactionCart[];
 }
 
+function resolveAssetUrl(path?: string) {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  return `${config.endpointUrl}/${path.replace(/^\/+/, "")}`;
+}
+
 export default function PaymentSuccess() {
   const { locationCode, transactionId } = useParams<{ locationCode: string; transactionId: string }>();
 
-  // Fetch transaction data
-  const { data: transactionData, isLoading } = useQuery({
-    queryKey: ['transaction', transactionId],
+  useEffect(() => {
+    if (transactionId) removePendingPayment(transactionId);
+  }, [transactionId]);
+
+  const {
+    data: transactionData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["transaction", transactionId],
     queryFn: async () => {
       if (!transactionId) return null;
-      const response = await fetch(`${config.apiUrl}//transactions/${transactionId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch transaction data');
-      }
+      const response = await fetch(`${config.apiUrl}/transactions/${transactionId}`);
+      if (!response.ok) throw new Error("Failed to fetch transaction data");
       const result = await response.json();
       return result.data as TransactionData;
     },
-    enabled: !!transactionId,
+    enabled: Boolean(transactionId),
   });
 
-  return (
-    <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ''}>
-      <div className="max-w-2xl mx-auto px-4 py-16">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+  if (isLoading) {
+    return (
+      <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      </AppLayoutCommerce>
+    );
+  }
+
+  if (error || !transactionData) {
+    return (
+      <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
+        <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-md bg-red-50 text-[#e30613]">
+            <AlertCircle className="h-7 w-7" />
           </div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <GlassCard className="p-8 text-center">
-              {/* Success Icon */}
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
-              >
-                <CheckCircle className="h-10 w-10 text-green-600" />
-              </motion.div>
+          <h1 className="text-xl font-extrabold text-[#071a4f]">Ringkasan transaksi tidak tersedia</h1>
+          <p className="mt-2 text-sm text-slate-500">Kembali ke katalog atau buka kembali detail pembayaran.</p>
+          <Button asChild className="mt-6 rounded-md bg-[#071a4f] hover:bg-[#102866]">
+            <Link to="/commerce">Kembali ke katalog</Link>
+          </Button>
+        </div>
+      </AppLayoutCommerce>
+    );
+  }
 
-              {/* Success Message */}
-              <h1 className="text-3xl font-bold mb-2">Transaksi Selesai!</h1>
-              <p className="text-muted-foreground text-sm mb-4">
-                Pembayaran Anda telah diverifikasi. Admin toko telah memberikan barang pesanan Anda.
-              </p>
+  const items = transactionData.transaction_carts || [];
 
-              {/* Transaction Code */}
-              {transactionData && (
-                <div className="mb-6">
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <p className="text-sm text-muted-foreground mb-1">Transaction Code</p>
-                    <p className="font-mono text-xl font-bold text-primary">{transactionData.transaction_code || '-'}</p>
-                  </div>
-                </div>
-              )}
+  return (
+    <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
+      <div className="mx-auto w-full max-w-[960px] space-y-6">
+        <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-sm font-bold text-[#e30613]">Checkout selesai</p>
+            <h1 className="mt-1 text-2xl font-extrabold text-[#071a4f] md:text-3xl">Terima kasih telah berbelanja</h1>
+          </div>
+          <div className="flex items-center gap-3 text-sm font-bold text-slate-400">
+            <span>1. Keranjang</span>
+            <span aria-hidden="true">/</span>
+            <span>2. Pembayaran</span>
+            <span aria-hidden="true">/</span>
+            <span className="text-[#071a4f]">3. Selesai</span>
+          </div>
+        </div>
 
-              {/* Product List */}
-              {transactionData && transactionData.transaction_carts && transactionData.transaction_carts.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="text-lg font-semibold mb-4 text-left">Item Pesanan</h3>
-                  <div className="space-y-3">
-                    {transactionData.transaction_carts.map((item, index) => (
-                      <div key={index} className="flex items-start gap-4 p-3 rounded-lg bg-muted/30">
-                        {item.product_details?.image_path ? (
-                          <img
-                            src={`${config.endpointUrl}/${item.product_details.image_path}`}
-                            alt={item.product_details.product_name || 'Product'}
-                            className="w-16 h-16 object-cover rounded-md"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center">
-                            <Package className="h-6 w-6 text-muted-foreground" />
-                          </div>
-                        )}
-                        <div className="flex-1 text-left">
-                          <h4 className="font-medium text-sm">{item.product_details?.product_name || `Product #${item.product_stock_id}`}</h4>
-                          <p className="text-xs text-muted-foreground">Qty: {item.qty}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-sm">{formatCurrency(item.amount)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm text-muted-foreground">Subtotal:</span>
-                      <span className="font-medium">{formatCurrency(transactionData.base_amount)}</span>
-                    </div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm text-muted-foreground">Nominal Code:</span>
-                      <span className="font-medium text-primary">{transactionData.payment_code}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">Total Pembayaran:</span>
-                      <span className="font-bold text-lg">{formatCurrency(transactionData.total_amount)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            {/* Order Status */}
-            <div className="bg-muted/50 rounded-lg p-6 mb-8">
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <ShoppingBag className="h-5 w-5 text-primary" />
-                <span className="font-medium">Terimakasih Telah Berbelanja</span>
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="commerce-panel overflow-hidden"
+        >
+          <div className="grid md:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="p-6 md:p-8">
+              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+                <CheckCircle2 className="h-9 w-9" />
               </div>
-              {/* <div className="text-sm text-muted-foreground">
-                <p className="mb-2">Sedang dipersiapkan oleh admin toko</p>
-                <p className="text-xs">Anda akan menerima notifikasi ketika barang siap diambil</p>
-              </div> */}
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-2xl font-extrabold text-[#071a4f]">Transaksi berhasil diselesaikan</h2>
+                <StatusBadge status={getStatusBadgeKey(transactionData.status)} />
+              </div>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-500">
+                Penerimaan barang telah tercatat. Simpan kode transaksi berikut sebagai referensi pesanan Anda.
+              </p>
+              <div className="mt-6 inline-flex max-w-full items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                <ReceiptText className="h-5 w-5 shrink-0 text-[#e30613]" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Kode transaksi</p>
+                  <p className="truncate font-mono text-base font-extrabold text-[#071a4f]">{transactionData.transaction_code || transactionData.id}</p>
+                </div>
+              </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <Button className="w-full" size="lg" asChild>
-                <Link to={`/commerce`}>
-                  <ShoppingBag className="h-4 w-4 mr-2" />
-                  Belanja Lagi
-                </Link>
-              </Button>
-              {/* <Button variant="outline" className="w-full" size="lg" asChild>
-                <Link to={`/${locationCode}/commerce/cart`}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Lihat Pesanan Lain
-                </Link>
-              </Button> */}
+            <div className="flex flex-col justify-between bg-[#071a4f] p-6 text-white md:p-7">
+              <div>
+                <PackageCheck className="h-8 w-8 text-white/80" />
+                <p className="mt-5 text-sm font-bold text-white/65">Total pembayaran</p>
+                <p className="mt-1 text-3xl font-extrabold">{formatCurrency(transactionData.total_amount)}</p>
+                <p className="mt-2 text-xs font-medium text-white/60">{transactionData.total_item} item telah diterima</p>
+              </div>
+              <div className="mt-8 space-y-2">
+                <Button asChild className="commerce-orange-button h-11 w-full rounded-md font-extrabold">
+                  <Link to="/commerce">
+                    <ShoppingBag className="h-4 w-4" />
+                    Belanja lagi
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" className="h-10 w-full rounded-md text-white/80 hover:bg-white/10 hover:text-white">
+                  <Link to={`/${locationCode}/commerce/payment/${transactionId}`}>
+                    <ArrowLeft className="h-4 w-4" />
+                    Lihat detail transaksi
+                  </Link>
+                </Button>
+              </div>
             </div>
-          </GlassCard>
+          </div>
+        </motion.section>
 
-          {/* Additional Info */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mt-6 text-center text-sm text-muted-foreground"
-          >
-            <p>Jika ada pertanyaan, silakan hubungi admin toko melalui WhatsApp</p>
-          </motion.div>
-        </motion.div>
-        )}
+        <section className="commerce-panel overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 md:px-5">
+            <div>
+              <h2 className="font-extrabold text-[#071a4f]">Item pesanan</h2>
+              <p className="text-xs font-medium text-slate-500">Ringkasan produk yang diterima</p>
+            </div>
+            <span className="text-xs font-bold text-slate-500">{items.length} produk</span>
+          </div>
+
+          {items.length > 0 ? (
+            <div className="divide-y divide-slate-100 px-4 md:px-5">
+              {items.map((item, index) => (
+                <div key={item.id || `${item.product_stock_id}-${index}`} className="flex items-center gap-3 py-4">
+                  <div className="commerce-product-visual flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200">
+                    {item.product_details?.image_path ? (
+                      <img
+                        src={resolveAssetUrl(item.product_details.image_path)}
+                        alt={item.product_details.product_name || "Produk"}
+                        className="h-full w-full object-contain p-1.5"
+                      />
+                    ) : (
+                      <ImageOff className="h-5 w-5 text-slate-300" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-sm font-extrabold text-[#071a4f]">
+                      {item.product_details?.product_name || `Produk #${item.product_stock_id}`}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">{item.qty} item</p>
+                  </div>
+                  <p className="text-sm font-extrabold text-[#071a4f]">{formatCurrency(item.amount)}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="px-5 py-8 text-center text-sm text-slate-500">Detail produk tidak tersedia.</p>
+          )}
+
+          <div className="border-t border-slate-200 bg-slate-50 px-4 py-4 md:px-5">
+            <div className="ml-auto max-w-sm space-y-3">
+              <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span className="font-bold">{formatCurrency(transactionData.base_amount)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-slate-500">Kode unik</span><span className="font-bold">{transactionData.payment_code || transactionData.nominal_code}</span></div>
+              <Separator />
+              <div className="flex justify-between text-base font-extrabold text-[#071a4f]"><span>Total</span><span>{formatCurrency(transactionData.total_amount)}</span></div>
+            </div>
+          </div>
+        </section>
       </div>
     </AppLayoutCommerce>
   );

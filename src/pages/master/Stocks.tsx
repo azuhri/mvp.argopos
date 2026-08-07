@@ -270,14 +270,14 @@ export default function MasterStocks() {
               placeholder="Search stocks..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-card/70 backdrop-blur border-border/50"
+              className="pl-9 bg-card border-border"
             />
           </div>
 
           {/* Filters and sorting - organized in grid */}
           <div className="md:col-span-6 grid grid-cols-2 gap-2">
             <Select value={locationType} onValueChange={(value: any) => setLocationType(value)}>
-              <SelectTrigger className="bg-card/70 backdrop-blur border-border/50">
+              <SelectTrigger className="bg-card border-border">
                 <SelectValue placeholder="Location Type" />
               </SelectTrigger>
               <SelectContent>
@@ -288,7 +288,7 @@ export default function MasterStocks() {
             </Select>
 
             <Select value={sortBy} onValueChange={(value: any) => handleSortChange(value)}>
-              <SelectTrigger className="bg-card/70 backdrop-blur border-border/50">
+              <SelectTrigger className="bg-card border-border">
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
               <SelectContent>
@@ -306,7 +306,7 @@ export default function MasterStocks() {
               variant="outline"
               size="icon"
               onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-              className="bg-card/70 backdrop-blur border-border/50 w-full"
+              className="bg-card border-border w-full"
             >
               <ArrowUpDown className="h-4 w-4" />
             </Button>
@@ -316,7 +316,7 @@ export default function MasterStocks() {
           <div className="md:col-span-5 grid grid-cols-3 gap-2">
             <Dialog open={isCreateStockOpen} onOpenChange={setIsCreateStockOpen}>
               <DialogTrigger asChild>
-                <Button className="btn-tap bg-primary">
+                <Button className="admin-accent-button btn-tap">
                   <Plus className="h-4 w-4 mr-2" /> Create
                 </Button>
               </DialogTrigger>
@@ -407,7 +407,7 @@ export default function MasterStocks() {
 
             <Dialog open={isDistributeStockOpen} onOpenChange={setIsDistributeStockOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="bg-card/70 backdrop-blur border-border/50">
+                <Button variant="outline" className="bg-card border-border">
                   <ArrowRightLeft className="h-4 w-4 mr-2" /> Distribute
                 </Button>
               </DialogTrigger>
@@ -524,7 +524,7 @@ export default function MasterStocks() {
 
             <Dialog open={isTransferStockOpen} onOpenChange={setIsTransferStockOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="bg-card/70 backdrop-blur border-border/50">
+                <Button variant="outline" className="bg-card border-border">
                   <ArrowRightLeft className="h-4 w-4 mr-2" /> Transfer
                 </Button>
               </DialogTrigger>

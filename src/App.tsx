@@ -24,6 +24,7 @@ import MasterUserManagement from "./pages/master/UsersManagement";
 import MasterLocations from "./pages/master/Locations";
 import MasterRoles from "./pages/master/Roles";
 import MasterStocks from "./pages/master/Stocks";
+import StockMutations from "./pages/master/StockMutations";
 import MasterProducts from "./pages/master/Products";
 import CreateProduct from "./pages/master/CreateProduct";
 import MasterCategories from "./pages/master/Categories";
@@ -58,8 +59,11 @@ const App = () => (
             <Route path="/commerce/cart" element={<StoreCart />} />
             <Route path="/commerce/product/:productId" element={<StoreProductDetail />} />
 
-            {/* Public Transaction Approval Route */}
-            <Route path="/transactions/:transactionId/approve-payment" element={<TransactionApproval />} />
+            <Route path="/transactions/:transactionId/approve-payment" element={
+              <ProtectedRoute menuKey="transactions" requireWrite>
+                <TransactionApproval />
+              </ProtectedRoute>
+            } />
 
             {/* Auth Routes */}
             <Route path="/auth/sign-in" element={<Login />} />
@@ -155,6 +159,12 @@ const App = () => (
             <Route path="/master/stocks" element={
               <ProtectedRoute>
                 <MasterStocks />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/master/stock-mutations" element={
+              <ProtectedRoute menuKey="master_stock_mutations" requireWrite>
+                <StockMutations />
               </ProtectedRoute>
             } />
 
