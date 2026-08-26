@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const appUrl = "http://127.0.0.1:4173/celestia";
+const appUrl = "http://127.0.0.1:4173/";
 
 const menuNames = [
   "dashboard",

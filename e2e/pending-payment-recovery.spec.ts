@@ -1,6 +1,6 @@
 import { expect, type BrowserContext, test } from "@playwright/test";
 
-const appUrl = "http://127.0.0.1:4173/celestia";
+const appUrl = "http://127.0.0.1:4173/";
 const storageKey = "argopos.store.pending-payments.v1";
 const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
@@ -79,7 +79,7 @@ async function mockPendingPaymentApi(
   context: BrowserContext,
   state: PendingPaymentMockState,
 ) {
-  await context.route("**/backend/celestia/api/v1/**", async (route) => {
+  await context.route("**/backend//api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
 

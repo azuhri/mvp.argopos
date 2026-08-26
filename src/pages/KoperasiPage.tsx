@@ -152,7 +152,7 @@ export default function KoperasiPage() {
                   <Button variant="outline" size="lg" className="h-7 w-full bg-secondary text-sm text-primary py-2 sm:py-4 flex-1"
                     onClick={() => {
                       localStorage.setItem('selectedLocationCode', store.location_code);
-                      window.location.href = `/celestia/commerce`
+                      window.location.href = `/commerce`
                     }}
                   >
                     <ShoppingBasket size={25} />

@@ -292,7 +292,7 @@ export default function StoreProductDetail() {
     if (result.success) {
       toast.success("Produk ditambahkan, mengalihkan ke checkout...");
       setTimeout(() => {
-        window.location.href = `/celestia/${locationCode}/commerce/cart`;
+        window.location.href = `/${locationCode}/commerce/cart`;
       }, 1000);
     } else {
       toast.error(result.message);

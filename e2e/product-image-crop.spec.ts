@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
-const appUrl = "http://127.0.0.1:4173/celestia";
+const appUrl = "http://127.0.0.1:4173/";
 
 test("master product crops main and collection images to consistent JPEG output", async ({ page }, testInfo) => {
   test.setTimeout(60_000);

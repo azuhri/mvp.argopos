@@ -776,8 +776,8 @@ class ApiClient {
           const isPublicRoute = publicRoutePatterns.some(pattern => pattern.test(window.location.pathname));
 
           // Only redirect if not on public route and not already on login page
-          if (!isPublicRoute && window.location.pathname !== '/celestia/auth/sign-in') {
-            window.location.href = "/celestia/auth/sign-in";
+          if (!isPublicRoute && window.location.pathname !== '/auth/sign-in') {
+            window.location.href = "/auth/sign-in";
           }
         }
 

@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const appUrl = "http://127.0.0.1:4173/celestia";
+const appUrl = "http://127.0.0.1:4173/";
 const productImage = `${appUrl}/image/POKPOK%20PACKSHOT.png`;
 
 const store = {

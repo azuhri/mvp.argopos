@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  base: '/celestia/',
+  base: '/',
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
