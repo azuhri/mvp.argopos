@@ -15,7 +15,6 @@ export function BottomNav() {
     queryKey: ['current-user'],
     queryFn: () => userService.getCurrentUser(),
   });
-
   const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
   const filteredNav = getFilteredNavigation(assignedStoresCount);
 
