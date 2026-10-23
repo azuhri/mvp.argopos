@@ -101,6 +101,24 @@ test("a slow in-flight check never overlaps or creates another checkout", async 
   expect(state.creates).toBe(0);
 });
 
+test("reopening an order without the return query verifies payment automatically", async ({ page, context }) => {
+  const state = pending();
+  await mockReturn(context, state);
+  await page.clock.install();
+  await page.goto("/RETURN/commerce/payment/return-order");
+  await expect.poll(() => state.refreshes).toBe(1);
+  await expect(page.getByText(/Pembayaran diperiksa otomatis setiap 5 detik/)).toBeVisible();
+  await page.clock.fastForward(5000);
+  await expect.poll(() => state.refreshes).toBe(2);
+  state.status = "PAID"; // A webhook has updated the stored status.
+  await page.clock.fastForward(5000);
+  await expect(page).toHaveURL(/\/commerce\/payment-success\/return-order$/);
+  await expect(page.getByRole("heading", { name: "Pembayaran berhasil" })).toBeVisible();
+  await page.clock.fastForward(20000);
+  expect(state.refreshes).toBe(2);
+  expect(state.creates).toBe(0);
+});
+
 for (const terminal of ["FAILED", "EXPIRED"]) {
   test(`${terminal} return stops polling without showing success`, async ({ page, context }) => {
     const state = { ...pending(), status: terminal };

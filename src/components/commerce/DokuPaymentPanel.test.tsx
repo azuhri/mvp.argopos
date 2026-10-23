@@ -179,11 +179,12 @@ describe("DOKU payment panel", () => {
     expect(mocks.createCheckout).not.toHaveBeenCalled();
   });
 
-  it("does not overlap slow checks and aborts the active check on unmount", async () => {
+  it.each([true, false])("does not overlap slow checks and aborts on unmount (returnMode=%s)", async (returnMode) => {
     vi.useFakeTimers();
+    mocks.getStatus.mockResolvedValue({ ...pending, payment_id: "existing-attempt" });
     let finish!: (value: { session: PaymentSession; checked: boolean }) => void;
     mocks.refreshStatus.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    const view = renderPanel({ returnMode: true });
+    const view = renderPanel({ returnMode });
     await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
     expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
     await act(async () => { finish({ session: pending, checked: false }); await vi.advanceTimersByTimeAsync(1); });
@@ -194,6 +195,63 @@ describe("DOKU payment panel", () => {
     expect(signal.aborted).toBe(true);
     await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
     expect(mocks.refreshStatus).toHaveBeenCalledTimes(2);
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it("automatically verifies a reopened pending attempt without a return marker", async () => {
+    vi.useFakeTimers();
+    const onVerifiedPaid = vi.fn();
+    const attempt = { ...pending, payment_id: "existing-attempt", creation_state: "READY" as const, verification_pending: true };
+    mocks.getStatus.mockResolvedValue(attempt);
+    mocks.refreshStatus.mockResolvedValue({ session: attempt, checked: false });
+    renderPanel({ onVerifiedPaid });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    expect(onVerifiedPaid).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(3999); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(2);
+    // The database GET is still stale; verified refresh must drive success.
+    mocks.refreshStatus.mockResolvedValue({ session: { ...attempt, status: "PAID" }, checked: true });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(3);
+    expect(onVerifiedPaid).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(3);
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it("observes a webhook's PAID result without a provider refresh on a reopened order", async () => {
+    vi.useFakeTimers();
+    const onVerifiedPaid = vi.fn();
+    mocks.getStatus.mockResolvedValue({ ...pending, payment_id: "existing-attempt", status: "PAID" });
+    renderPanel({ onVerifiedPaid });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(onVerifiedPaid).toHaveBeenCalledTimes(1);
+    expect(mocks.refreshStatus).not.toHaveBeenCalled();
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it("does not initiate or refresh a provider session before checkout exists", async () => {
+    vi.useFakeTimers();
+    renderPanel();
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+    expect(mocks.getStatus.mock.calls.length).toBeGreaterThan(1);
+    expect(mocks.refreshStatus).not.toHaveBeenCalled();
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403, 404])("stops reopened-order verification after refresh HTTP %s", async (status) => {
+    vi.useFakeTimers();
+    mocks.getStatus.mockResolvedValue({ ...pending, payment_id: "existing-attempt" });
+    mocks.refreshStatus.mockRejectedValue(new PaymentRequestError("Akses pembayaran tidak tersedia.", status));
+    const onVerifiedPaid = vi.fn();
+    renderPanel({ onVerifiedPaid });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    expect(mocks.getStatus).toHaveBeenCalledTimes(1);
+    expect(onVerifiedPaid).not.toHaveBeenCalled();
     expect(mocks.createCheckout).not.toHaveBeenCalled();
   });
 

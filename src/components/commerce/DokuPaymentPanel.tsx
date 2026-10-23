@@ -23,22 +23,28 @@ export function DokuPaymentPanel({ transactionId, returnMode, onVerifiedPaid }: 
   const queryKey = ["doku-payment", transactionId];
   const statusQuery = useQuery({
     queryKey,
-    // Returning from DOKU starts verification, never a new checkout. Query's
-    // in-flight deduplication and AbortSignal also cover polling and unmounts.
-    queryFn: async ({ signal }) => returned
-      ? (await paymentService.refreshStatus(transactionId, signal)).session
-      : paymentService.getStatus(transactionId, signal),
-    retry: (count, error) => !returned && !(error instanceof PaymentRequestError && [401, 403, 404].includes(error.status)) && count < 2,
+    // A reopened order may have no return marker. Verify its existing attempt
+    // too; a GET alone only observes notifications already stored by the API.
+    // One Query owns the whole check, including cancellation and deduplication.
+    queryFn: async ({ signal }) => {
+      if (returned) return (await paymentService.refreshStatus(transactionId, signal)).session;
+      const latest = await paymentService.getStatus(transactionId, signal);
+      if (latest.payment_id && latest.status === "PENDING" && !latest.review_required && !refreshing.current) {
+        return (await paymentService.refreshStatus(transactionId, signal)).session;
+      }
+      return latest;
+    },
+    // Retry on the next polling tick, without additional immediate POSTs.
+    retry: false,
     refetchInterval: (query) => {
       if (query.state.error instanceof PaymentRequestError && [401, 403, 404].includes(query.state.error.status)) return false;
       const data = query.state.data;
       if (data && (data.status !== "PENDING" || data.review_required)) return false;
-      if (returned) return 5000;
-      return query.state.error || data?.verification_pending ? 15000 : 5000;
+      return 5000;
     },
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: !returned,
-    refetchOnReconnect: !returned,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
   const createMutation = useMutation({ mutationFn: (rejectedPaymentId?: string) => paymentService.createCheckout(transactionId, rejectedPaymentId) });
   const refreshMutation = useMutation({ mutationFn: () => paymentService.refreshStatus(transactionId) });
@@ -131,7 +137,7 @@ export function DokuPaymentPanel({ transactionId, returnMode, onVerifiedPaid }: 
           {session.channel || session.doku_payment_method ? <div className="flex justify-between gap-3"><dt>Metode</dt><dd>{getDokuPaymentMethodLabel(session.channel || session.doku_payment_method!)}</dd></div> : null}
         </dl>
         <p role="status" className="text-sm leading-relaxed text-slate-600">
-          {reviewRequired ? `${paid ? "Pembayaran telah diterima dan sedang diperiksa admin." : "Admin sedang memeriksa pembayaran ini."} Jangan melakukan pembayaran ulang; hubungi outlet dengan kode transaksi Anda.` : paid ? "Pembayaran telah dikonfirmasi. Status penyiapan pesanan tersedia pada detail transaksi." : session.status === "EXPIRED" || expired ? "Waktu pembayaran telah berakhir. Hubungi outlet jika dana sudah terpotong; jangan membayar ulang." : session.status === "FAILED" ? canRetry && !returned ? "Sesi sebelumnya tidak berhasil dibuat. Anda dapat mencoba kembali untuk pesanan yang sama." : "Pembayaran belum berhasil. Hubungi outlet untuk bantuan jika dana sudah terpotong." : returned ? "Pembayaran diperiksa otomatis setiap 5 detik. Halaman sukses akan terbuka setelah pembayaran dikonfirmasi. Jangan membayar ulang." : verificationPending ? "Status diperbarui otomatis setelah konfirmasi pembayaran diterima. Jika sudah membayar, tunggu konfirmasi sebelum mencoba kembali." : "Anda akan diarahkan ke halaman pembayaran DOKU untuk menyelesaikan pesanan ini."}
+          {reviewRequired ? `${paid ? "Pembayaran telah diterima dan sedang diperiksa admin." : "Admin sedang memeriksa pembayaran ini."} Jangan melakukan pembayaran ulang; hubungi outlet dengan kode transaksi Anda.` : paid ? "Pembayaran telah dikonfirmasi. Status penyiapan pesanan tersedia pada detail transaksi." : session.status === "EXPIRED" || expired ? "Waktu pembayaran telah berakhir. Hubungi outlet jika dana sudah terpotong; jangan membayar ulang." : session.status === "FAILED" ? canRetry && !returned ? "Sesi sebelumnya tidak berhasil dibuat. Anda dapat mencoba kembali untuk pesanan yang sama." : "Pembayaran belum berhasil. Hubungi outlet untuk bantuan jika dana sudah terpotong." : returned || session.payment_id ? "Pembayaran diperiksa otomatis setiap 5 detik. Halaman sukses akan terbuka setelah pembayaran dikonfirmasi. Jangan membayar ulang." : verificationPending ? "Status diperbarui otomatis setelah konfirmasi pembayaran diterima. Jika sudah membayar, tunggu konfirmasi sebelum mencoba kembali." : "Anda akan diarahkan ke halaman pembayaran DOKU untuk menyelesaikan pesanan ini."}
         </p>
         {!returned && (!terminal || canRetry) && !expired && !verificationPending && !reviewRequired && !statusQuery.error && !ownershipDenied ? <Button className="commerce-orange-button min-h-11 w-full" disabled={createMutation.isPending || refreshMutation.isPending || statusQuery.isFetching} onClick={() => void openCheckout()}>
           {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
