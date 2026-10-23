@@ -1,10 +1,12 @@
-import { useCallback, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { StoreStockRequestPanel } from "@/components/master/StoreStockRequestPanel";
+import { StorePaymentSettings } from "@/components/master/StorePaymentSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,12 +21,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, ArrowRight, Save, X, Plus, Calendar, Package, ArrowUpDown, Users, Briefcase, Building2, DollarSign, Camera, CheckCircle, Clock, Store, Truck, RefreshCw, Inbox } from "lucide-react";
+import { User, Pencil, Trash2, Eye, Search, ExternalLink, Upload, CreditCard, ArrowLeft, Save, X, Plus, Calendar, Package, ArrowUpDown, Users, Briefcase, Building2, DollarSign, Camera, CheckCircle, Clock, Store, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { storeService } from "@/lib/services/storeService";
 import { stockService } from "@/lib/services/stockService";
 import { transactionService } from "@/lib/services/transactionService";
-import { Store as StoreType, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, StockTransferRequest, TransactionCart, apiClient } from "@/lib/api";
+import { Store as StoreType, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, TransactionCart, apiClient } from "@/lib/api";
 import { config } from "@/lib/config";
 import { parseIDR } from "@/lib/utils";
 import CurrencyInput from "@/components/ui/input-currency";
@@ -34,14 +36,6 @@ type StoreDetailTab = typeof storeDetailTabs[number];
 
 const isStoreDetailTab = (value: string | null): value is StoreDetailTab =>
   value !== null && storeDetailTabs.includes(value as StoreDetailTab);
-
-const stockTransferStatusLabel: Record<StockTransferRequest["status"], string> = {
-  requested: "Menunggu source",
-  source_approved: "Siap diterima",
-  source_rejected: "Ditolak source",
-  completed: "Diterima",
-  cancelled: "Dibatalkan",
-};
 
 export default function KoperasiDetailPage() {
   const { locationId } = useParams<{ locationId: string }>();
@@ -109,37 +103,6 @@ export default function KoperasiDetailPage() {
   const [editingStock, setEditingStock] = useState<Stock | null>(null);
   const [stockFormData, setStockFormData] = useState({ base_price: 0, discount_price: 0, tax_percentage: 0, stock: 0 });
 
-  // Incoming warehouse distribution state
-  const [incomingStockRequests, setIncomingStockRequests] = useState<StockTransferRequest[]>([]);
-  const [incomingStockLoading, setIncomingStockLoading] = useState(false);
-  const [incomingStockPage, setIncomingStockPage] = useState(1);
-  const [incomingStockTotalPages, setIncomingStockTotalPages] = useState(1);
-  const [receiveRequest, setReceiveRequest] = useState<StockTransferRequest | null>(null);
-  const [receivingStock, setReceivingStock] = useState(false);
-
-  const loadIncomingStockRequests = useCallback(async () => {
-    if (!locationId) return;
-
-    try {
-      setIncomingStockLoading(true);
-      const response = await stockService.getStockTransferRequests({
-        page: incomingStockPage,
-        page_size: 10,
-        to_location_id: locationId,
-        movement_type: "distribution",
-        status: "all",
-        sort_order: "desc",
-      });
-      setIncomingStockRequests(response.requests || []);
-      setIncomingStockTotalPages(Math.max(1, response.meta?.total_pages || 1));
-    } catch (error) {
-      toast.error("Gagal memuat penerimaan stock");
-      console.error(error);
-    } finally {
-      setIncomingStockLoading(false);
-    }
-  }, [incomingStockPage, locationId]);
-
   // Payment method state
   const [paymentMethodOpen, setPaymentMethodOpen] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'create' | 'edit'>('create');
@@ -179,12 +142,6 @@ export default function KoperasiDetailPage() {
       loadTransactions();
     }
   }, [locationId, activeTab, transactionPage, transactionPageSize, transactionStatus, transactionUser, transactionStartDate, transactionEndDate, transactionPaymentMethod, transactionCode, transactionSortBy, transactionSortOrder]);
-
-  useEffect(() => {
-    if (locationId && activeTab === "stock-management") {
-      loadIncomingStockRequests();
-    }
-  }, [activeTab, loadIncomingStockRequests, locationId]);
 
   const handleTabChange = (value: string) => {
     if (!isStoreDetailTab(value)) return;
@@ -293,23 +250,6 @@ export default function KoperasiDetailPage() {
     }
   };
 
-  const handleReceiveStock = async () => {
-    if (!receiveRequest) return;
-
-    try {
-      setReceivingStock(true);
-      await stockService.receiveStockTransferRequest(receiveRequest.id);
-      toast.success("Penerimaan stock berhasil dikonfirmasi");
-      setReceiveRequest(null);
-      await loadIncomingStockRequests();
-      await loadStoreDetail();
-    } catch (error) {
-      toast.error((error as Error).message || "Gagal mengonfirmasi penerimaan stock");
-    } finally {
-      setReceivingStock(false);
-    }
-  };
-
   const filteredTransactions = transactions.filter((tx) => {
     if (!transactionSearch) return true;
     const query = transactionSearch.toLowerCase();
@@ -403,7 +343,7 @@ export default function KoperasiDetailPage() {
     if (!pickupProofTransaction || !pickupProofFile) return;
     setPickupProofUploading(true);
     try {
-      const response = await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile);
+      const response = await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile, undefined, pickupProofTransaction.payment_provider);
       if (!response.success) throw new Error(response.message || 'Upload failed');
       toast.success('Bukti serah terima berhasil diupload');
       closePickupProofModal();
@@ -1039,151 +979,11 @@ export default function KoperasiDetailPage() {
         </TabsContent>
 
         <TabsContent value="stock-management" className="space-y-4">
-          <GlassCard>
-            <div className="p-4 md:p-6">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="flex items-center gap-2 text-lg font-semibold">
-                    <Truck className="h-5 w-5 text-primary" aria-hidden="true" />
-                    Penerimaan stock
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Distribusi warehouse yang ditujukan ke {store.location_name}.
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void loadIncomingStockRequests()}
-                  disabled={incomingStockLoading}
-                >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${incomingStockLoading ? "animate-spin" : ""}`} aria-hidden="true" />
-                  Muat ulang
-                </Button>
-              </div>
-
-              <div className="hidden overflow-x-auto md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Produk</TableHead>
-                      <TableHead>Asal</TableHead>
-                      <TableHead>Jumlah</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Waktu request</TableHead>
-                      <TableHead className="text-right">Aksi</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {incomingStockLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="h-28 text-center text-muted-foreground">
-                          Memuat penerimaan stock...
-                        </TableCell>
-                      </TableRow>
-                    ) : incomingStockRequests.length > 0 ? (
-                      incomingStockRequests.map((request) => (
-                        <TableRow key={request.id}>
-                          <TableCell>
-                            <p className="font-medium">{request.master_product?.product_name || request.master_product_id}</p>
-                            <p className="mt-1 max-w-xs truncate text-xs text-muted-foreground">{request.notes || "Tanpa catatan"}</p>
-                          </TableCell>
-                          <TableCell>{request.from_location?.location_name || "Warehouse"}</TableCell>
-                          <TableCell className="font-semibold">{request.quantity}</TableCell>
-                          <TableCell>
-                            <Badge variant={request.status === "completed" ? "default" : request.status === "source_approved" ? "secondary" : "outline"}>
-                              {stockTransferStatusLabel[request.status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{new Date(request.created_at).toLocaleString("id-ID")}</TableCell>
-                          <TableCell className="text-right">
-                            {request.status === "source_approved" ? (
-                              <Button size="sm" onClick={() => setReceiveRequest(request)}>
-                                <CheckCircle className="mr-2 h-4 w-4" aria-hidden="true" />
-                                Konfirmasi diterima
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Tidak ada aksi</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={6} className="h-36 text-center">
-                          <Inbox className="mx-auto mb-2 h-7 w-7 text-muted-foreground" aria-hidden="true" />
-                          <p className="text-sm text-muted-foreground">Belum ada distribusi stock untuk store ini.</p>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="space-y-3 md:hidden">
-                {incomingStockLoading ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">Memuat penerimaan stock...</p>
-                ) : incomingStockRequests.length > 0 ? (
-                  incomingStockRequests.map((request) => (
-                    <div key={request.id} className="rounded-lg border border-border p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{request.master_product?.product_name || request.master_product_id}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">Dari {request.from_location?.location_name || "Warehouse"}</p>
-                        </div>
-                        <Badge variant={request.status === "completed" ? "default" : "secondary"}>
-                          {stockTransferStatusLabel[request.status]}
-                        </Badge>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-                        <span className="text-sm text-muted-foreground">Jumlah</span>
-                        <span className="font-semibold">{request.quantity}</span>
-                      </div>
-                      {request.status === "source_approved" ? (
-                        <Button className="mt-4 w-full" size="sm" onClick={() => setReceiveRequest(request)}>
-                          <CheckCircle className="mr-2 h-4 w-4" aria-hidden="true" />
-                          Konfirmasi diterima
-                        </Button>
-                      ) : null}
-                    </div>
-                  ))
-                ) : (
-                  <div className="py-10 text-center">
-                    <Inbox className="mx-auto mb-2 h-7 w-7 text-muted-foreground" aria-hidden="true" />
-                    <p className="text-sm text-muted-foreground">Belum ada distribusi stock.</p>
-                  </div>
-                )}
-              </div>
-
-              {incomingStockTotalPages > 1 ? (
-                <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Halaman {incomingStockPage} dari {incomingStockTotalPages}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      title="Halaman sebelumnya"
-                      disabled={incomingStockPage <= 1 || incomingStockLoading}
-                      onClick={() => setIncomingStockPage((page) => Math.max(1, page - 1))}
-                    >
-                      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      title="Halaman berikutnya"
-                      disabled={incomingStockPage >= incomingStockTotalPages || incomingStockLoading}
-                      onClick={() => setIncomingStockPage((page) => Math.min(incomingStockTotalPages, page + 1))}
-                    >
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </GlassCard>
+          <StoreStockRequestPanel
+            locationId={locationId!}
+            locationName={store.location_name}
+            onStockChanged={loadStoreDetail}
+          />
         </TabsContent>
 
         {/* User Assigned Tab */}
@@ -1606,13 +1406,14 @@ export default function KoperasiDetailPage() {
 
         {/* Payment Method Tab */}
         <TabsContent value="payment">
+          <StorePaymentSettings key={locationId} locationId={locationId!} assignedUserIds={(store.assigned_users || []).map(user => user.id)}>
           <GlassCard>
             <div className="p-4 md:p-6">
               {/* Header Section */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <h4 className="font-semibold flex items-center gap-2 text-lg">
                   <Upload className="h-5 w-5" />
-                  Payment Methods
+                  Metode Pembayaran Manual
                 </h4>
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   {/* QRIS Button */}
@@ -1811,6 +1612,7 @@ export default function KoperasiDetailPage() {
               </div>
             </div>
           </GlassCard>
+          </StorePaymentSettings>
         </TabsContent>
 
         {/* Time Cutoff Tab */}
@@ -1900,24 +1702,6 @@ export default function KoperasiDetailPage() {
           </GlassCard>
         </TabsContent>
       </Tabs>
-
-      <AlertDialog open={Boolean(receiveRequest)} onOpenChange={(open) => !open && !receivingStock && setReceiveRequest(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Konfirmasi stock sudah diterima?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Konfirmasi ini akan menambah {receiveRequest?.quantity || 0} unit {receiveRequest?.master_product?.product_name || "produk"} ke stock store dan mencatat mutation log. Lanjutkan hanya setelah barang fisik diterima.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={receivingStock}>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={(event) => { event.preventDefault(); void handleReceiveStock(); }} disabled={receivingStock}>
-              {receivingStock ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle className="mr-2 h-4 w-4" aria-hidden="true" />}
-              Konfirmasi diterima
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Transaction Items Modal */}
       <Dialog open={cartModalOpen} onOpenChange={(open) => {

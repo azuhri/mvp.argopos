@@ -7,12 +7,14 @@ import { cn } from "@/lib/utils";
 
 interface PickupProofUploadProps {
   transactionId: string;
+  paymentProvider?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
 export function PickupProofUpload({
   transactionId,
+  paymentProvider,
   onSuccess,
   onCancel
 }: PickupProofUploadProps) {
@@ -81,7 +83,7 @@ export function PickupProofUpload({
 
     try {
       // Use file upload (follows Products.tsx pattern)
-      const response = await apiClient.uploadPickupProof(transactionId, selectedFile);
+      const response = await apiClient.uploadPickupProof(transactionId, selectedFile, undefined, paymentProvider);
       if (response.success) {
         toast.success('Pickup proof uploaded successfully');
         onSuccess?.();
@@ -203,6 +205,7 @@ interface PickupProofModalProps {
   isOpen: boolean;
   onClose: () => void;
   transactionId: string;
+  paymentProvider?: string;
   transactionCode: string;
   onSuccess?: () => void;
 }
@@ -211,6 +214,7 @@ export function PickupProofModal({
   isOpen,
   onClose,
   transactionId,
+  paymentProvider,
   transactionCode,
   onSuccess
 }: PickupProofModalProps) {
@@ -247,6 +251,7 @@ export function PickupProofModal({
 
         <PickupProofUpload
           transactionId={transactionId}
+          paymentProvider={paymentProvider}
           onSuccess={handleSuccess}
           onCancel={onClose}
         />

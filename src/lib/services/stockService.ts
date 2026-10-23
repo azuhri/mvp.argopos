@@ -103,6 +103,16 @@ export class StockService {
     return response.data;
   }
 
+  async getStockApprovalLetter(id: string, download = false): Promise<Blob> {
+    const response = await apiClient.getStockApprovalLetter(id, download);
+
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to get stock approval letter');
+    }
+
+    return response.data;
+  }
+
   async createStock(stock: CreateStockRequest): Promise<Stock> {
     const response = await apiClient.createStock(stock);
     

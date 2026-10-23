@@ -25,6 +25,7 @@ interface TransactionCart {
 
 interface Transaction {
   id: string;
+  payment_provider?: string;
   transaction_code?: string;
   customer_name?: string;
   customer_no_wa?: string;
@@ -64,7 +65,7 @@ export default function PaymentApprovalPage() {
       });
 
       if (response.success && response.data) {
-        setTransactions(response.data as unknown as Transaction[]);
+        setTransactions((response.data as unknown as Transaction[]).filter((transaction) => transaction.payment_provider !== "DOKU"));
       }
     } catch (error) {
       toast.error("Failed to load pending transactions");
@@ -80,7 +81,7 @@ export default function PaymentApprovalPage() {
   };
 
   const handleConfirmApprove = async () => {
-    if (!approvingTransaction) return;
+    if (!approvingTransaction || approvingTransaction.payment_provider === "DOKU") return;
 
     try {
       setApprovingLoading(true);

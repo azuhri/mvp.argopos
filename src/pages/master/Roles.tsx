@@ -36,6 +36,7 @@ const permissionColors = {
 } as const;
 
 export default function MasterRoles() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
@@ -141,6 +142,7 @@ export default function MasterRoles() {
         });
         // Then update permissions
         await accessRoleService.setRolePermissions(editingRole.id, selectedPermissions);
+        await queryClient.invalidateQueries({ queryKey: ["role-permissions", editingRole.id], exact: true });
         toast.success("Role updated successfully");
       } else {
         // Create new role using accessRoleService
@@ -247,6 +249,7 @@ export default function MasterRoles() {
       });
 
       await accessRoleService.setRolePermissions(roleId, hiddenPermissions);
+      await queryClient.invalidateQueries({ queryKey: ["role-permissions", roleId], exact: true });
       toast.success("Permissions reset successfully");
       refetch();
     } catch (error) {
@@ -259,6 +262,7 @@ export default function MasterRoles() {
     try {
       const sourcePermissions = await accessRoleService.getRolePermissions(sourceRoleId);
       await accessRoleService.setRolePermissions(targetRoleId, sourcePermissions);
+      await queryClient.invalidateQueries({ queryKey: ["role-permissions", targetRoleId], exact: true });
       toast.success("Permissions copied successfully");
       refetch();
     } catch (error) {

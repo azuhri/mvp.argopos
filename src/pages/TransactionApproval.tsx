@@ -57,7 +57,7 @@ export default function TransactionApproval() {
   }, [fetchTransaction]);
 
   const handleApprove = async () => {
-    if (!transactionId || !transaction || transaction.status !== "WAITING_TO_PAYMENT") return;
+    if (!transactionId || !transaction || transaction.status !== "WAITING_TO_PAYMENT" || transaction.payment_provider === "DOKU") return;
 
     setApproving(true);
     setError(null);
@@ -78,7 +78,7 @@ export default function TransactionApproval() {
   };
 
   const isPaid = transaction?.status === "PAID";
-  const canApprove = transaction?.status === "WAITING_TO_PAYMENT";
+  const canApprove = transaction?.status === "WAITING_TO_PAYMENT" && transaction.payment_provider !== "DOKU";
 
   return (
     <AppLayout title="Konfirmasi Pembayaran">
@@ -102,7 +102,7 @@ export default function TransactionApproval() {
               </div>
               {transaction ? (
                 <Badge variant={isPaid ? "default" : canApprove ? "secondary" : "outline"}>
-                  {transaction.status.replaceAll("_", " ")}
+                  {transaction.status.replace(/_/g, " ")}
                 </Badge>
               ) : null}
             </div>
@@ -173,7 +173,7 @@ export default function TransactionApproval() {
                   </div>
                 ) : (
                   <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                    Transaksi dengan status ini tidak dapat dikonfirmasi dari halaman approval.
+                    {transaction.payment_provider === "DOKU" ? "Pembayaran DOKU diverifikasi otomatis. Periksa laporan pembayaran untuk status dan rekonsiliasi." : "Transaksi dengan status ini tidak dapat dikonfirmasi dari halaman approval."}
                   </div>
                 )}
 

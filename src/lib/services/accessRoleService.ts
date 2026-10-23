@@ -259,6 +259,10 @@ class AccessRoleService {
 
   async setRolePermissions(roleId: string, permissions: Record<string, 'hidden' | 'read' | 'write'>): Promise<void> {
     const menus = await this.getAllMenus();
+    if (permissions.master_stores && permissions.master_stores !== 'hidden' &&
+      !menus.some(menu => menu.menu_name.toLowerCase() === 'master_stores')) {
+      throw new Error('Menu Store Management belum tersedia di server. Hubungi administrator untuk memperbarui daftar menu sebelum menyimpan izin.');
+    }
     console.log('Available menus from backend:', menus.map(m => ({ id: m.id, menu_name: m.menu_name })));
     console.log('Permissions from frontend:', permissions);
 

@@ -72,7 +72,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
                   return (
                     <NavLink
-                      key={item.key}
+                      key={item.path}
                       to={item.path}
                       title={collapsed ? item.label : undefined}
                       aria-current={isActive ? "page" : undefined}

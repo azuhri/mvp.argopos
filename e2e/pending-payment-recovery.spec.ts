@@ -1,6 +1,7 @@
 import { expect, type BrowserContext, test } from "@playwright/test";
+import { recordTransactionCredentials, transactionCredentials } from "./payment-transport";
 
-const appUrl = "http://127.0.0.1:4173/";
+const appUrl = "http://127.0.0.1:4173";
 const storageKey = "argopos.store.pending-payments.v1";
 const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
@@ -79,9 +80,13 @@ async function mockPendingPaymentApi(
   context: BrowserContext,
   state: PendingPaymentMockState,
 ) {
-  await context.route("**/backend//api/v1/**", async (route) => {
+  await context.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
+
+    if (path.endsWith("/payment-settings")) {
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ success: true, data: { location_id: "location-1", payment_mode: "MANUAL", doku_available: true, doku_methods: ["QRIS"] } }) });
+    }
 
     if (path.endsWith("/location/stores")) {
       await route.fulfill({
@@ -208,6 +213,7 @@ async function mockPendingPaymentApi(
 }
 
 test("customer can recover and resume the original pending payment", async ({ context, page }, testInfo) => {
+  await recordTransactionCredentials(context);
   const state: PendingPaymentMockState = {
     status: "WAITING_TO_PAYMENT",
     createRequests: 0,
@@ -237,6 +243,7 @@ test("customer can recover and resume the original pending payment", async ({ co
   await page.getByLabel("Nama pelanggan").fill("Dewi Anggraini");
   await page.getByLabel("Email").fill("dewi@example.test");
   await page.getByText("Transfer Rekening", { exact: true }).click();
+  await expect(page.getByText("DOKU — pembayaran online", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Lanjutkan pembayaran" }).click();
 
   await expect(page).toHaveURL(
@@ -258,6 +265,9 @@ test("customer can recover and resume the original pending payment", async ({ co
   );
   await expect(page.getByRole("button", { name: "Bayar nanti" })).toBeVisible();
   expect(state.detailRequestedFromCart).toBe(true);
+  const credentialRequests = await transactionCredentials(page);
+  expect(credentialRequests.find((request) => request.path.endsWith("/transactions") && request.method === "POST")?.credentials).toBe("same-origin");
+  expect(credentialRequests.filter((request) => request.path.includes("/transactions/")).every((request) => request.credentials === "same-origin")).toBe(true);
 
   const expectedPendingStorage = {
     version: 1,

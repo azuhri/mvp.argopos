@@ -33,12 +33,12 @@ describe("StockService stock mutations", () => {
     expect(getStockMutations).toHaveBeenCalledWith(filters);
   });
 
-  it("scopes incoming distribution requests to the destination store", async () => {
+  it("scopes store requests to both directions through location_id", async () => {
     const filters: StockTransferRequestFilters = {
       page: 1,
       page_size: 10,
-      to_location_id: "store-id",
-      movement_type: "distribution",
+      location_id: "store-id",
+      movement_type: "all",
       status: "all",
       sort_order: "desc",
     };
@@ -52,5 +52,15 @@ describe("StockService stock mutations", () => {
 
     await expect(stockService.getStockTransferRequests(filters)).resolves.toEqual(data);
     expect(getStockTransferRequests).toHaveBeenCalledWith(filters);
+  });
+
+  it("loads an authenticated approval letter blob", async () => {
+    const letter = new Blob(["%PDF-1.4"], { type: "application/pdf" });
+    const getStockApprovalLetter = vi
+      .spyOn(apiClient, "getStockApprovalLetter")
+      .mockResolvedValue({ success: true, data: letter });
+
+    await expect(stockService.getStockApprovalLetter("request-id", true)).resolves.toBe(letter);
+    expect(getStockApprovalLetter).toHaveBeenCalledWith("request-id", true);
   });
 });

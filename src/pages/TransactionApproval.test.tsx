@@ -78,4 +78,12 @@ describe("TransactionApproval", () => {
     expect(screen.queryByRole("button", { name: "Konfirmasi pembayaran" })).not.toBeInTheDocument();
     expect(mocks.approveTransactionPayment).not.toHaveBeenCalled();
   });
+
+  it("does not offer manual payment approval for a gateway order", async () => {
+    mocks.getTransaction.mockResolvedValue({ success: true, data: { ...waitingTransaction, payment_provider: "DOKU" } });
+    renderPage();
+    expect(await screen.findByText(/Pembayaran DOKU diverifikasi otomatis/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Konfirmasi pembayaran" })).not.toBeInTheDocument();
+    expect(mocks.approveTransactionPayment).not.toHaveBeenCalled();
+  });
 });

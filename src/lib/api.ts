@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -153,6 +153,15 @@ export interface StorePaymentMethod {
   updated_at: string;
 }
 
+export type StorePaymentMode = 'MANUAL' | 'DOKU';
+
+export interface StorePaymentSettings {
+  location_id: string;
+  payment_mode: StorePaymentMode;
+  doku_available: boolean;
+  doku_methods: string[];
+}
+
 export interface TransactionCart {
   id: string;
   product_stock_id: string;
@@ -166,6 +175,7 @@ export interface TransactionCart {
 
 export interface Transaction {
   id: string;
+  payment_provider?: string;
   transaction_code?: string;
   master_location_id?: string;
   location_name?: string;
@@ -596,6 +606,8 @@ export interface StockTransferRequest {
   destination_received_at?: string;
   rejected_by?: string;
   rejected_at?: string;
+  approval_letter_available?: boolean;
+  approval_letter_number?: string;
   created_at: string;
   updated_at: string;
   from_location?: Location;
@@ -604,6 +616,7 @@ export interface StockTransferRequest {
 }
 
 export interface StockTransferRequestFilters {
+  request_id?: string;
   page?: number;
   page_size?: number;
   start_date?: string;
@@ -625,7 +638,6 @@ export interface CreateStockTransferRequest {
   from_location_id: string;
   to_location_id: string;
   master_product_id: string;
-  source_product_stock_id?: string;
   quantity: number;
   notes?: string;
 }
@@ -756,7 +768,7 @@ class ApiClient {
       (response) => {
         return normalizeApiResponse(response.data);
       },
-      (error) => {
+      async (error) => {
         if (error.response?.status === 401) {
           localStorage.removeItem('argopos.auth.token');
           localStorage.removeItem('argopos.auth.user');
@@ -781,8 +793,24 @@ class ApiClient {
           }
         }
 
+        let responseData = error.response?.data;
+        if (
+          typeof Blob !== 'undefined' &&
+          responseData instanceof Blob &&
+          responseData.type.includes('json')
+        ) {
+          try {
+            responseData = JSON.parse(await responseData.text());
+          } catch {
+            // Keep the status fallback when a proxy returns a malformed JSON blob.
+          }
+        }
+
+        const responseMessage = typeof responseData === 'object' && responseData !== null && 'message' in responseData
+          ? (responseData as { message?: unknown }).message
+          : undefined;
         const message =
-          error.response?.data?.message ||
+          (typeof responseMessage === 'string' && responseMessage) ||
           error.response?.statusText ||
           'API request failed';
 
@@ -793,21 +821,20 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: any = {}
+    options: AxiosRequestConfig = {}
   ): Promise<ApiResponse<T>> {
-    const { method = 'GET', data, params } = options;
+    const { method = 'GET', ...requestOptions } = options;
 
     // console.log('Request config:', { method, endpoint, dataType: data?.constructor?.name, isFormData: data instanceof FormData });
 
-    const config: any = {
+    const requestConfig: AxiosRequestConfig = {
       method,
       url: endpoint,
-      ...(data && { data }),
-      ...(params && { params }),
+      ...requestOptions,
     };
 
     // Let axios interceptor handle all header management
-    return this.axiosInstance.request(config);
+    return this.axiosInstance.request(requestConfig);
   }
 
   // Auth endpoints
@@ -1175,6 +1202,7 @@ class ApiClient {
 
   async getStockTransferRequests(filters: StockTransferRequestFilters = {}): Promise<ApiResponse<StockTransferRequestListResponse>> {
     const params = new URLSearchParams();
+    if (filters.request_id) params.set('request_id', filters.request_id);
     if (filters.page) params.set('page', filters.page.toString());
     if (filters.page_size) params.set('page_size', filters.page_size.toString());
     if (filters.start_date) params.set('start_date', filters.start_date);
@@ -1212,6 +1240,13 @@ class ApiClient {
   async receiveStockTransferRequest(id: string): Promise<ApiResponse<StockTransferRequest>> {
     return this.request<StockTransferRequest>(`/stocks/transfer-requests/${id}/receive`, {
       method: 'POST',
+    });
+  }
+
+  async getStockApprovalLetter(id: string, download = false): Promise<ApiResponse<Blob>> {
+    return this.request<Blob>(`/stocks/transfer-requests/${id}/approval-letter${download ? '?download=true' : ''}`, {
+      responseType: 'blob',
+      headers: { Accept: 'application/pdf' },
     });
   }
 
@@ -1311,6 +1346,17 @@ class ApiClient {
     return this.request<StorePaymentMethod[]>(`/stores/${locationId}/payment-methods`);
   }
 
+  async getStorePaymentSettings(locationId: string): Promise<ApiResponse<StorePaymentSettings>> {
+    return this.request<StorePaymentSettings>(`/stores/${encodeURIComponent(locationId)}/payment-settings`);
+  }
+
+  async updateStorePaymentSettings(locationId: string, paymentMode: StorePaymentMode): Promise<ApiResponse<StorePaymentSettings>> {
+    return this.request<StorePaymentSettings>(`/stores/${encodeURIComponent(locationId)}/payment-settings`, {
+      method: 'PUT',
+      data: { payment_mode: paymentMode },
+    });
+  }
+
   async upsertPaymentMethod(paymentMethod: any): Promise<ApiResponse<any>> {
     return this.request('/stores/payment-methods', {
       method: 'POST',
@@ -1374,19 +1420,21 @@ class ApiClient {
     });
   }
 
-  async uploadPickupProof(transactionId: string, file?: File, pathProofPickup?: string): Promise<ApiResponse<{ path_proof_pickup: string; pickup_at: string }>> {
+  async uploadPickupProof(transactionId: string, file?: File, pathProofPickup?: string, paymentProvider?: string): Promise<ApiResponse<{ path_proof_pickup: string; pickup_at: string }>> {
     // Support both file upload (FormData) and base64 string (JSON)
     if (file) {
       const formData = new FormData();
       formData.append('file', file);
       return this.request(`/transactions/${transactionId}/upload-pickup-proof`, {
         method: 'POST',
+        withCredentials: paymentProvider === "DOKU",
         data: formData,
       });
     }
     // Fallback to JSON with base64 string
     return this.request(`/transactions/${transactionId}/upload-pickup-proof`, {
       method: 'POST',
+      withCredentials: paymentProvider === "DOKU",
       data: { path_proof_pickup: pathProofPickup },
     });
   }

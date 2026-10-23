@@ -127,7 +127,7 @@ export function TopBar({ title }: TopBarProps) {
             {searchResults.length > 0 ? (
               searchResults.map((item) => (
                 <button
-                  key={item.key}
+                  key={item.path}
                   type="button"
                   role="option"
                   aria-selected="false"

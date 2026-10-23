@@ -182,7 +182,7 @@ export default function TransactionPage() {
     setPickupProofUploading(true);
     try {
       // Use apiClient.uploadPickupProof with file upload (follows Products.tsx pattern)
-      const response = await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile);
+      const response = await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile, undefined, pickupProofTransaction.payment_provider);
       if (!response.success) throw new Error(response.message || 'Upload failed');
       toast.success('Bukti serah terima berhasil diupload');
       closePickupProofModal();
@@ -575,7 +575,7 @@ export default function TransactionPage() {
                               <Button size="sm" variant="outline" onClick={() => handleViewCartItems(tx.id)}>
                                 <Eye className="h-3 w-3 mr-1" /> Items
                               </Button>
-                              {tx.status === "WAITING_TO_PAYMENT" && (
+                              {tx.status === "WAITING_TO_PAYMENT" && tx.payment_provider !== "DOKU" && (
                                 <Button size="sm" variant="outline" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                   Approve Payment
@@ -663,7 +663,7 @@ export default function TransactionPage() {
                           <Eye className="h-3 w-3 mr-1" /> View Items
                         </Button>
                         <div className="flex gap-2">
-                          {tx.status === "WAITING_TO_PAYMENT" && (
+                          {tx.status === "WAITING_TO_PAYMENT" && tx.payment_provider !== "DOKU" && (
                             <Button className="flex-1" variant="outline" size="sm" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
                               <CheckCircle className="h-3 w-3 mr-1" /> Approve Payment
                             </Button>
@@ -791,7 +791,7 @@ export default function TransactionPage() {
               {approvalTarget?.action === "payment" ? "Approve Payment" : "Update Delivery Status"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {pickupProofTransaction?.action === "payment"
+              {approvalTarget?.action === "payment"
                 ? "This will mark the transaction as paid."
                 : "This will move to preparing product."}
             </AlertDialogDescription>

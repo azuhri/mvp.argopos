@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, type User, type AccessRole, type LoginResponse } from "./api";
 import { accessRoleService } from "./services/accessRoleService";
@@ -77,11 +77,13 @@ interface AuthContextValue {
   getPermission: (menuKey: MenuKey) => PermissionMode;
   canRead: (menuKey: MenuKey) => boolean;
   canWrite: (menuKey: MenuKey) => boolean;
+  refreshPermissions: () => Promise<void>;
+  permissionsRefreshing: boolean;
 }
 
 // Hook to fetch permissions from API
 function usePermissions(roleId?: string) {
-  const { data: permissions = {}, isLoading, error } = useQuery({
+  const { data: permissions = {}, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['role-permissions', roleId],
     queryFn: async () => {
       if (!roleId) return {};
@@ -99,7 +101,7 @@ function usePermissions(roleId?: string) {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  return { permissions, loading: isLoading };
+  return { permissions, loading: isLoading, refreshing: isFetching, refetch };
 }
 
 const STORAGE_KEY = "argopos.auth.user";
@@ -187,7 +189,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Use dynamic permissions from API
-  const { permissions, loading: permissionsLoading } = usePermissions(user?.role_id);
+  const { permissions, loading: permissionsLoading, refreshing: permissionsRefreshing, refetch: refetchPermissions } = usePermissions(user?.role_id);
+  const refreshPermissions = useCallback(async (): Promise<void> => {
+    if (!user?.role_id) return;
+    await refetchPermissions();
+  }, [refetchPermissions, user?.role_id]);
 
   const getPermission = (menuKey: MenuKey): PermissionMode => {
     if (!user || permissionsLoading) return "hidden";
@@ -214,9 +220,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       getPermission,
       canRead,
-      canWrite
+      canWrite,
+      refreshPermissions,
+      permissionsRefreshing,
     }),
-    [user, combinedLoading, permissions]
+    [user, combinedLoading, permissions, refreshPermissions, permissionsRefreshing]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

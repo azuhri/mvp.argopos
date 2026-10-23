@@ -81,38 +81,44 @@ export class LocationService {
     type = ''
   ): Promise<LocationListResponse> {
     const response = await apiClient.getLocations(page, pageSize, search, locationCode, type);
-    console.log('API response in getLocations:', response);
-    
+
     if (!response.success || !response.data) {
       throw new Error(response.message || 'Failed to get locations');
     }
-    
+
     // Handle nested response structure: {success: true, data: {locations: [...], meta: {...}}}
-    const responseData = response.data as any;
-    const locations = responseData?.locations || responseData || [];
-    const meta = responseData?.meta || { page, page_size: pageSize, total: locations.length };
-    
-    console.log('Extracted locations in service:', locations);
-    console.log('Extracted meta in service:', meta);
-    
+    const responseData = response.data as LocationListResponse | Location[];
+    const locations = Array.isArray(responseData) ? responseData : responseData.locations;
+    const meta = Array.isArray(responseData)
+      ? { page, page_size: pageSize, total: responseData.length }
+      : responseData.meta;
+
     return {
       locations: Array.isArray(locations) ? locations : [],
-      meta: meta
+      meta,
     };
   }
 
   // Get all locations (without pagination)
   async getAllLocations(): Promise<Location[]> {
-    const response = await apiClient.getLocations(1, 1000); // Get all with large page size
-    if (!response.success || !response.data) {
-      throw new Error(response.message || 'Failed to get all locations');
+    // The backend accepts at most 100 records per page. Requesting a larger
+    // page size silently falls back to 20, so walk every page explicitly.
+    const pageSize = 100;
+    const locations: Location[] = [];
+    let page = 1;
+
+    while (true) {
+      const result = await this.getLocations(page, pageSize);
+      locations.push(...result.locations);
+
+      if (result.locations.length === 0 || locations.length >= result.meta.total) {
+        break;
+      }
+
+      page += 1;
     }
-    
-    // Handle nested response structure
-    const responseData = response.data as any;
-    const locations = responseData?.locations || responseData || [];
-    
-    return Array.isArray(locations) ? locations : [];
+
+    return locations;
   }
 }
 

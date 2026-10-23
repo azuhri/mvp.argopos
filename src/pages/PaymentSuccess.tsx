@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   AlertCircle,
@@ -34,6 +34,7 @@ interface TransactionCart {
 
 interface TransactionData {
   id: string;
+  payment_provider?: string;
   transaction_code: string;
   status: string;
   payment_code?: string;
@@ -54,10 +55,6 @@ function resolveAssetUrl(path?: string) {
 export default function PaymentSuccess() {
   const { locationCode, transactionId } = useParams<{ locationCode: string; transactionId: string }>();
 
-  useEffect(() => {
-    if (transactionId) removePendingPayment(transactionId);
-  }, [transactionId]);
-
   const {
     data: transactionData,
     isLoading,
@@ -73,6 +70,10 @@ export default function PaymentSuccess() {
     },
     enabled: Boolean(transactionId),
   });
+
+  useEffect(() => {
+    if (transactionId && transactionData?.status === "COMPLETED") removePendingPayment(transactionId);
+  }, [transactionId, transactionData?.status]);
 
   if (isLoading) {
     return (
@@ -99,6 +100,10 @@ export default function PaymentSuccess() {
         </div>
       </AppLayoutCommerce>
     );
+  }
+
+  if (transactionData.status !== "COMPLETED") {
+    return <Navigate to={`/${locationCode}/commerce/payment/${transactionId}`} replace />;
   }
 
   const items = transactionData.transaction_carts || [];
@@ -213,7 +218,7 @@ export default function PaymentSuccess() {
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-4 md:px-5">
             <div className="ml-auto max-w-sm space-y-3">
               <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span className="font-bold">{formatCurrency(transactionData.base_amount)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-slate-500">Kode unik</span><span className="font-bold">{transactionData.payment_code || transactionData.nominal_code}</span></div>
+              {transactionData.payment_provider !== "DOKU" && <div className="flex justify-between text-sm"><span className="text-slate-500">Kode unik</span><span className="font-bold">{transactionData.payment_code || transactionData.nominal_code}</span></div>}
               <Separator />
               <div className="flex justify-between text-base font-extrabold text-[#071a4f]"><span>Total</span><span>{formatCurrency(transactionData.total_amount)}</span></div>
             </div>

@@ -1,5 +1,25 @@
-import { describe, expect, it } from "vitest";
-import { createLocationStatusPayload, getLocationStatus, isLocationActive } from "./locationService";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { apiClient, type Location } from "@/lib/api";
+import {
+  createLocationStatusPayload,
+  getLocationStatus,
+  isLocationActive,
+  LocationService,
+} from "./locationService";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function makeLocation(index: number): Location {
+  return {
+    id: `location-${index}`,
+    location_code: `LOC-${index}`,
+    location_name: `Location ${index}`,
+    type: "store",
+    created_at: "2026-09-07T00:00:00Z",
+  };
+}
 
 describe("location status helpers", () => {
   it("normalizes inactive status variants", () => {
@@ -17,5 +37,34 @@ describe("location status helpers", () => {
       status: "inactive",
       is_active: false,
     });
+  });
+});
+
+describe("LocationService.getAllLocations", () => {
+  it("loads every backend page when more than 100 locations exist", async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => makeLocation(index));
+    const secondPage = Array.from({ length: 25 }, (_, index) => makeLocation(index + 100));
+    const getLocations = vi.spyOn(apiClient, "getLocations")
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          locations: firstPage,
+          meta: { page: 1, page_size: 100, total: 125 },
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          locations: secondPage,
+          meta: { page: 2, page_size: 100, total: 125 },
+        },
+      });
+
+    const locations = await new LocationService().getAllLocations();
+
+    expect(getLocations).toHaveBeenNthCalledWith(1, 1, 100, "", "", "");
+    expect(getLocations).toHaveBeenNthCalledWith(2, 2, 100, "", "", "");
+    expect(locations).toHaveLength(125);
+    expect(locations.at(-1)?.id).toBe("location-124");
   });
 });

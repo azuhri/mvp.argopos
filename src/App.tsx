@@ -31,6 +31,7 @@ import MasterCategories from "./pages/master/Categories";
 import StoreManagement from "./pages/master/StoreManagement";
 import KoperasiDetailPage from "./pages/master/KoperasiDetailPage";
 import PaymentApprovalPage from "./pages/master/PaymentApprovalPage";
+import Payments from "./pages/Payments";
 import CommerceCatalog from "./pages/CommerceCatalog";
 import PaymentDetail from "./pages/PaymentDetail";
 import PaymentSuccess from "./pages/PaymentSuccess";
@@ -85,6 +86,11 @@ const App = () => (
             <Route path="/transactions" element={
               <ProtectedRoute>
                 <TransactionPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/payments" element={
+              <ProtectedRoute menuKey="transactions">
+                <Payments />
               </ProtectedRoute>
             } />
 

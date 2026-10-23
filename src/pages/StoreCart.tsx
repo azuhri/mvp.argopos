@@ -35,6 +35,9 @@ import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { upsertPendingPayment } from "@/lib/pendingPaymentStorage";
+import { paymentService, validatedCheckoutUrl } from "@/lib/services/paymentService";
+import { getStorePaymentSettings, storePaymentSettingsQueryKey } from "@/lib/services/storePaymentSettingsService";
+import { DokuMethodDialog } from "@/components/commerce/DokuMethodDialog";
 
 interface ProductStock {
   id: string;
@@ -87,13 +90,15 @@ interface OperationalStatus {
 
 interface CreateTransactionRequest {
   master_location_id: string;
-  base_amount: number;
+  base_amount?: number;
   total_item: number;
-  payment_method_id: string;
-  nominal_code: string;
+  payment_method_id?: string;
+  payment_provider?: "DOKU";
+  doku_payment_method?: string;
+  nominal_code?: string;
   carts: Array<{
     product_stock_id: string;
-    amount: number;
+    amount?: number;
     qty: number;
   }>;
   customer_name?: string;
@@ -143,6 +148,7 @@ async function fetchTransactionDetail(transactionId: string) {
 }
 
 function getPaymentMethodLabel(paymentType: string) {
+  if (paymentType === "DOKU") return "DOKU — pembayaran online";
   if (paymentType === "qris") return "QRIS";
   if (paymentType === "transfer_rekening") return "Transfer Rekening";
   if (paymentType === "cutoff_hutang") return "Cutoff / Hutang";
@@ -161,6 +167,10 @@ export default function StoreCart() {
   const [cart, setCart] = useState(getCartSummary());
   const [updating, setUpdating] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
+  const [dokuMethodDialogOpen, setDokuMethodDialogOpen] = useState(false);
+  const [selectedDokuMethod, setSelectedDokuMethod] = useState<string | null>(null);
+  const [dokuSelectionError, setDokuSelectionError] = useState("");
+  const [dokuPickupAcknowledged, setDokuPickupAcknowledged] = useState(false);
   const [pickupTimeAlert, setPickupTimeAlert] = useState<{
     show: boolean;
     message: string;
@@ -181,6 +191,8 @@ export default function StoreCart() {
   const [isExternalCustomerExists, setIsExternalCustomerExists] = useState(false);
   const [isValidatingExternal, setIsValidatingExternal] = useState(false);
   const [isCreatingTransaction, setIsCreatingTransaction] = useState(false);
+  const [isOpeningDokuCheckout, setIsOpeningDokuCheckout] = useState(false);
+  const checkoutSubmitting = useRef(false);
   const employeeValidationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const externalValidationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -212,7 +224,28 @@ export default function StoreCart() {
     enabled: !!locationCode,
   });
 
-  // Fetch payment methods for the store
+  const paymentSettingsQuery = useQuery({
+    queryKey: storePaymentSettingsQueryKey(storeData?.location_id || ""),
+    queryFn: () => getStorePaymentSettings(storeData!.location_id),
+    enabled: Boolean(storeData?.location_id),
+    retry: false,
+  });
+  const paymentSettings = paymentSettingsQuery.data;
+  const isDokuMode = paymentSettings?.payment_mode === "DOKU";
+  const dokuMethods = useMemo(() => [...new Set((paymentSettings?.doku_methods || []).filter((method) => typeof method === "string" && method.trim()))], [paymentSettings?.doku_methods]);
+  const paymentSettingsUnavailable = !paymentSettings || Boolean(paymentSettingsQuery.error) || (isDokuMode && (!paymentSettings.doku_available || dokuMethods.length === 0));
+
+  useEffect(() => {
+    if (!isDokuMode) {
+      setDokuMethodDialogOpen(false);
+      setSelectedDokuMethod(null);
+    } else if (selectedDokuMethod && !dokuMethods.includes(selectedDokuMethod)) {
+      setSelectedDokuMethod(null);
+      setDokuSelectionError("Metode pembayaran yang dipilih sudah tidak tersedia. Pilih metode lain.");
+    }
+  }, [isDokuMode, dokuMethods, selectedDokuMethod]);
+
+  // Manual methods remain stored when an outlet switches to DOKU.
   const { data: paymentMethods, isLoading: loadingPaymentMethods } = useQuery({
     queryKey: ['paymentMethods', storeData?.location_id],
     queryFn: async () => {
@@ -225,7 +258,7 @@ export default function StoreCart() {
       const result = await response.json();
       return result.data as PaymentMethod[];
     },
-    enabled: !!storeData?.location_id,
+    enabled: Boolean(storeData?.location_id) && paymentSettings?.payment_mode === "MANUAL",
   });
 
   // Fetch operational status for pickup time check
@@ -431,9 +464,18 @@ export default function StoreCart() {
   }, []);
 
   // Create transaction
-  const handleCreateTransaction = async (bypassPickupTimeCheck = false) => {
+  const handleCreateTransaction = async (bypassPickupTimeCheck = false, dokuConfirmed = false) => {
+    if (checkoutSubmitting.current) return;
+    if (paymentSettingsUnavailable) {
+      toast.error("Pembayaran outlet belum tersedia. Periksa kembali beberapa saat lagi.");
+      return;
+    }
     if (!selectedPaymentMethod) {
       toast.error('Pilih metode pembayaran terlebih dahulu');
+      return;
+    }
+    if (isDokuMode && dokuConfirmed && (!selectedDokuMethod || !dokuMethods.includes(selectedDokuMethod))) {
+      setDokuSelectionError("Pilih metode pembayaran DOKU terlebih dahulu.");
       return;
     }
 
@@ -483,9 +525,33 @@ export default function StoreCart() {
       }
     }
 
+    if (isDokuMode && !dokuConfirmed) {
+      setSelectedDokuMethod(null);
+      setDokuSelectionError("");
+      setDokuPickupAcknowledged(bypassPickupTimeCheck);
+      setDokuMethodDialogOpen(true);
+      return;
+    }
+
+    checkoutSubmitting.current = true;
     setIsCreatingTransaction(true);
 
     try {
+      const currentSettings = await paymentSettingsQuery.refetch();
+      if (currentSettings.error || !currentSettings.data ||
+          (currentSettings.data.payment_mode === "DOKU") !== (selectedPaymentMethod === "DOKU") ||
+          (currentSettings.data.payment_mode === "DOKU" && !currentSettings.data.doku_available)) {
+        setDokuSelectionError("Pengaturan pembayaran outlet berubah atau belum tersedia. Periksa kembali pilihan pembayaran.");
+        toast.error("Pengaturan pembayaran outlet berubah atau belum tersedia. Periksa metode pembayaran sebelum melanjutkan.");
+        return;
+      }
+      if (currentSettings.data.payment_mode === "DOKU" &&
+          (!dokuConfirmed || !selectedDokuMethod || !currentSettings.data.doku_methods.includes(selectedDokuMethod))) {
+        setSelectedDokuMethod(null);
+        setDokuSelectionError("Metode pembayaran yang dipilih sudah tidak tersedia. Pilih metode lain.");
+        return;
+      }
+
       // Prepare cart items
       const carts = cart.items.map(item => ({
         product_stock_id: item.productId,
@@ -511,6 +577,15 @@ export default function StoreCart() {
         carts: carts
       };
 
+      if (selectedPaymentMethod === "DOKU") {
+        transactionRequest.payment_provider = "DOKU";
+        transactionRequest.doku_payment_method = selectedDokuMethod!;
+        delete transactionRequest.payment_method_id;
+        delete transactionRequest.nominal_code;
+        delete transactionRequest.base_amount;
+        transactionRequest.carts = carts.map(({ product_stock_id, qty }) => ({ product_stock_id, qty }));
+      }
+
       // Add customer information based on type
       if (isInternalCustomer) {
         transactionRequest.customer_name = employeeCodeOrNIK.trim();
@@ -524,6 +599,7 @@ export default function StoreCart() {
       // Create transaction via API
       const response = await fetch(`${config.apiUrl}/transactions`, {
         method: 'POST',
+        credentials: transactionRequest.payment_provider === "DOKU" ? "include" : "same-origin",
         headers: {
           'Content-Type': 'application/json',
         },
@@ -559,32 +635,69 @@ export default function StoreCart() {
           }
         }
 
+        const paymentPath = `/${locationCode}/commerce/payment/${result.data.id}`;
+        if (transactionRequest.payment_provider === "DOKU") {
+          setIsOpeningDokuCheckout(true);
+          clearCart();
+          try {
+            const payment = await paymentService.createCheckout(result.data.id);
+            if (payment.status === "PENDING" && payment.checkout_url && !payment.verification_pending &&
+                !payment.review_required && !["CREATING", "UNCERTAIN"].includes(payment.creation_state || "") &&
+                Date.parse(payment.expires_at) > Date.now()) {
+              const checkoutUrl = validatedCheckoutUrl(payment.checkout_url);
+              window.location.assign(checkoutUrl);
+              return;
+            }
+          } catch {
+            toast.warning("Pesanan sudah dibuat. Periksa status pembayaran pada detail transaksi sebelum mencoba kembali.");
+          }
+          setIsOpeningDokuCheckout(false);
+          navigate(paymentPath);
+          return;
+        }
+
         toast.success('Transaksi berhasil dibuat');
         clearCart();
-        navigate(`/${locationCode}/commerce/payment/${result.data.id}`);
+        navigate(paymentPath);
       } else {
         toast.error('Gagal membuat transaksi');
       }
     } catch {
       toast.error('Gagal membuat transaksi');
     } finally {
+      checkoutSubmitting.current = false;
       setIsCreatingTransaction(false);
     }
   };
 
   // Filter payment methods based on customer type
-  const filteredPaymentMethods = useMemo(() => paymentMethods?.filter(pm => {
-    if (!pm.is_active) return false;
-    // Cutoff/hutang only available for internal customers who are validated
-    if (pm.payment_type === 'cutoff_hutang' && (!isInternalCustomer || isEmployeeValid !== true)) return false;
-    return true;
-  }) || [], [isEmployeeValid, isInternalCustomer, paymentMethods]);
+  const filteredPaymentMethods = useMemo(() => {
+    if (!paymentSettings || paymentSettingsQuery.error) return [];
+    if (paymentSettings.payment_mode === "DOKU") return [{
+      id: "DOKU", location_id: storeData?.location_id || "", payment_type: "DOKU",
+      image_url: "", bank_name: "", account_number: "", account_name: "", is_active: true,
+    }];
+    return paymentMethods?.filter(pm => {
+      if (!pm.is_active || pm.payment_type.toUpperCase() === "DOKU") return false;
+      // Cutoff/hutang only available for internal customers who are validated.
+      if (pm.payment_type === 'cutoff_hutang' && (!isInternalCustomer || isEmployeeValid !== true)) return false;
+      return true;
+    }) || [];
+  }, [paymentSettings, paymentSettingsQuery.error, isEmployeeValid, isInternalCustomer, paymentMethods, storeData?.location_id]);
 
   useEffect(() => {
+    if (isDokuMode && !paymentSettingsUnavailable) {
+      setSelectedPaymentMethod("DOKU");
+      return;
+    }
+    if (paymentSettingsUnavailable) {
+      setSelectedPaymentMethod(null);
+      return;
+    }
     if (!selectedPaymentMethod) return;
     const remainsAvailable = filteredPaymentMethods.some((method) => method.id === selectedPaymentMethod);
     if (!remainsAvailable) setSelectedPaymentMethod(null);
-  }, [filteredPaymentMethods, selectedPaymentMethod]);
+  }, [filteredPaymentMethods, selectedPaymentMethod, isDokuMode, paymentSettingsUnavailable]);
 
   // Reset employee validation when switching customer type
   useEffect(() => {
@@ -631,6 +744,16 @@ export default function StoreCart() {
         </div>
       </AppLayoutCommerce>
     );
+  }
+
+  if (isOpeningDokuCheckout) {
+    return <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 text-center" role="status">
+        <LoadingSpinner />
+        <h1 className="text-xl font-extrabold text-[#071a4f]">Menyiapkan pembayaran DOKU</h1>
+        <p className="text-sm text-slate-600">Pesanan Anda sudah tersimpan. Tunggu hingga halaman pembayaran terbuka.</p>
+      </div>
+    </AppLayoutCommerce>;
   }
 
   if (items.length === 0) {
@@ -971,7 +1094,13 @@ export default function StoreCart() {
                   <CreditCard className="h-5 w-5 text-[#e30613]" />
                   <h3 className="font-extrabold text-[#071a4f]">Metode pembayaran</h3>
                 </div>
-                {loadingPaymentMethods ? (
+                {isDokuMode && !paymentSettingsQuery.error && <p className="mb-3 text-sm text-slate-600">Pilih metode DOKU sebelum membuat pesanan. Anda akan meninjau pilihan pembayaran pada langkah berikutnya.</p>}
+                {paymentSettingsQuery.error ? (
+                  <div className="space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
+                    <p role="alert" className="text-sm text-red-800">Pengaturan pembayaran outlet belum dapat dimuat. Muat ulang sebelum melanjutkan.</p>
+                    <Button type="button" size="sm" variant="outline" disabled={paymentSettingsQuery.isFetching} onClick={() => void paymentSettingsQuery.refetch()}>Muat ulang pembayaran</Button>
+                  </div>
+                ) : paymentSettingsQuery.isPending || loadingPaymentMethods ? (
                   <div className="space-y-2">
                     <div className="h-14 animate-pulse rounded-md bg-slate-100" />
                     <div className="h-14 animate-pulse rounded-md bg-slate-100" />
@@ -980,16 +1109,17 @@ export default function StoreCart() {
                   <RadioGroup
                     value={selectedPaymentMethod || ''}
                     onValueChange={setSelectedPaymentMethod}
+                    disabled={paymentSettingsUnavailable}
                   >
                     <div className="space-y-2">
                       {filteredPaymentMethods.map((pm) => (
                         <div
                           key={pm.id}
-                          className={`flex cursor-pointer items-center space-x-3 rounded-md border p-3 transition ${selectedPaymentMethod === pm.id
+                          className={`flex items-center space-x-3 rounded-md border p-3 transition ${paymentSettingsUnavailable ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${selectedPaymentMethod === pm.id
                             ? 'border-[#071a4f] bg-[#eef2fb]'
                             : 'border-slate-200 bg-white hover:border-slate-300'
                             }`}
-                          onClick={() => setSelectedPaymentMethod(pm.id)}
+                          onClick={() => { if (!paymentSettingsUnavailable) setSelectedPaymentMethod(pm.id); }}
                         >
                           <RadioGroupItem value={pm.id} id={pm.id} className="sr-only" />
                           <div className="flex items-center gap-3 flex-1">
@@ -1003,6 +1133,7 @@ export default function StoreCart() {
                               >
                                 {getPaymentMethodLabel(pm.payment_type)}
                               </Label>
+                              {pm.payment_type === "DOKU" && <p className="mt-1 text-xs text-muted-foreground">Pesanan dibuat setelah Anda memilih metode dan mengonfirmasi pembayaran.</p>}
                               {pm.payment_type === 'transfer_rekening' && pm.bank_name && (
                                 <p className="text-xs text-muted-foreground">
                                   {pm.bank_name} - {pm.account_number}
@@ -1024,6 +1155,8 @@ export default function StoreCart() {
                     Tidak ada metode pembayaran yang tersedia
                   </p>
                 )}
+                {isDokuMode && !paymentSettings.doku_available && !paymentSettingsQuery.error && <p role="alert" className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Pembayaran DOKU sementara tidak tersedia. Hubungi outlet atau coba kembali beberapa saat lagi.</p>}
+                {isDokuMode && paymentSettings.doku_available && dokuMethods.length === 0 && !paymentSettingsQuery.error && <p role="alert" className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Belum ada metode DOKU yang tersedia. Hubungi outlet atau coba kembali beberapa saat lagi.</p>}
               </div>
 
               <Separator className="my-4" />
@@ -1039,7 +1172,7 @@ export default function StoreCart() {
                 <Button
                   className="commerce-orange-button h-12 w-full rounded-md font-extrabold"
                   size="lg"
-                  disabled={!selectedPaymentMethod || isCreatingTransaction}
+                  disabled={!selectedPaymentMethod || paymentSettingsUnavailable || paymentSettingsQuery.isFetching || isCreatingTransaction}
                   onClick={() => handleCreateTransaction()}
                 >
                   {isCreatingTransaction ? (
@@ -1065,6 +1198,19 @@ export default function StoreCart() {
           </div>
         </div>
       </div>
+
+      <DokuMethodDialog
+        open={dokuMethodDialogOpen}
+        onOpenChange={(open) => { setDokuMethodDialogOpen(open); if (!open) setSelectedDokuMethod(null); }}
+        methods={dokuMethods}
+        selectedMethod={selectedDokuMethod}
+        onSelectMethod={(method) => { setSelectedDokuMethod(method); setDokuSelectionError(""); }}
+        amount={total}
+        busy={isCreatingTransaction || paymentSettingsQuery.isFetching}
+        unavailable={paymentSettingsUnavailable}
+        error={dokuSelectionError}
+        onConfirm={() => void handleCreateTransaction(dokuPickupAcknowledged, true)}
+      />
 
       <Dialog open={pickupTimeAlert?.show || false} onOpenChange={() => setPickupTimeAlert(null)}>
         <DialogContent className="commerce-theme commerce-panel max-w-md rounded-lg">

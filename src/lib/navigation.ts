@@ -41,6 +41,7 @@ export const NAV_GROUPS_MENUS: NavGroupConfig[] = [
     listMenus: [
       { key: "dashboard", path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, mobile: true },
       { key: "transactions", path: "/transactions", label: "Transactions", icon: BadgeDollarSign, mobile: true },
+      { key: "transactions", path: "/payments", label: "Pembayaran DOKU", icon: ReceiptText },
       { key: "customers", path: "/customers", label: "Customers", icon: Users, mobile: true },
       // { key: "products", path: "/products", label: "Products", icon: Package, mobile: true },
       { key: "koperasi", path: "/master/store", label: "Koperasi", icon: Building2, mobile: true },

@@ -284,6 +284,7 @@ export default function Transactions() {
             setSelectedTransaction(null);
           }}
           transactionId={selectedTransaction.id}
+          paymentProvider={selectedTransaction.payment_provider}
           transactionCode={selectedTransaction.transaction_code || selectedTransaction.id?.slice(0, 8) || '-'}
           onSuccess={handlePickupProofSuccess}
         />

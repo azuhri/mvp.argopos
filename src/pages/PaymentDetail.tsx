@@ -42,6 +42,7 @@ import {
   parsePaymentExpiry,
 } from "@/lib/paymentExpiry";
 import { getTransactionItemCount } from "@/lib/transactionPresentation";
+import { DokuPaymentPanel } from "@/components/commerce/DokuPaymentPanel";
 
 interface StoreAssignedUser {
   id: string;
@@ -81,6 +82,7 @@ interface TransactionCart {
 
 interface Transaction {
   id: string;
+  payment_provider?: string;
   master_location_id: string;
   customer_id: string;
   status: string;
@@ -126,7 +128,12 @@ function PaymentMethodIcon({ paymentType }: { paymentType?: string }) {
   return <Banknote className="h-5 w-5" />;
 }
 
-function getStatusMessage(status: string) {
+function getStatusMessage(status: string, paymentProvider?: string) {
+  if (paymentProvider === "DOKU") {
+    if (status === "WAITING_TO_PAYMENT") return "Menunggu konfirmasi pembayaran DOKU. Jika sudah membayar, jangan bayar ulang.";
+    if (status === "PAID") return "Pembayaran DOKU telah diterima. Periksa detail verifikasi di bawah.";
+    if (status === "REJECTED") return "Pesanan telah dibatalkan. Periksa status pembayaran DOKU di bawah sebelum membuat pesanan baru.";
+  }
   if (status === "WAITING_TO_PAYMENT") return "Selesaikan pembayaran sebelum waktu berakhir.";
   if (status === "PAID") return "Pembayaran sudah diverifikasi dan pesanan segera diproses.";
   if (status === "PREPARING_PRODUCT") return "Outlet sedang menyiapkan produk pesanan Anda.";
@@ -374,6 +381,7 @@ export default function PaymentDetail() {
     try {
       const response = await fetch(`${config.apiUrl}/transactions/${transactionId}/confirm-receipt`, {
         method: "POST",
+        credentials: transactionData?.payment_provider === "DOKU" ? "include" : "same-origin",
         headers: { "Content-Type": "application/json" },
       });
       if (!response.ok) throw new Error("Gagal mengkonfirmasi penerimaan barang");
@@ -437,7 +445,7 @@ export default function PaymentDetail() {
     );
   }
 
-  if (transactionData.status === "REJECTED") {
+  if (transactionData.status === "REJECTED" && transactionData.payment_provider !== "DOKU") {
     return (
       <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
         <div className="mx-auto flex min-h-[65vh] max-w-lg items-center justify-center">
@@ -465,6 +473,7 @@ export default function PaymentDetail() {
   const items = transactionData.transaction_carts || [];
   const totalItems = getTransactionItemCount(transactionData.total_item, items);
   const isWaiting = transactionData.status === "WAITING_TO_PAYMENT";
+  const isDoku = transactionData.payment_provider === "DOKU";
   const isReadyToPickup = transactionData.status === "READY_TO_PICKUP";
   const qrisUrl = selectedPaymentMethod?.image_url
     ? selectedPaymentMethod.image_url.startsWith("http")
@@ -511,10 +520,10 @@ export default function PaymentDetail() {
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <p className="font-extrabold text-[#071a4f]">{getStatusMessage(transactionData.status)}</p>
+                <p className="font-extrabold text-[#071a4f]">{getStatusMessage(transactionData.status, transactionData.payment_provider)}</p>
                 <StatusBadge status={getStatusBadgeKey(transactionData.status)} />
               </div>
-              <p className="mt-1 text-xs font-medium text-slate-600">Status diperbarui otomatis setiap 5 detik.</p>
+              <p className="mt-1 text-xs font-medium text-slate-600">{isDoku ? "Status pembayaran dan pesanan diperbarui otomatis." : "Status diperbarui otomatis setiap 5 detik."}</p>
             </div>
           </div>
           {isWaiting && (
@@ -544,6 +553,7 @@ export default function PaymentDetail() {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
+            {isDoku && <DokuPaymentPanel key={transactionData.id} transactionId={transactionData.id} />}
             <section className="commerce-panel overflow-hidden">
               <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-4 md:px-5">
                 <Package className="h-5 w-5 text-[#e30613]" />
@@ -584,7 +594,7 @@ export default function PaymentDetail() {
               )}
             </section>
 
-            <section className="commerce-panel p-4 md:p-5">
+            {!isDoku && <section className="commerce-panel p-4 md:p-5">
               <div className="mb-4 flex items-center gap-2">
                 <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#eef2fb] text-[#071a4f]">
                   <PaymentMethodIcon paymentType={selectedPaymentMethod?.payment_type} />
@@ -632,9 +642,9 @@ export default function PaymentDetail() {
                   Pembayaran dicatat melalui cutoff internal. Konfirmasikan penerimaan setelah barang diterima.
                 </div>
               )}
-            </section>
+            </section>}
 
-            {admins.length > 0 && (
+            {!isDoku && admins.length > 0 && (
               <section className="commerce-panel p-4 md:p-5">
                 <div className="mb-4 flex items-center gap-2">
                   <Store className="h-5 w-5 text-[#e30613]" />
@@ -685,7 +695,7 @@ export default function PaymentDetail() {
                   </span>
                 </div>
                 <div className="flex justify-between gap-3 text-sm"><span className="text-slate-500">Subtotal</span><span className="font-bold">{formatCurrency(transactionData.base_amount)}</span></div>
-                <div className="flex justify-between gap-3 text-sm"><span className="text-slate-500">Kode unik</span><span className="font-bold">{transactionData.payment_code || transactionData.nominal_code}</span></div>
+                {!isDoku && <div className="flex justify-between gap-3 text-sm"><span className="text-slate-500">Kode unik</span><span className="font-bold">{transactionData.payment_code || transactionData.nominal_code}</span></div>}
                 <Separator />
                 <div>
                   <p className="text-xs font-bold text-slate-500">Total pembayaran</p>
