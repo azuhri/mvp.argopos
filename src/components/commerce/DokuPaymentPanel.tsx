@@ -6,25 +6,39 @@ import { formatCurrency } from "@/lib/mockData";
 import { PaymentRequestError, paymentService, validatedCheckoutUrl } from "@/lib/services/paymentService";
 import { getDokuPaymentMethodLabel } from "@/lib/dokuPaymentMethods";
 
-export function DokuPaymentPanel({ transactionId }: { transactionId: string }) {
+interface DokuPaymentPanelProps {
+  transactionId: string;
+  returnMode?: boolean;
+  onVerifiedPaid?: () => void;
+}
+
+export function DokuPaymentPanel({ transactionId, returnMode, onVerifiedPaid }: DokuPaymentPanelProps) {
   const queryClient = useQueryClient();
   const submitting = useRef(false);
   const refreshing = useRef(false);
   const [now, setNow] = useState(Date.now());
   const [actionError, setActionError] = useState("");
   const [refreshMessage, setRefreshMessage] = useState("");
+  const returned = returnMode ?? new URLSearchParams(window.location.search).has("doku_return");
   const queryKey = ["doku-payment", transactionId];
   const statusQuery = useQuery({
     queryKey,
-    queryFn: () => paymentService.getStatus(transactionId),
-    retry: (count, error) => !(error instanceof PaymentRequestError && [401, 403, 404].includes(error.status)) && count < 2,
+    // Returning from DOKU starts verification, never a new checkout. Query's
+    // in-flight deduplication and AbortSignal also cover polling and unmounts.
+    queryFn: async ({ signal }) => returned
+      ? (await paymentService.refreshStatus(transactionId, signal)).session
+      : paymentService.getStatus(transactionId, signal),
+    retry: (count, error) => !returned && !(error instanceof PaymentRequestError && [401, 403, 404].includes(error.status)) && count < 2,
     refetchInterval: (query) => {
       if (query.state.error instanceof PaymentRequestError && [401, 403, 404].includes(query.state.error.status)) return false;
       const data = query.state.data;
-      if (data && data.status !== "PENDING") return false;
+      if (data && (data.status !== "PENDING" || data.review_required)) return false;
+      if (returned) return 5000;
       return query.state.error || data?.verification_pending ? 15000 : 5000;
     },
     refetchIntervalInBackground: false,
+    refetchOnWindowFocus: !returned,
+    refetchOnReconnect: !returned,
   });
   const createMutation = useMutation({ mutationFn: (rejectedPaymentId?: string) => paymentService.createCheckout(transactionId, rejectedPaymentId) });
   const refreshMutation = useMutation({ mutationFn: () => paymentService.refreshStatus(transactionId) });
@@ -35,7 +49,6 @@ export function DokuPaymentPanel({ transactionId }: { transactionId: string }) {
   const reviewRequired = Boolean(session?.review_required);
   const terminal = session && session.status !== "PENDING";
   const canRetry = session?.status === "FAILED" && session.creation_state === "REJECTED" && Boolean(session.payment_id) && !expired;
-  const returned = new URLSearchParams(window.location.search).has("doku_return");
   const ownershipDenied = [statusQuery.error, refreshMutation.error].some((error) => error instanceof PaymentRequestError && [401, 403].includes(error.status));
 
   useEffect(() => {
@@ -45,6 +58,9 @@ export function DokuPaymentPanel({ transactionId }: { transactionId: string }) {
   useEffect(() => {
     if (paid) void queryClient.invalidateQueries({ queryKey: ["transaction", transactionId], exact: true });
   }, [paid, queryClient, transactionId]);
+  useEffect(() => {
+    if (paid && !reviewRequired && !statusQuery.isFetching && !statusQuery.error) onVerifiedPaid?.();
+  }, [paid, reviewRequired, statusQuery.isFetching, statusQuery.error, onVerifiedPaid]);
 
   const openCheckout = async () => {
     if (submitting.current || refreshing.current || ownershipDenied || !session || (terminal && !canRetry) || expired || verificationPending || reviewRequired) return;
@@ -73,7 +89,7 @@ export function DokuPaymentPanel({ transactionId }: { transactionId: string }) {
     setActionError("");
     setRefreshMessage("");
     try {
-      if (!session) {
+      if (!session || returned) {
         await statusQuery.refetch();
         return;
       }
@@ -115,16 +131,17 @@ export function DokuPaymentPanel({ transactionId }: { transactionId: string }) {
           {session.channel || session.doku_payment_method ? <div className="flex justify-between gap-3"><dt>Metode</dt><dd>{getDokuPaymentMethodLabel(session.channel || session.doku_payment_method!)}</dd></div> : null}
         </dl>
         <p role="status" className="text-sm leading-relaxed text-slate-600">
-          {reviewRequired ? `${paid ? "Pembayaran telah diterima dan sedang diperiksa admin." : "Admin sedang memeriksa pembayaran ini."} Jangan melakukan pembayaran ulang; hubungi outlet dengan kode transaksi Anda.` : paid ? "Pembayaran telah dikonfirmasi. Status penyiapan pesanan tersedia pada detail transaksi." : verificationPending || returned ? "Status diperbarui otomatis setelah konfirmasi pembayaran diterima. Jika sudah membayar, tunggu konfirmasi sebelum mencoba kembali." : expired ? "Tautan pembayaran sudah tidak dapat digunakan. Status pembayaran masih diperiksa; hubungi outlet jika dana sudah terpotong." : canRetry ? "Sesi sebelumnya tidak berhasil dibuat. Anda dapat mencoba kembali untuk pesanan yang sama." : session.status === "FAILED" ? "Sesi pembayaran belum dapat dilanjutkan. Hubungi outlet untuk bantuan." : "Anda akan diarahkan ke halaman pembayaran DOKU untuk menyelesaikan pesanan ini."}
+          {reviewRequired ? `${paid ? "Pembayaran telah diterima dan sedang diperiksa admin." : "Admin sedang memeriksa pembayaran ini."} Jangan melakukan pembayaran ulang; hubungi outlet dengan kode transaksi Anda.` : paid ? "Pembayaran telah dikonfirmasi. Status penyiapan pesanan tersedia pada detail transaksi." : session.status === "EXPIRED" || expired ? "Waktu pembayaran telah berakhir. Hubungi outlet jika dana sudah terpotong; jangan membayar ulang." : session.status === "FAILED" ? canRetry && !returned ? "Sesi sebelumnya tidak berhasil dibuat. Anda dapat mencoba kembali untuk pesanan yang sama." : "Pembayaran belum berhasil. Hubungi outlet untuk bantuan jika dana sudah terpotong." : returned ? "Pembayaran diperiksa otomatis setiap 5 detik. Halaman sukses akan terbuka setelah pembayaran dikonfirmasi. Jangan membayar ulang." : verificationPending ? "Status diperbarui otomatis setelah konfirmasi pembayaran diterima. Jika sudah membayar, tunggu konfirmasi sebelum mencoba kembali." : "Anda akan diarahkan ke halaman pembayaran DOKU untuk menyelesaikan pesanan ini."}
         </p>
-        {(!terminal || canRetry) && !expired && !verificationPending && !reviewRequired && !statusQuery.error && !ownershipDenied ? <Button className="commerce-orange-button min-h-11 w-full" disabled={createMutation.isPending || refreshMutation.isPending || statusQuery.isFetching} onClick={() => void openCheckout()}>
+        {!returned && (!terminal || canRetry) && !expired && !verificationPending && !reviewRequired && !statusQuery.error && !ownershipDenied ? <Button className="commerce-orange-button min-h-11 w-full" disabled={createMutation.isPending || refreshMutation.isPending || statusQuery.isFetching} onClick={() => void openCheckout()}>
           {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
           {createMutation.isPending ? "Menyiapkan pembayaran..." : canRetry ? "Coba pembayaran kembali" : session.checkout_url ? "Lanjutkan ke DOKU" : "Bayar melalui DOKU"}
         </Button> : null}
       </> : null}
       {actionError ? <p role="alert" className="text-sm text-red-700">{actionError}</p> : null}
       {refreshMessage && !paid ? <p role="status" className="text-sm text-slate-600">{refreshMessage}</p> : null}
-      {!paid || reviewRequired ? <Button variant="outline" className="min-h-10 w-full" disabled={statusQuery.isFetching || createMutation.isPending || refreshMutation.isPending} onClick={() => void refreshStatus()}><RefreshCw className={`h-4 w-4 ${statusQuery.isFetching || refreshMutation.isPending ? "animate-spin" : ""}`} />{refreshMutation.isPending ? "Memeriksa pembayaran..." : "Periksa status pembayaran"}</Button> : null}
+      {returned && !terminal && !reviewRequired && !ownershipDenied && !statusQuery.error ? <p role="status" className="flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" />Menunggu konfirmasi DOKU...</p> : null}
+      {(!returned || terminal || statusQuery.error) && (!paid || reviewRequired) ? <Button variant="outline" className="min-h-10 w-full" disabled={ownershipDenied || statusQuery.isFetching || createMutation.isPending || refreshMutation.isPending} onClick={() => void refreshStatus()}><RefreshCw className={`h-4 w-4 ${statusQuery.isFetching || refreshMutation.isPending ? "animate-spin" : ""}`} />{refreshMutation.isPending || (returned && statusQuery.isFetching) ? "Memeriksa pembayaran..." : "Periksa status pembayaran"}</Button> : null}
     </section>
   );
 }

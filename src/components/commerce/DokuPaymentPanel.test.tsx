@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DokuPaymentPanel } from "./DokuPaymentPanel";
 import { PaymentRequestError, type PaymentSession } from "@/lib/services/paymentService";
 
@@ -14,10 +14,13 @@ const pending: PaymentSession = {
   payment_id: "", transaction_id: "order-one", invoice_number: "", status: "PENDING",
   amount: 50000, expires_at: new Date(Date.now() + 3600000).toISOString(), verification_pending: false,
 };
-function renderPanel() {
+const clients: QueryClient[] = [];
+function renderPanel(props: { returnMode?: boolean; onVerifiedPaid?: () => void } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={client}><DokuPaymentPanel transactionId="order-one" /></QueryClientProvider>);
+  clients.push(client);
+  return render(<QueryClientProvider client={client}><DokuPaymentPanel transactionId="order-one" {...props} /></QueryClientProvider>);
 }
+afterEach(() => { cleanup(); clients.splice(0).forEach((client) => client.clear()); vi.useRealTimers(); });
 
 describe("DOKU payment panel", () => {
   beforeEach(() => {
@@ -30,7 +33,9 @@ describe("DOKU payment panel", () => {
     renderPanel();
     expect(await screen.findByRole("heading", { name: "Menunggu verifikasi pembayaran" })).toBeInTheDocument();
     expect(mocks.createCheckout).not.toHaveBeenCalled();
-    expect(mocks.refreshStatus).not.toHaveBeenCalled();
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    expect(mocks.getStatus).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Bayar melalui DOKU|Lanjutkan ke DOKU/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Pembayaran berhasil" })).not.toBeInTheDocument();
   });
 
@@ -151,6 +156,85 @@ describe("DOKU payment panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Periksa status pembayaran" }));
     expect(await screen.findByRole("heading", { name: "Pembayaran perlu ditinjau" })).toBeInTheDocument();
     expect(screen.getByText(/Pembayaran telah diterima dan sedang diperiksa admin/)).toBeInTheDocument();
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it("verifies the return immediately and every five seconds, then stops only on canonical PAID", async () => {
+    vi.useFakeTimers();
+    const onVerifiedPaid = vi.fn();
+    mocks.refreshStatus.mockResolvedValue({ session: { ...pending, checkout_url: "https://sandbox.doku.com/checkout/test" }, checked: true });
+    renderPanel({ returnMode: true, onVerifiedPaid });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /DOKU/ })).not.toBeInTheDocument();
+    expect(onVerifiedPaid).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(2);
+    mocks.refreshStatus.mockResolvedValue({ session: { ...pending, status: "PAID" }, checked: true });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(3);
+    expect(onVerifiedPaid).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(3);
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it("does not overlap slow checks and aborts the active check on unmount", async () => {
+    vi.useFakeTimers();
+    let finish!: (value: { session: PaymentSession; checked: boolean }) => void;
+    mocks.refreshStatus.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const view = renderPanel({ returnMode: true });
+    await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    await act(async () => { finish({ session: pending, checked: false }); await vi.advanceTimersByTimeAsync(1); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(2);
+    const signal = mocks.refreshStatus.mock.calls[1][1] as AbortSignal;
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(2);
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403, 404])("stops automatic checks after HTTP %s without claiming success", async (status) => {
+    vi.useFakeTimers();
+    const onVerifiedPaid = vi.fn();
+    mocks.refreshStatus.mockRejectedValue(new PaymentRequestError("Akses pembayaran tidak tersedia.", status));
+    renderPanel({ returnMode: true, onVerifiedPaid });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("Akses pembayaran tidak tersedia.");
+    expect(onVerifiedPaid).not.toHaveBeenCalled();
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it("recovers a failed automatic check at the next interval without assuming payment succeeded", async () => {
+    vi.useFakeTimers();
+    const onVerifiedPaid = vi.fn();
+    mocks.refreshStatus.mockRejectedValueOnce(new PaymentRequestError("Koneksi terputus.", 503))
+      .mockResolvedValue({ session: { ...pending, verification_pending: true }, checked: false });
+    renderPanel({ returnMode: true, onVerifiedPaid });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByRole("alert")).toHaveTextContent("Koneksi terputus.");
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(onVerifiedPaid).not.toHaveBeenCalled();
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { status: "EXPIRED" as const }, { status: "FAILED" as const },
+    { status: "PAID" as const, review_required: true },
+  ])("stops for terminal state $status without opening success for a review", async (state) => {
+    vi.useFakeTimers();
+    const onVerifiedPaid = vi.fn();
+    mocks.refreshStatus.mockResolvedValue({ session: { ...pending, ...state }, checked: true });
+    renderPanel({ returnMode: true, onVerifiedPaid });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
+    expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
+    expect(onVerifiedPaid).not.toHaveBeenCalled();
     expect(mocks.createCheckout).not.toHaveBeenCalled();
   });
 });

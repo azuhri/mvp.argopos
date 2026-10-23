@@ -54,6 +54,43 @@ describe("gateway transport", () => {
     await expect(paymentService.refreshStatus("other-order")).rejects.toThrow("browser tempat pesanan dibuat");
   });
 
+  it("aborts the real transport when the polling query is unmounted", async () => {
+    let transportSignal!: AbortSignal;
+    vi.stubGlobal("fetch", vi.fn((_url, options: RequestInit) => new Promise((_resolve, reject) => {
+      transportSignal = options.signal!;
+      transportSignal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    })));
+    const controller = new AbortController();
+    const request = paymentService.refreshStatus("order-one", controller.signal);
+    controller.abort();
+    await expect(request).rejects.toMatchObject({ name: "AbortError" });
+    expect(transportSignal.aborted).toBe(true);
+  });
+
+  it("downloads owned PDF bytes with the attachment filename and without a bearer token", async () => {
+    const blob = new Blob(["%PDF-1.4 test invoice"], { type: "application/pdf" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, headers: new Headers({ "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="Invoice-CEL-ONE.pdf"' }), blob: async () => blob });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await paymentService.downloadInvoice("order-one")).toEqual({ blob, filename: "Invoice-CEL-ONE.pdf" });
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/payments\/transactions\/order-one\/invoice$/);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: "include", cache: "no-store", redirect: "error" });
+    expect(fetchMock.mock.calls[0][1].headers).toBeUndefined();
+  });
+
+  it.each([401, 409, 503])("handles invoice HTTP %s as a bounded error without downloading the response", async (status) => {
+    const blob = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status, blob }));
+    await expect(paymentService.downloadInvoice("order-one")).rejects.toMatchObject({ status });
+    expect(blob).not.toHaveBeenCalled();
+  });
+
+  it("rejects a successful non-PDF response instead of saving it as an invoice", async () => {
+    const blob = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, headers: new Headers({ "Content-Type": "text/html" }), blob }));
+    await expect(paymentService.downloadInvoice("order-one")).rejects.toThrow("format PDF");
+    expect(blob).not.toHaveBeenCalled();
+  });
+
   it("reuses the replacement key for repeated retries of one definitively rejected attempt", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: { status: "PENDING" } }) });
     vi.stubGlobal("fetch", fetchMock);

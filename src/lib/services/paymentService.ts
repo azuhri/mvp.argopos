@@ -66,6 +66,9 @@ async function request<T>(path: string, options: RequestInit = {}, filters?: Pay
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
   const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  options.signal?.addEventListener("abort", cancel, { once: true });
   const timeout = window.setTimeout(() => controller.abort(), 20000);
   try {
     const response = await fetch(paymentUrl(path, filters), { ...options, headers, signal: controller.signal, credentials: options.credentials ?? "include", cache: "no-store" });
@@ -78,9 +81,11 @@ async function request<T>(path: string, options: RequestInit = {}, filters?: Pay
     }
     return payload;
   } catch (error) {
+    if (options.signal?.aborted) throw error;
     if (error instanceof PaymentRequestError) throw error;
     throw new PaymentRequestError("Koneksi pembayaran terputus. Periksa status sebelum mencoba kembali.", 0);
   } finally {
+    options.signal?.removeEventListener("abort", cancel);
     window.clearTimeout(timeout);
   }
 }
@@ -122,16 +127,51 @@ export function validatedCheckoutUrl(value: string): string {
   return url.href;
 }
 
+function invoiceFilename(disposition: string | null, transactionId: string): string {
+  const encoded = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = disposition?.match(/filename="([^"]+)"/i)?.[1] || disposition?.match(/filename=([^;]+)/i)?.[1];
+  let filename = plain?.trim() || `invoice-${transactionId}.pdf`;
+  if (encoded) {
+    try { filename = decodeURIComponent(encoded); } catch { /* Use the plain attachment filename. */ }
+  }
+  filename = Array.from(filename, (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127 || character === "/" || character === "\\" ? "_" : character).join("");
+  return filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
+}
+
 export const paymentService = {
   async getConfig(): Promise<PaymentConfig> { return (await request<PaymentConfig>("/config", { credentials: "same-origin" })).data; },
-  async getStatus(transactionId: string): Promise<PaymentSession> {
-    return (await request<PaymentSession>(`/transactions/${encodeURIComponent(transactionId)}`)).data;
+  async getStatus(transactionId: string, signal?: AbortSignal): Promise<PaymentSession> {
+    return (await request<PaymentSession>(`/transactions/${encodeURIComponent(transactionId)}`, { signal })).data;
   },
-  async refreshStatus(transactionId: string): Promise<PaymentRefreshResult> {
+  async refreshStatus(transactionId: string, signal?: AbortSignal): Promise<PaymentRefreshResult> {
     const result = await request<PaymentSession>(`/transactions/${encodeURIComponent(transactionId)}/refresh`, {
-      method: "POST", body: JSON.stringify({}),
+      method: "POST", body: JSON.stringify({}), signal,
     });
     return { session: result.data, checked: result.meta?.checked === true };
+  },
+  async downloadInvoice(transactionId: string): Promise<{ blob: Blob; filename: string }> {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(paymentUrl(`/transactions/${encodeURIComponent(transactionId)}/invoice`), {
+        credentials: "include", cache: "no-store", redirect: "error", signal: controller.signal,
+      });
+      if (!response.ok) {
+        const message = [401, 403].includes(response.status)
+          ? "Akses invoice tidak tersedia. Gunakan browser tempat pesanan dibuat atau hubungi outlet."
+          : response.status === 409
+            ? "Invoice tersedia setelah pembayaran dikonfirmasi dan pemeriksaan selesai."
+            : "Invoice belum dapat diunduh. Coba kembali sebentar lagi.";
+        throw new PaymentRequestError(message, response.status);
+      }
+      if (response.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase() !== "application/pdf") {
+        throw new PaymentRequestError("Invoice belum tersedia dalam format PDF. Coba kembali sebentar lagi.", 0);
+      }
+      return { blob: await response.blob(), filename: invoiceFilename(response.headers.get("Content-Disposition"), transactionId) };
+    } catch (error) {
+      if (error instanceof PaymentRequestError) throw error;
+      throw new PaymentRequestError("Koneksi unduhan terputus. Coba unduh invoice kembali.", 0);
+    } finally { window.clearTimeout(timeout); }
   },
   async createCheckout(transactionId: string, rejectedPaymentId?: string): Promise<PaymentSession> {
     return (await request<PaymentSession>("/checkout", {

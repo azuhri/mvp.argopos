@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   AlertCircle,
@@ -165,6 +165,12 @@ function persistPendingTransaction(
 export default function PaymentDetail() {
   const { locationCode, transactionId } = useParams<{ locationCode: string; transactionId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnMode = new URLSearchParams(location.search).has("doku_return");
+  const viewOrder = new URLSearchParams(location.search).get("view") === "order";
+  const handleVerifiedPaid = useCallback(() => {
+    if (!viewOrder) navigate(`/${locationCode}/commerce/payment-success/${transactionId}`, { replace: true });
+  }, [locationCode, transactionId, navigate, viewOrder]);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isSavingForLater, setIsSavingForLater] = useState(false);
   const [recoveryExpiry, setRecoveryExpiry] = useState<{
@@ -526,7 +532,7 @@ export default function PaymentDetail() {
               <p className="mt-1 text-xs font-medium text-slate-600">{isDoku ? "Status pembayaran dan pesanan diperbarui otomatis." : "Status diperbarui otomatis setiap 5 detik."}</p>
             </div>
           </div>
-          {isWaiting && (
+          {isWaiting && !(isDoku && returnMode) && (
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-stretch">
               <div className="min-w-[168px] rounded-md border border-amber-200 bg-white px-4 py-3 text-left md:text-right">
                 <p className="text-xs font-bold text-amber-700">Sisa waktu pembayaran</p>
@@ -553,7 +559,7 @@ export default function PaymentDetail() {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            {isDoku && <DokuPaymentPanel key={transactionData.id} transactionId={transactionData.id} />}
+            {isDoku && <DokuPaymentPanel key={transactionData.id} transactionId={transactionData.id} returnMode={returnMode} onVerifiedPaid={handleVerifiedPaid} />}
             <section className="commerce-panel overflow-hidden">
               <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-4 md:px-5">
                 <Package className="h-5 w-5 text-[#e30613]" />

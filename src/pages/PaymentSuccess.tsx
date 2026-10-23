@@ -1,11 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  Download,
   ImageOff,
+  Loader2,
   PackageCheck,
   ReceiptText,
   ShoppingBag,
@@ -20,6 +22,7 @@ import { config } from "@/lib/config";
 import { formatCurrency } from "@/lib/mockData";
 import { getStatusBadgeKey } from "@/lib/utils";
 import { removePendingPayment } from "@/lib/pendingPaymentStorage";
+import { PaymentRequestError, paymentService } from "@/lib/services/paymentService";
 
 interface TransactionCart {
   id?: string;
@@ -54,10 +57,14 @@ function resolveAssetUrl(path?: string) {
 
 export default function PaymentSuccess() {
   const { locationCode, transactionId } = useParams<{ locationCode: string; transactionId: string }>();
+  const downloading = useRef(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   const {
     data: transactionData,
     isLoading,
+    isFetching: transactionFetching,
     error,
   } = useQuery({
     queryKey: ["transaction", transactionId],
@@ -69,13 +76,49 @@ export default function PaymentSuccess() {
       return result.data as TransactionData;
     },
     enabled: Boolean(transactionId),
+    refetchOnMount: "always",
   });
 
-  useEffect(() => {
-    if (transactionId && transactionData?.status === "COMPLETED") removePendingPayment(transactionId);
-  }, [transactionId, transactionData?.status]);
+  const isDoku = transactionData?.payment_provider === "DOKU";
+  const paymentQuery = useQuery({
+    queryKey: ["doku-payment", transactionId],
+    queryFn: ({ signal }) => paymentService.getStatus(transactionId!, signal),
+    enabled: Boolean(transactionId && isDoku),
+    staleTime: 0,
+    refetchOnMount: "always",
+    retry: (count, requestError) => !(requestError instanceof PaymentRequestError && [401, 403, 404].includes(requestError.status)) && count < 1,
+  });
+  const verifiedPaid = isDoku && !paymentQuery.isFetching && !paymentQuery.error && paymentQuery.data?.status === "PAID" && !paymentQuery.data.review_required;
+  const completed = transactionData?.status === "COMPLETED";
 
-  if (isLoading) {
+  useEffect(() => {
+    if (transactionId && (verifiedPaid || (!isDoku && completed && !transactionFetching && !error))) removePendingPayment(transactionId);
+  }, [transactionId, verifiedPaid, isDoku, completed, transactionFetching, error]);
+
+  const downloadInvoice = async () => {
+    if (!transactionId || !verifiedPaid || downloading.current) return;
+    downloading.current = true;
+    setIsDownloading(true);
+    setDownloadError("");
+    try {
+      const { blob, filename } = await paymentService.downloadInvoice(transactionId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (requestError) {
+      setDownloadError(requestError instanceof Error ? requestError.message : "Invoice belum dapat diunduh. Coba kembali sebentar lagi.");
+    } finally {
+      downloading.current = false;
+      setIsDownloading(false);
+    }
+  };
+
+  if (isLoading || (!isDoku && transactionFetching) || (isDoku && (paymentQuery.isPending || paymentQuery.isFetching))) {
     return (
       <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -102,7 +145,18 @@ export default function PaymentSuccess() {
     );
   }
 
-  if (transactionData.status !== "COMPLETED") {
+  if (isDoku && paymentQuery.error) {
+    return <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
+      <section className="commerce-panel mx-auto max-w-lg space-y-4 p-6">
+        <h1 className="text-xl font-extrabold text-[#071a4f]">Pembayaran belum dapat diverifikasi</h1>
+        <p role="alert" className="text-sm text-slate-600">{paymentQuery.error.message}</p>
+        <Button onClick={() => void paymentQuery.refetch()} className="commerce-orange-button w-full">Periksa kembali</Button>
+        <Button asChild variant="outline" className="w-full"><Link to={`/${locationCode}/commerce/payment/${transactionId}?view=order`}>Lihat detail transaksi</Link></Button>
+      </section>
+    </AppLayoutCommerce>;
+  }
+
+  if (isDoku ? !verifiedPaid : !completed) {
     return <Navigate to={`/${locationCode}/commerce/payment/${transactionId}`} replace />;
   }
 
@@ -114,7 +168,7 @@ export default function PaymentSuccess() {
         <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-bold text-[#e30613]">Checkout selesai</p>
-            <h1 className="mt-1 text-2xl font-extrabold text-[#071a4f] md:text-3xl">Terima kasih telah berbelanja</h1>
+            <h1 className="mt-1 text-2xl font-extrabold text-[#071a4f] md:text-3xl">{isDoku ? "Pembayaran berhasil" : "Terima kasih telah berbelanja"}</h1>
           </div>
           <div className="flex items-center gap-3 text-sm font-bold text-slate-400">
             <span>1. Keranjang</span>
@@ -137,11 +191,11 @@ export default function PaymentSuccess() {
                 <CheckCircle2 className="h-9 w-9" />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-extrabold text-[#071a4f]">Transaksi berhasil diselesaikan</h2>
-                <StatusBadge status={getStatusBadgeKey(transactionData.status)} />
+                <h2 className="text-2xl font-extrabold text-[#071a4f]">{completed ? "Transaksi berhasil diselesaikan" : "Pembayaran telah dikonfirmasi"}</h2>
+                <StatusBadge status={getStatusBadgeKey(isDoku && !completed ? "PAID" : transactionData.status)} />
               </div>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-500">
-                Penerimaan barang telah tercatat. Simpan kode transaksi berikut sebagai referensi pesanan Anda.
+                {completed ? "Penerimaan barang telah tercatat. Simpan kode transaksi berikut sebagai referensi pesanan Anda." : "Terima kasih. Pembayaran Anda telah diterima. Simpan invoice sebagai bukti pembayaran dan pantau penyiapan pesanan melalui detail transaksi."}
               </p>
               <div className="mt-6 inline-flex max-w-full items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
                 <ReceiptText className="h-5 w-5 shrink-0 text-[#e30613]" />
@@ -154,12 +208,19 @@ export default function PaymentSuccess() {
 
             <div className="flex flex-col justify-between bg-[#071a4f] p-6 text-white md:p-7">
               <div>
-                <PackageCheck className="h-8 w-8 text-white/80" />
+                {completed ? <PackageCheck className="h-8 w-8 text-white/80" /> : <ReceiptText className="h-8 w-8 text-white/80" />}
                 <p className="mt-5 text-sm font-bold text-white/65">Total pembayaran</p>
                 <p className="mt-1 text-3xl font-extrabold">{formatCurrency(transactionData.total_amount)}</p>
-                <p className="mt-2 text-xs font-medium text-white/60">{transactionData.total_item} item telah diterima</p>
+                <p className="mt-2 text-xs font-medium text-white/60">{transactionData.total_item} item {completed ? "telah diterima" : "dalam pesanan"}</p>
               </div>
               <div className="mt-8 space-y-2">
+                {isDoku ? <>
+                  <Button className="commerce-orange-button min-h-11 w-full rounded-md font-extrabold" disabled={isDownloading} onClick={() => void downloadInvoice()}>
+                    {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    {isDownloading ? "Menyiapkan invoice..." : "Unduh invoice PDF"}
+                  </Button>
+                  {downloadError ? <p role="alert" className="rounded-md bg-white/10 p-3 text-sm text-white">{downloadError}</p> : null}
+                </> : null}
                 <Button asChild className="commerce-orange-button h-11 w-full rounded-md font-extrabold">
                   <Link to="/commerce">
                     <ShoppingBag className="h-4 w-4" />
@@ -167,7 +228,7 @@ export default function PaymentSuccess() {
                   </Link>
                 </Button>
                 <Button asChild variant="ghost" className="h-10 w-full rounded-md text-white/80 hover:bg-white/10 hover:text-white">
-                  <Link to={`/${locationCode}/commerce/payment/${transactionId}`}>
+                  <Link to={`/${locationCode}/commerce/payment/${transactionId}${isDoku ? "?view=order" : ""}`}>
                     <ArrowLeft className="h-4 w-4" />
                     Lihat detail transaksi
                   </Link>
@@ -181,7 +242,7 @@ export default function PaymentSuccess() {
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 md:px-5">
             <div>
               <h2 className="font-extrabold text-[#071a4f]">Item pesanan</h2>
-              <p className="text-xs font-medium text-slate-500">Ringkasan produk yang diterima</p>
+              <p className="text-xs font-medium text-slate-500">{completed ? "Ringkasan produk yang diterima" : "Ringkasan produk yang dipesan"}</p>
             </div>
             <span className="text-xs font-bold text-slate-500">{items.length} produk</span>
           </div>

@@ -64,10 +64,10 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-function renderDetail() {
+function renderDetail(search = "?doku_return=1&status=SUCCESS") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
   clients.push(client);
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/STORE/commerce/payment/order-one?doku_return=1&status=SUCCESS"]}><Routes><Route path="/:locationCode/commerce/payment/:transactionId" element={<PaymentDetail />} /></Routes></MemoryRouter></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/STORE/commerce/payment/order-one${search}`]}><Routes><Route path="/:locationCode/commerce/payment/:transactionId" element={<PaymentDetail />} /><Route path="/:locationCode/commerce/payment-success/:transactionId" element={<p>Halaman pembayaran berhasil</p>} /></Routes></MemoryRouter></QueryClientProvider>);
 }
 
 describe("DOKU payment status and transaction synchronization", () => {
@@ -75,16 +75,16 @@ describe("DOKU payment status and transaction synchronization", () => {
     renderDetail();
     expect(await screen.findByText("Menunggu konfirmasi pembayaran DOKU. Jika sudah membayar, jangan bayar ulang.")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Menunggu verifikasi pembayaran" })).toBeInTheDocument();
-    expect(mocks.refreshStatus).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Periksa status pembayaran" }));
-    await waitFor(() => expect(mocks.getStatus).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.refreshStatus).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Periksa status pembayaran" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("payment-countdown")).not.toBeInTheDocument();
     expect(screen.getAllByText("Waiting Payment")).toHaveLength(2);
     expect(screen.queryByRole("heading", { name: "Pembayaran berhasil" })).not.toBeInTheDocument();
     expect(mocks.createCheckout).not.toHaveBeenCalled();
   });
 
   it("immediately refreshes the parent transaction after the panel receives verified PAID", async () => {
-    renderDetail();
+    renderDetail("?view=order");
     expect(await screen.findAllByText("Waiting Payment")).toHaveLength(2);
     await screen.findByRole("button", { name: "Periksa status pembayaran" });
     expect(transactionReads).toBe(1);
@@ -115,6 +115,14 @@ describe("DOKU payment status and transaction synchronization", () => {
     expect(screen.getByText("Pesanan telah dibatalkan. Periksa status pembayaran DOKU di bawah sebelum membuat pesanan baru.")).toBeInTheDocument();
     expect(screen.queryByText(/pesanan segera diproses/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Bayar melalui DOKU" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Halaman pembayaran berhasil")).not.toBeInTheDocument();
+  });
+
+  it.each(["?doku_return=1&status=FAILED", ""])("opens success only after owned PAID, independent of return parameters %s", async (search) => {
+    paymentStatus = "PAID";
+    renderDetail(search);
+    expect(await screen.findByText("Halaman pembayaran berhasil")).toBeInTheDocument();
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
   });
 
   it("preserves the manual payment instructions without starting gateway polling", async () => {

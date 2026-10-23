@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const appUrl = "http://127.0.0.1:4173/";
+const appUrl = "http://127.0.0.1:4173";
 const productImage = `${appUrl}/image/POKPOK%20PACKSHOT.png`;
 
 const store = {
@@ -99,6 +99,9 @@ async function mockStorefrontApi(page: Page) {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+    if (path.endsWith("/payment-settings")) {
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ success: true, data: { location_id: "location-1", payment_mode: "MANUAL", doku_available: true, doku_methods: [] } }) });
+    }
 
     if (path.endsWith("/location/stores")) {
       await route.fulfill({

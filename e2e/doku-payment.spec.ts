@@ -1,9 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { jsPDF } from "jspdf";
 import { recordTransactionCredentials, transactionCredentials } from "./payment-transport";
+
+test.use({ video: "off" });
 
 for (const width of [1440, 390]) {
   test(`DOKU checkout and verified return at ${width}px (mock provider)`, async ({ page, context }, testInfo) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await recordTransactionCredentials(context);
     await page.setViewportSize({ width, height: 950 });
     const expiresAt = new Date(Date.now() + 3600000).toISOString();
@@ -23,6 +27,7 @@ for (const width of [1440, 390]) {
     let verificationPending = false;
     let providerPaid = false;
     let paymentChecks = 0;
+    let invoiceDownloads = 0;
     let selectedDokuMethod = "";
     const chosenMethod = width === 1440 ? "VIRTUAL_ACCOUNT_BCA" : "QRIS";
     const chosenMethodLabel = width === 1440 ? "Virtual Account BCA" : "QRIS";
@@ -57,6 +62,14 @@ for (const width of [1440, 390]) {
         if (providerPaid) { paymentStatus = "PAID"; verificationPending = false; }
         return route.fulfill({ contentType: "application/json", body: JSON.stringify({ success: true, data: { ...session, status: paymentStatus, verification_pending: verificationPending }, meta: { checked: true } }) });
       }
+      if (path.endsWith("/payments/transactions/order-doku/invoice")) {
+        invoiceDownloads += 1;
+        expect(request.method()).toBe("GET");
+        expect(paymentStatus).toBe("PAID");
+        const invoice = new jsPDF({ compress: false });
+        invoice.text(["INVOICE CEL-TEST-ONE", "TRX-DOKU-TEST", "Produk uji pembayaran", "Total IDR 50000", "PAID"], 20, 20);
+        return route.fulfill({ contentType: "application/pdf", headers: { "Content-Disposition": 'attachment; filename="invoice-TRX-DOKU-TEST.pdf"', "Access-Control-Expose-Headers": "Content-Disposition", "Cache-Control": "private, no-store" }, body: Buffer.from(invoice.output("arraybuffer")) });
+      }
       if (path.endsWith("/payments/checkout")) {
         paymentCreates += 1;
         expect(request.headers()["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
@@ -65,7 +78,7 @@ for (const width of [1440, 390]) {
         expect(recovery.pending.items[0].transaction_id).toBe(order.id);
         return respond({ ...session, payment_id: "attempt-one", checkout_url: "https://sandbox.doku.com/checkout/test-only" });
       }
-      if (path.endsWith("/transactions/order-doku")) return respond({ ...order, status: paymentStatus === "PAID" ? "PAID" : "WAITING_TO_PAYMENT" });
+      if (path.endsWith("/transactions/order-doku")) return respond({ ...order, status: paymentStatus === "PAID" ? "PAID" : "WAITING_TO_PAYMENT", paid_at: paymentStatus === "PAID" ? new Date().toISOString() : null });
       return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
     });
     await context.route("https://sandbox.doku.com/checkout/test-only", (route) => route.fulfill({ contentType: "text/html", body: "<h1>Hosted checkout test fixture</h1>" }));
@@ -107,7 +120,7 @@ for (const width of [1440, 390]) {
     expect(orderCreates).toBe(0);
     expect(paymentCreates).toBe(0);
     await dialog.getByRole("button", { name: "Konfirmasi dan bayar" }).dblclick();
-    await expect(page).toHaveURL("https://sandbox.doku.com/checkout/test-only");
+    await expect(page).toHaveURL("https://sandbox.doku.com/checkout/test-only", { timeout: 15000 });
     expect(orderCreates).toBe(1);
     expect(paymentCreates).toBe(1);
     verificationPending = true;
@@ -116,26 +129,45 @@ for (const width of [1440, 390]) {
     await expect(page.getByRole("heading", { name: "Menunggu verifikasi pembayaran" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Pembayaran DOKU", exact: true }).getByText(chosenMethodLabel, { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Pembayaran berhasil" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Bayar melalui DOKU|Lanjut.*DOKU/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Unduh invoice/i })).toHaveCount(0);
     await expect(page.getByText("Kode unik", { exact: true })).toHaveCount(0);
     const credentialRequests = await transactionCredentials(page);
     expect(credentialRequests.find((request) => request.path.endsWith("/transactions") && request.method === "POST")?.credentials).toBe("include");
     expect(credentialRequests.some((request) => request.path.endsWith("/payments/config"))).toBe(false);
     expect(credentialRequests.find((request) => request.path.endsWith("/payments/checkout"))?.credentials).toBe("include");
-    expect(credentialRequests.find((request) => request.path.endsWith("/payments/transactions/order-doku"))?.credentials).toBe("include");
+    expect(credentialRequests.find((request) => request.path.endsWith("/payments/transactions/order-doku/refresh"))?.credentials).toBe("include");
     expect(credentialRequests.find((request) => request.path.endsWith("/transactions/order-doku") && !request.path.includes("/payments/"))?.credentials).toBe("same-origin");
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`doku-pending-${width}.png`), fullPage: true });
-    expect(paymentChecks).toBe(0);
+    await expect.poll(() => paymentChecks).toBeGreaterThanOrEqual(1);
+    const pendingChecks = paymentChecks;
     providerPaid = true;
-    await page.getByRole("button", { name: "Periksa status pembayaran" }).click();
+    await expect(page).toHaveURL(/\/DOKU-STORE\/commerce\/payment-success\/order-doku$/, { timeout: 10000 });
     await expect(page.getByRole("heading", { name: "Pembayaran berhasil" })).toBeVisible();
     await expect(page.getByText("Waiting Payment", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Paid", { exact: true })).toHaveCount(2);
-    await expect(page.getByText("Pembayaran DOKU telah diterima. Periksa detail verifikasi di bawah.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Bayar melalui DOKU" })).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect.poll(() => page.getByRole("button", { name: /Unduh invoice/i }).evaluate((element) => getComputedStyle(element.closest("section")!).opacity)).toBe("1");
     await page.screenshot({ path: testInfo.outputPath(`doku-verified-${width}.png`), fullPage: true });
+    const downloaded = page.waitForEvent("download");
+    await page.getByRole("button", { name: /Unduh invoice/i }).click();
+    const download = await downloaded;
+    expect(download.suggestedFilename()).toBe("invoice-TRX-DOKU-TEST.pdf");
+    const bytes = await readFile((await download.path())!);
+    expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(bytes.toString()).toContain("INVOICE CEL-TEST-ONE");
+    expect(bytes.toString()).toContain("Total IDR 50000");
+    expect(bytes.toString()).toContain("%%EOF");
+    await testInfo.attach(`invoice-${width}.pdf`, { contentType: "application/pdf", body: bytes });
     expect((await transactionCredentials(page)).find((request) => request.path.endsWith("/payments/transactions/order-doku/refresh"))?.credentials).toBe("include");
-    expect(paymentChecks).toBe(1);
+    expect((await transactionCredentials(page)).find((request) => request.path.endsWith("/payments/transactions/order-doku/invoice"))?.credentials).toBe("include");
+    expect(invoiceDownloads).toBe(1);
+    expect(paymentChecks).toBe(pendingChecks + 1);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Pembayaran berhasil" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Unduh invoice/i })).toBeEnabled();
+    expect(paymentChecks).toBe(pendingChecks + 1);
     expect(orderCreates).toBe(1);
     expect(paymentCreates).toBe(1);
   });
