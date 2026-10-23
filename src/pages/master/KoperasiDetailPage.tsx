@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { DokuFulfillmentActions } from "@/components/shared/DokuFulfillmentActions";
 import { StoreStockRequestPanel } from "@/components/master/StoreStockRequestPanel";
 import { StorePaymentSettings } from "@/components/master/StorePaymentSettings";
 import { Button } from "@/components/ui/button";
@@ -343,7 +344,9 @@ export default function KoperasiDetailPage() {
     if (!pickupProofTransaction || !pickupProofFile) return;
     setPickupProofUploading(true);
     try {
-      const response = await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile, undefined, pickupProofTransaction.payment_provider);
+      const response = pickupProofTransaction.payment_provider === "DOKU"
+        ? await apiClient.uploadStaffPickupProof(pickupProofTransaction.id, pickupProofFile)
+        : await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile);
       if (!response.success) throw new Error(response.message || 'Upload failed');
       toast.success('Bukti serah terima berhasil diupload');
       closePickupProofModal();
@@ -1197,7 +1200,8 @@ export default function KoperasiDetailPage() {
                                   Approve Payment
                                 </Button>
                               )}
-                              {(tx.status === 'PAID' || tx.status === 'PREPARING_PRODUCT') && !tx.path_proof_pickup && (
+                              <DokuFulfillmentActions transaction={tx} onUpdated={() => void loadTransactions()} onUpload={() => openPickupProofModal(tx)} />
+                              {tx.payment_provider !== 'DOKU' && (tx.status === 'PAID' || tx.status === 'PREPARING_PRODUCT') && !tx.path_proof_pickup && (
                                 <Button
                                   size="sm"
                                   className="bg-blue-500 hover:bg-blue-600 text-white"
@@ -1207,7 +1211,7 @@ export default function KoperasiDetailPage() {
                                   Upload Bukti
                                 </Button>
                               )}
-                              {tx.path_proof_pickup && (
+                              {tx.payment_provider !== 'DOKU' && tx.path_proof_pickup && (
                                 <Button
                                   size="sm"
                                   className="bg-green-500 hover:bg-green-600 text-white"
@@ -1286,7 +1290,8 @@ export default function KoperasiDetailPage() {
                           Confirm Payment
                         </Button>
                       )}
-                      {(tx.status === 'PAID' || tx.status === 'PREPARING_PRODUCT') && !tx.path_proof_pickup && (
+                      <DokuFulfillmentActions transaction={tx} onUpdated={() => void loadTransactions()} onUpload={() => openPickupProofModal(tx)} className="w-full" />
+                      {tx.payment_provider !== 'DOKU' && (tx.status === 'PAID' || tx.status === 'PREPARING_PRODUCT') && !tx.path_proof_pickup && (
                         <Button
                           size="sm"
                           className="w-full bg-blue-500 hover:bg-blue-600 text-white"
@@ -1296,7 +1301,7 @@ export default function KoperasiDetailPage() {
                           Upload Bukti
                         </Button>
                       )}
-                      {tx.path_proof_pickup && (
+                      {tx.payment_provider !== 'DOKU' && tx.path_proof_pickup && (
                         <Button
                           size="sm"
                           className="w-full bg-green-500 hover:bg-green-600 text-white"

@@ -1439,6 +1439,15 @@ class ApiClient {
     });
   }
 
+  async uploadStaffPickupProof(transactionId: string, file: File): Promise<ApiResponse<{ path_proof_pickup: string; pickup_at: string; status: string }>> {
+    const data = new FormData();
+    data.append('file', file);
+    return this.request(`/transactions/required/${transactionId}/upload-pickup-proof`, {
+      method: 'POST',
+      data,
+    });
+  }
+
   async getDashboardAnalytics(params?: { range_days?: number; store_id?: string; start_date?: string; end_date?: string }): Promise<ApiResponse<DashboardAnalyticsResponse>> {
     const query = new URLSearchParams();
     if (params?.range_days) {

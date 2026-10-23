@@ -17,10 +17,14 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.getStatus.mockResolvedValue({ transaction_id: "order-one", status: "PENDING", review_required: false });
 });
-afterEach(() => { cleanup(); clients.splice(0).forEach((client) => client.clear()); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); clients.splice(0).forEach((client) => client.clear()); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+const transactionData = (status: string, provider = "DOKU") => ({ id: "order-one", transaction_code: "TRX-ONE", status, total_amount: 50000, base_amount: 50000, total_item: 1, payment_provider: provider, transaction_carts: [] });
+const transactionResponse = (status: string) => ({ ok: true, json: async () => ({ success: true, data: transactionData(status) }) });
+const advance = async (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
 function renderStatus(status: string, provider = "DOKU", options?: { cachedStatus: string; response: Promise<unknown> }) {
-  const data = { id: "order-one", transaction_code: "TRX-ONE", status, total_amount: 50000, base_amount: 50000, total_item: 1, payment_provider: provider, transaction_carts: [] };
+  const data = transactionData(status, provider);
   vi.stubGlobal("fetch", vi.fn().mockReturnValue(options?.response ?? Promise.resolve({ ok: true, json: async () => ({ success: true, data }) })));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   if (options) client.setQueryData(["transaction", "order-one"], { ...data, status: options.cachedStatus });
@@ -37,7 +41,11 @@ describe("verified payment success", () => {
     expect(mocks.downloadInvoice).not.toHaveBeenCalled();
   });
 
-  it.each(["PAID", "PREPARING", "READY_TO_PICKUP"])("shows owned PAID during %s without claiming goods were received", async (status) => {
+  it.each([
+    ["PAID", "Menunggu persiapan"],
+    ["PREPARING_PRODUCT", "Sedang disiapkan"],
+    ["READY_TO_PICKUP", "Siap diambil"],
+  ])("shows owned PAID during %s without claiming goods were received", async (status, label) => {
     mocks.getStatus.mockResolvedValue({ transaction_id: "order-one", status: "PAID" });
     renderStatus(status);
     expect(await screen.findByRole("heading", { name: "Pembayaran berhasil" })).toBeInTheDocument();
@@ -47,6 +55,8 @@ describe("verified payment success", () => {
     expect(mocks.removePendingPayment).toHaveBeenCalledWith("order-one");
     expect(screen.queryByText("Kode unik")).not.toBeInTheDocument();
     expect(mocks.downloadInvoice).not.toHaveBeenCalled();
+    expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toHaveTextContent(label);
+    expect(screen.queryByRole("button", { name: /Mulai persiapan|Upload Bukti/ })).not.toBeInTheDocument();
   });
 
   it("only claims receipt completion when the backend confirms COMPLETED and owned PAID", async () => {
@@ -55,6 +65,91 @@ describe("verified payment success", () => {
     expect(await screen.findByText("Transaksi berhasil diselesaikan")).toBeInTheDocument();
     expect(screen.getByText(/Penerimaan barang telah tercatat/)).toBeInTheDocument();
     expect(mocks.removePendingPayment).toHaveBeenCalledWith("order-one");
+    expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toHaveTextContent("Pesanan diterima");
+  });
+
+  it("waits for canonical fulfillment when transaction data lags verified payment", async () => {
+    mocks.getStatus.mockResolvedValue({ transaction_id: "order-one", status: "PAID" });
+    renderStatus("WAITING_TO_PAYMENT");
+    expect(await screen.findByRole("heading", { name: "Pembayaran berhasil" })).toBeInTheDocument();
+    expect(screen.getByText("Menunggu pembaruan status")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toBeNull();
+  });
+
+  it("polls fulfillment every five seconds and stops at COMPLETED without rechecking DOKU", async () => {
+    vi.useFakeTimers();
+    mocks.getStatus.mockResolvedValue({ transaction_id: "order-one", status: "PAID" });
+    renderStatus("PAID");
+    await advance(10);
+    await advance(10);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await advance(4000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    for (const [status, label] of [["PREPARING_PRODUCT", "Sedang disiapkan"], ["READY_TO_PICKUP", "Siap diambil"], ["COMPLETED", "Pesanan diterima"]]) {
+      vi.mocked(fetch).mockResolvedValue(transactionResponse(status) as Response);
+      await advance(status === "PREPARING_PRODUCT" ? 1000 : 5000);
+      await advance(10);
+      expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toHaveTextContent(label);
+      expect(screen.getByRole("button", { name: "Unduh invoice PDF" })).toBeEnabled();
+    }
+    expect(fetch).toHaveBeenCalledTimes(4);
+    await advance(20000);
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(mocks.getStatus).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Status diperbarui otomatis/)).not.toBeInTheDocument();
+  });
+
+  it("retains success and the last progress after a transient failure, then recovers on the next tick", async () => {
+    vi.useFakeTimers();
+    mocks.getStatus.mockResolvedValue({ transaction_id: "order-one", status: "PAID" });
+    renderStatus("PREPARING_PRODUCT");
+    await advance(10);
+    await advance(10);
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status: 503 } as Response);
+    await advance(5010);
+    expect(screen.getByRole("heading", { name: "Pembayaran berhasil" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Progres terakhir tetap ditampilkan");
+    expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toHaveTextContent("Sedang disiapkan");
+    vi.mocked(fetch).mockResolvedValue(transactionResponse("READY_TO_PICKUP") as Response);
+    await advance(5010);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toHaveTextContent("Siap diambil");
+    expect(mocks.getStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("pauses in a hidden tab, avoids overlapping slow requests, and aborts on unmount", async () => {
+    vi.useFakeTimers();
+    mocks.getStatus.mockResolvedValue({ transaction_id: "order-one", status: "PAID" });
+    const view = renderStatus("PAID");
+    await advance(10);
+    await advance(10);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await advance(10000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    visibility.mockReturnValue("visible");
+    vi.mocked(fetch).mockReturnValue(new Promise<Response>(() => {}));
+    await advance(15000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const signal = vi.mocked(fetch).mock.calls[1][1]?.signal;
+    expect(signal?.aborted).toBe(false);
+    view.unmount();
+    expect(signal?.aborted).toBe(true);
+    await advance(15000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([401, 403, 404])("stops polling if the transaction becomes unavailable (%s)", async (status) => {
+    vi.useFakeTimers();
+    mocks.getStatus.mockResolvedValue({ transaction_id: "order-one", status: "PAID" });
+    renderStatus("PAID");
+    await advance(10);
+    await advance(10);
+    vi.mocked(fetch).mockResolvedValue({ ok: false, status } as Response);
+    await advance(5010);
+    expect(screen.getByText("Ringkasan transaksi tidak tersedia")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Status pesanan" })).not.toBeInTheDocument();
+    await advance(15000);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("does not show success or invoice for a paid payment under review", async () => {

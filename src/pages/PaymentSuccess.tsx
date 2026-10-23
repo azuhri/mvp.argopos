@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
+import { OrderFulfillmentProgress } from "@/components/commerce/OrderFulfillmentProgress";
 import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -66,17 +67,21 @@ export default function PaymentSuccess() {
     isLoading,
     isFetching: transactionFetching,
     error,
+    refetch: refetchTransaction,
   } = useQuery({
     queryKey: ["transaction", transactionId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!transactionId) return null;
-      const response = await fetch(`${config.apiUrl}/transactions/${transactionId}`);
-      if (!response.ok) throw new Error("Failed to fetch transaction data");
+      const response = await fetch(`${config.apiUrl}/transactions/${transactionId}`, { signal, cache: "no-store" });
+      if (!response.ok) throw new PaymentRequestError("Ringkasan transaksi belum dapat dimuat.", response.status);
       const result = await response.json();
       return result.data as TransactionData;
     },
     enabled: Boolean(transactionId),
     refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
   });
 
   const isDoku = transactionData?.payment_provider === "DOKU";
@@ -90,6 +95,16 @@ export default function PaymentSuccess() {
   });
   const verifiedPaid = isDoku && !paymentQuery.isFetching && !paymentQuery.error && paymentQuery.data?.status === "PAID" && !paymentQuery.data.review_required;
   const completed = transactionData?.status === "COMPLETED";
+  const transactionUnavailable = error instanceof PaymentRequestError && [401, 403, 404].includes(error.status);
+  const fulfillmentPending = ["WAITING_TO_PAYMENT", "PAID", "PREPARING_PRODUCT", "READY_TO_PICKUP"].includes(transactionData?.status ?? "");
+
+  useEffect(() => {
+    if (!verifiedPaid || !fulfillmentPending || transactionUnavailable) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refetchTransaction({ cancelRefetch: false });
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [transactionId, verifiedPaid, fulfillmentPending, transactionUnavailable, refetchTransaction]);
 
   useEffect(() => {
     if (transactionId && (verifiedPaid || (!isDoku && completed && !transactionFetching && !error))) removePendingPayment(transactionId);
@@ -128,7 +143,7 @@ export default function PaymentSuccess() {
     );
   }
 
-  if (error || !transactionData) {
+  if (!transactionData || transactionUnavailable || (error && !isDoku)) {
     return (
       <AppLayoutCommerce title={config.appNameCommerce} locationCode={locationCode || ""}>
         <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
@@ -195,7 +210,7 @@ export default function PaymentSuccess() {
                 <StatusBadge status={getStatusBadgeKey(isDoku && !completed ? "PAID" : transactionData.status)} />
               </div>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-500">
-                {completed ? "Penerimaan barang telah tercatat. Simpan kode transaksi berikut sebagai referensi pesanan Anda." : "Terima kasih. Pembayaran Anda telah diterima. Simpan invoice sebagai bukti pembayaran dan pantau penyiapan pesanan melalui detail transaksi."}
+                {completed ? "Penerimaan barang telah tercatat. Simpan kode transaksi berikut sebagai referensi pesanan Anda." : "Terima kasih. Pembayaran Anda telah diterima. Simpan invoice sebagai bukti pembayaran dan pantau penyiapan pesanan di bawah ini."}
               </p>
               <div className="mt-6 inline-flex max-w-full items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
                 <ReceiptText className="h-5 w-5 shrink-0 text-[#e30613]" />
@@ -237,6 +252,8 @@ export default function PaymentSuccess() {
             </div>
           </div>
         </motion.section>
+
+        {isDoku && <OrderFulfillmentProgress status={transactionData.status} refreshFailed={Boolean(error)} />}
 
         <section className="commerce-panel overflow-hidden">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 md:px-5">

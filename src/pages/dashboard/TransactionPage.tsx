@@ -9,6 +9,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { DokuFulfillmentActions } from "@/components/shared/DokuFulfillmentActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -182,7 +183,9 @@ export default function TransactionPage() {
     setPickupProofUploading(true);
     try {
       // Use apiClient.uploadPickupProof with file upload (follows Products.tsx pattern)
-      const response = await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile, undefined, pickupProofTransaction.payment_provider);
+      const response = pickupProofTransaction.payment_provider === "DOKU"
+        ? await apiClient.uploadStaffPickupProof(pickupProofTransaction.id, pickupProofFile)
+        : await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile);
       if (!response.success) throw new Error(response.message || 'Upload failed');
       toast.success('Bukti serah terima berhasil diupload');
       closePickupProofModal();
@@ -581,7 +584,8 @@ export default function TransactionPage() {
                                   Approve Payment
                                 </Button>
                               )}
-                              {(tx.status === "PAID" || tx.status === "PREPARING_PRODUCT") && !tx.path_proof_pickup && (
+                              <DokuFulfillmentActions transaction={tx} onUpdated={() => void transactionsQuery.refetch()} onUpload={() => openPickupProofModal(tx)} />
+                              {tx.payment_provider !== "DOKU" && (tx.status === "PAID" || tx.status === "PREPARING_PRODUCT") && !tx.path_proof_pickup && (
                                 <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => openPickupProofModal(tx)}>
                                   <Camera className="h-3 w-3 mr-1" />
                                   Upload Bukti
@@ -668,17 +672,13 @@ export default function TransactionPage() {
                               <CheckCircle className="h-3 w-3 mr-1" /> Approve Payment
                             </Button>
                           )}
-                          {tx.status === "PREPARING_PRODUCT" && !tx.path_proof_pickup && (
+                          <DokuFulfillmentActions transaction={tx} onUpdated={() => void transactionsQuery.refetch()} onUpload={() => openPickupProofModal(tx)} className="flex-1" />
+                          {tx.payment_provider !== "DOKU" && (tx.status === "PAID" || tx.status === "PREPARING_PRODUCT") && !tx.path_proof_pickup && (
                             <Button className="flex-1 bg-blue-500 hover:bg-blue-600 text-white" size="sm" onClick={() => openPickupProofModal(tx)}>
                               <Camera className="h-3 w-3 mr-1" /> Upload Bukti
                             </Button>
                           )}
-                          {(tx.status === "PAID" || tx.status === "PREPARING_PRODUCT") && !tx.path_proof_pickup && (
-                            <Button className="flex-1 bg-blue-500 hover:bg-blue-600 text-white" size="sm" onClick={() => openPickupProofModal(tx)}>
-                              <Camera className="h-3 w-3 mr-1" /> Upload Bukti
-                            </Button>
-                          )}
-                          {tx.path_proof_pickup && (
+                          {tx.payment_provider !== "DOKU" && tx.path_proof_pickup && (
                             <Button className="flex-1 bg-green-500 hover:bg-green-600 text-white" size="sm" onClick={() => handleMarkReadyPickup(tx)}>
                               <CheckCircle className="h-3 w-3 mr-1" /> Siap Diambil
                             </Button>

@@ -23,4 +23,14 @@ describe("transaction cookie compatibility", () => {
     expect(mocks.request.mock.calls[0][0].withCredentials).toBe(false);
     expect(mocks.request.mock.calls[1][0].withCredentials).toBe(true);
   });
+
+  it("sends staff proof to the protected endpoint without requiring the customer's cookie", async () => {
+    const file = new File(["fixture"], "proof.png", { type: "image/png" });
+    await apiClient.uploadStaffPickupProof("gateway-one", file);
+    const request = mocks.request.mock.calls[0][0];
+    expect(request.url).toBe("/transactions/required/gateway-one/upload-pickup-proof");
+    expect(request.method).toBe("POST");
+    expect(request.withCredentials).toBeUndefined();
+    expect(request.data.get("file")).toBe(file);
+  });
 });
