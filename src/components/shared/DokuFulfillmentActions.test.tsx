@@ -12,6 +12,11 @@ afterEach(cleanup);
 beforeEach(() => { vi.clearAllMocks(); mocks.canWrite.mockReturnValue(true); mocks.approveDelivery.mockResolvedValue(undefined); });
 
 describe("DOKU fulfillment actions", () => {
+  it.each(["PREPARING_PRODUCT", "READY_TO_PICKUP", "COMPLETED"])("does not offer proof upload from a page without an upload action: %s", (status) => {
+    render(<DokuFulfillmentActions transaction={{ ...order, status }} onUpdated={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Upload Bukti" })).not.toBeInTheDocument();
+  });
+
   it("requires an explicit preparation action before offering upload", async () => {
     const onUpload = vi.fn(), onUpdated = vi.fn();
     const view = render(<DokuFulfillmentActions transaction={order} onUpload={onUpload} onUpdated={onUpdated} />);

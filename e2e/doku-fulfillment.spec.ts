@@ -5,6 +5,7 @@ test.use({ video: "off" });
 for (const path of ["/transactions", "/master/store/pickup-store?tab=transaction"]) {
   for (const width of [1440, 390]) {
     test(`DOKU preparation and staff proof at ${path}, ${width}px`, async ({ page, context }, testInfo) => {
+      await context.route("**/*", route => new URL(route.request().url()).origin === "http://127.0.0.1:4173" ? route.continue() : route.abort());
       await page.setViewportSize({ width, height: 950 });
       await page.addInitScript(() => {
         localStorage.setItem("argopos.auth.user", JSON.stringify({ id: "staff-test", username: "Staff Test", email: "staff@example.test", role: "super_admin", role_id: "staff-role" }));
@@ -15,7 +16,7 @@ for (const path of ["/transactions", "/master/store/pickup-store?tab=transaction
       let preparations = 0, uploads = 0;
       const order = () => ({
         id: "pickup-order", transaction_code: "TRX-DOKU-PICKUP", master_location_id: "pickup-store",
-        payment_provider: "DOKU", status, path_proof_pickup: proof,
+        payment_provider: "DOKU", doku_payment_method: "VIRTUAL_ACCOUNT_BCA", status, path_proof_pickup: proof,
         paid_at: "2026-10-23T01:00:00Z", created_at: "2026-10-23T00:50:00Z",
         total_amount: 27900, base_amount: 27900, total_item: 1, location_name: "Pickup Store", customer_name: "Customer Test",
       });
@@ -27,7 +28,7 @@ for (const path of ["/transactions", "/master/store/pickup-store?tab=transaction
         if (endpoint.endsWith("/users/")) return json({ id: "staff-test", role: { role_name: "super_admin" }, assigned_stores: [] });
         if (endpoint.endsWith("/stores/pickup-store")) return json({ id: "pickup-store", location_id: "pickup-store", location_name: "Pickup Store", location_code: "PICKUP", assigned_users: [], payment_methods: [], product_stores: [] });
         if (endpoint.endsWith("/stores/pickup-store/transactions")) return json([order()], { total: 1 });
-        if (endpoint.endsWith("/transactions/required")) return json({ transactions: [order()], meta: { total: 1, page: 1, page_size: 20 } });
+        if (endpoint.endsWith("/transactions/required")) return json({ transactions: [order(), { ...order(), id: "manual-paid", transaction_code: "TRX-MANUAL-PAID", payment_provider: "MANUAL", status: "PAID" }, { ...order(), id: "manual-unpaid", transaction_code: "TRX-MANUAL-UNPAID", payment_provider: "MANUAL", status: "WAITING_TO_PAYMENT" }], meta: { total: 3, page: 1, page_size: 20 } });
         if (endpoint.endsWith("/approve-delivery")) {
           expect(endpoint).toContain("/transactions/required/pickup-order/");
           expect(request.method()).toBe("POST");
@@ -51,12 +52,24 @@ for (const path of ["/transactions", "/master/store/pickup-store?tab=transaction
         return json([]);
       });
       await page.goto(path);
+      await expect(page.getByText("DOKU - VA BCA", { exact: true }).filter({ visible: true })).toBeVisible();
       const prepare = page.getByRole("button", { name: "Mulai persiapan", exact: true }).filter({ visible: true });
       await expect(prepare).toBeEnabled();
       await expect(page.getByRole("button", { name: "Upload Bukti", exact: true }).filter({ visible: true })).toHaveCount(0);
       expect(preparations).toBe(0);
       await prepare.click();
       const upload = page.getByRole("button", { name: "Upload Bukti", exact: true }).filter({ visible: true });
+      if (path === "/transactions") {
+        await expect.poll(() => preparations).toBe(1);
+        await expect(prepare).toHaveCount(0);
+        await expect(upload).toHaveCount(0);
+        await expect(page.getByRole("dialog", { name: "Upload Bukti Serah Terima" })).toHaveCount(0);
+        await expect(page.getByRole("link", { name: "Scan QR penyerahan" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Approve Payment", exact: true }).filter({ visible: true })).toBeEnabled();
+        expect(uploads).toBe(0);
+        await page.screenshot({ path: testInfo.outputPath("transaction-actions-without-upload.png"), fullPage: true });
+        return;
+      }
       await expect(upload).toBeVisible();
       expect(uploads).toBe(0);
       await upload.click();

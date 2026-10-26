@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Calendar, CheckCircle, Eye, Package, Search, Store, ArrowUpDown, Camera, Upload, X, FileDown, FileText, FileSpreadsheet } from "lucide-react";
+import { Calendar, CheckCircle, Eye, Package, Search, Store, ArrowUpDown, FileDown, FileText, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -30,8 +30,8 @@ import { Badge } from "@/components/ui/badge";
 import { transactionService, type TransactionListResult } from "@/lib/services/transactionService";
 import { userService } from "@/lib/services/userService";
 import { config } from "@/lib/config";
-import { apiClient } from "@/lib/api";
 import type { Transaction, TransactionCart } from "@/lib/api";
+import { getTransactionPaymentMethodLabel } from "@/lib/transactionPresentation";
 import {
   exportTransactionsToCSV,
   exportTransactionsToXLSX,
@@ -75,27 +75,6 @@ const getStatusBadgeKey = (status: string) => {
   return map[status] || "inactive";
 };
 
-const paymentMethodLabel = (paymentType: string) => {
-  let value;
-  switch (paymentType) {
-    case 'qris':
-      value = 'QRIS';
-      break;
-    case 'cash':
-      value = 'Tunai';
-      break;
-    case 'transfer_rekening':
-      value = 'Transfer Bank';
-      break;
-    default:
-      value = paymentType;
-  }
-  return <Badge variant="secondary">{value}</Badge>;
-};
-
-
-
-
 export default function TransactionPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -114,12 +93,6 @@ export default function TransactionPage() {
   const [cartModalLoading, setCartModalLoading] = useState(false);
   const [cartModalTransaction, setCartModalTransaction] = useState<Transaction | null>(null);
   const [cartModalItems, setCartModalItems] = useState<TransactionCart[]>([]);
-  // Pickup proof upload modal state
-  const [pickupProofModalOpen, setPickupProofModalOpen] = useState(false);
-  const [pickupProofTransaction, setPickupProofTransaction] = useState<Transaction | null>(null);
-  const [pickupProofFile, setPickupProofFile] = useState<File | null>(null);
-  const [pickupProofPreview, setPickupProofPreview] = useState<string | null>(null);
-  const [pickupProofUploading, setPickupProofUploading] = useState(false);
 
   const { data: currentUser } = useQuery({
     queryKey: ["current-user"],
@@ -144,57 +117,6 @@ export default function TransactionPage() {
     setCartModalOpen(false);
     setCartModalTransaction(null);
     setCartModalItems([]);
-  };
-
-  // Pickup proof handlers
-  const openPickupProofModal = (tx: Transaction) => {
-    setPickupProofTransaction(tx);
-    setPickupProofFile(null);
-    setPickupProofPreview(null);
-    setPickupProofModalOpen(true);
-  };
-
-  const closePickupProofModal = () => {
-    setPickupProofModalOpen(false);
-    setPickupProofTransaction(null);
-    setPickupProofFile(null);
-    setPickupProofPreview(null);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB');
-      return;
-    }
-    setPickupProofFile(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => setPickupProofPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const handleUploadProof = async () => {
-    if (!pickupProofTransaction || !pickupProofFile) return;
-    setPickupProofUploading(true);
-    try {
-      // Use apiClient.uploadPickupProof with file upload (follows Products.tsx pattern)
-      const response = pickupProofTransaction.payment_provider === "DOKU"
-        ? await apiClient.uploadStaffPickupProof(pickupProofTransaction.id, pickupProofFile)
-        : await apiClient.uploadPickupProof(pickupProofTransaction.id, pickupProofFile);
-      if (!response.success) throw new Error(response.message || 'Upload failed');
-      toast.success('Bukti serah terima berhasil diupload');
-      closePickupProofModal();
-      transactionsQuery.refetch();
-    } catch (err: any) {
-      toast.error(err.message || 'Upload failed');
-    } finally {
-      setPickupProofUploading(false);
-    }
   };
 
   const handleMarkReadyPickup = async (tx: Transaction) => {
@@ -570,7 +492,7 @@ export default function TransactionPage() {
                           <TableCell>
                             <StatusBadge status={getStatusBadgeKey(tx.status)} />
                           </TableCell>
-                          <TableCell className="capitalize">{paymentMethodLabel(tx.payment_type) || "-"}</TableCell>
+                          <TableCell><Badge variant="secondary">{getTransactionPaymentMethodLabel(tx)}</Badge></TableCell>
                           <TableCell>{formatCurrency(tx.total_amount)}</TableCell>
                           <TableCell>{new Date(tx.created_at).toLocaleString("id-ID")}</TableCell>
                           <TableCell>
@@ -584,13 +506,7 @@ export default function TransactionPage() {
                                   Approve Payment
                                 </Button>
                               )}
-                              <DokuFulfillmentActions transaction={tx} onUpdated={() => void transactionsQuery.refetch()} onUpload={() => openPickupProofModal(tx)} />
-                              {tx.payment_provider !== "DOKU" && (tx.status === "PAID" || tx.status === "PREPARING_PRODUCT") && !tx.path_proof_pickup && (
-                                <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => openPickupProofModal(tx)}>
-                                  <Camera className="h-3 w-3 mr-1" />
-                                  Upload Bukti
-                                </Button>
-                              )}
+                              <DokuFulfillmentActions transaction={tx} onUpdated={() => void transactionsQuery.refetch()} />
                             </div>
                           </TableCell>
                         </TableRow>
@@ -653,7 +569,7 @@ export default function TransactionPage() {
                           <span className="text-muted-foreground">Total:</span> {formatCurrency(tx.total_amount)}
                         </div>
                         <div>
-                          <span className="text-muted-foreground">Payment:</span> {paymentMethodLabel(tx.payment_type)}
+                          <span className="text-muted-foreground">Payment:</span> <Badge variant="secondary">{getTransactionPaymentMethodLabel(tx)}</Badge>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Items:</span> {tx.transaction_carts?.length || 0}
@@ -672,12 +588,7 @@ export default function TransactionPage() {
                               <CheckCircle className="h-3 w-3 mr-1" /> Approve Payment
                             </Button>
                           )}
-                          <DokuFulfillmentActions transaction={tx} onUpdated={() => void transactionsQuery.refetch()} onUpload={() => openPickupProofModal(tx)} className="flex-1" />
-                          {tx.payment_provider !== "DOKU" && (tx.status === "PAID" || tx.status === "PREPARING_PRODUCT") && !tx.path_proof_pickup && (
-                            <Button className="flex-1 bg-blue-500 hover:bg-blue-600 text-white" size="sm" onClick={() => openPickupProofModal(tx)}>
-                              <Camera className="h-3 w-3 mr-1" /> Upload Bukti
-                            </Button>
-                          )}
+                          <DokuFulfillmentActions transaction={tx} onUpdated={() => void transactionsQuery.refetch()} className="flex-1" />
                           {tx.payment_provider !== "DOKU" && tx.path_proof_pickup && (
                             <Button className="flex-1 bg-green-500 hover:bg-green-600 text-white" size="sm" onClick={() => handleMarkReadyPickup(tx)}>
                               <CheckCircle className="h-3 w-3 mr-1" /> Siap Diambil
@@ -805,41 +716,6 @@ export default function TransactionPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Pickup Proof Upload Modal */}
-      <Dialog open={pickupProofModalOpen} onOpenChange={(open) => { if (!open) closePickupProofModal(); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Upload Bukti Serah Terima</DialogTitle>
-            <DialogDescription>
-              Transaksi: {pickupProofTransaction?.transaction_code || pickupProofTransaction?.id?.slice(0, 8) || '-'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {!pickupProofPreview ? (
-              <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-8 cursor-pointer hover:border-primary transition-colors">
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
-                <Camera className="h-12 w-12 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Ambil foto atau upload bukti</span>
-                <span className="text-xs text-muted-foreground">JPG/PNG, max 5MB</span>
-              </label>
-            ) : (
-              <div className="relative">
-                <img src={pickupProofPreview} alt="Preview" className="w-full h-auto max-h-48 rounded-lg object-contain" />
-                <Button size="sm" variant="outline" className="absolute top-2 right-2" onClick={() => { setPickupProofFile(null); setPickupProofPreview(null); }}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            <Button className="w-full" disabled={!pickupProofFile || pickupProofUploading} onClick={handleUploadProof}>
-              {pickupProofUploading ? (
-                <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />Mengupload... </>
-              ) : (
-                <><Upload className="h-4 w-4 mr-2" />Upload Bukti </>
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 }

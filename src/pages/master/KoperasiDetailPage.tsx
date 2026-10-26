@@ -30,6 +30,7 @@ import { transactionService } from "@/lib/services/transactionService";
 import { Store as StoreType, StoreAssignedUser, Transaction, StorePaymentMethod, Stock, TransactionCart, apiClient } from "@/lib/api";
 import { config } from "@/lib/config";
 import { parseIDR } from "@/lib/utils";
+import { getTransactionPaymentMethodLabel } from "@/lib/transactionPresentation";
 import CurrencyInput from "@/components/ui/input-currency";
 
 const storeDetailTabs = ["summary", "stock-management", "users", "transaction", "payment", "time-cutoff"] as const;
@@ -178,24 +179,6 @@ export default function KoperasiDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const paymentMethodLabel = (paymentType: string) => {
-    let value;
-    switch (paymentType) {
-      case 'qris':
-        value = 'QRIS';
-        break;
-      case 'cash':
-        value = 'Tunai';
-        break;
-      case 'transfer_rekening':
-        value = 'Transfer Bank';
-        break;
-      default:
-        value = paymentType;
-    }
-    return <Badge variant="secondary">{value}</Badge>;
   };
 
   const loadSummaryData = async () => {
@@ -1178,7 +1161,7 @@ export default function KoperasiDetailPage() {
                           <TableCell>
                             <StatusBadge status={getTransactionStatusBadge(tx.status)} />
                           </TableCell>
-                          <TableCell>{paymentMethodLabel(tx.payment_type)}</TableCell>
+                          <TableCell><Badge variant="secondary">{getTransactionPaymentMethodLabel(tx)}</Badge></TableCell>
                           <TableCell>{formatCurrency(tx.total_amount)}</TableCell>
                           <TableCell>{new Date(tx.created_at).toLocaleDateString()}</TableCell>
                           <TableCell>
@@ -1259,7 +1242,7 @@ export default function KoperasiDetailPage() {
                     <div className="grid grid-cols-2 gap-2 text-xs mb-2">
                       <div>
                         <span className="text-muted-foreground">Payment:</span>{" "}
-                        <span className="font-medium capitalize">{paymentMethodLabel(tx.payment_type)}</span>
+                        <Badge variant="secondary">{getTransactionPaymentMethodLabel(tx)}</Badge>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Total:</span>{" "}

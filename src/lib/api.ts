@@ -176,6 +176,7 @@ export interface TransactionCart {
 export interface Transaction {
   id: string;
   payment_provider?: string;
+  doku_payment_method?: string;
   transaction_code?: string;
   master_location_id?: string;
   location_name?: string;
@@ -806,15 +807,13 @@ class ApiClient {
           }
         }
 
-        const responseMessage = typeof responseData === 'object' && responseData !== null && 'message' in responseData
-          ? (responseData as { message?: unknown }).message
-          : undefined;
+        const responseMessage = responseData?.error?.message ?? responseData?.message;
         const message =
           (typeof responseMessage === 'string' && responseMessage) ||
           error.response?.statusText ||
           'API request failed';
 
-        return Promise.reject(new Error(message));
+        return Promise.reject(Object.assign(new Error(message), { status: error.response?.status }));
       }
     );
   }
@@ -1445,6 +1444,13 @@ class ApiClient {
     return this.request(`/transactions/required/${transactionId}/upload-pickup-proof`, {
       method: 'POST',
       data,
+    });
+  }
+
+  async confirmPickupQr(qrPayload: string): Promise<ApiResponse<{ transaction_id: string; transaction_code: string; status: "COMPLETED"; already_completed: boolean }>> {
+    return this.request('/transactions/required/confirm-pickup-qr', {
+      method: 'POST',
+      data: { qr_payload: qrPayload },
     });
   }
 

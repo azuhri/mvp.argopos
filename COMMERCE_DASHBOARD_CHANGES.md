@@ -1,5 +1,7 @@
 # Commerce Dashboard Development - Changes Documentation
 
+> Historical implementation notes, including older paths and navigation behavior. For the current DOKU handover and transaction-action behavior as of 26 October 2026, see [QR handover](docs/qr-handover.md).
+
 ## Overview
 This document outlines all changes made to the Commerce App dashboard for implementing transaction management, responsive design, and navigation features.
 

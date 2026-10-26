@@ -40,7 +40,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         style={{ "--sidebar-width": `${collapsed ? 76 : 260}px` } as CSSProperties}
       >
         <TopBar title={title} />
-        <main className="flex-1 px-4 pb-24 pt-5 md:px-5 md:pb-6 md:pt-6 lg:px-8 lg:py-7">
+        <main className="flex-1 px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5 md:px-5 md:pt-6 lg:px-8 lg:pt-7">
           <div className="mx-auto w-full max-w-[1500px]">
             {children}
           </div>

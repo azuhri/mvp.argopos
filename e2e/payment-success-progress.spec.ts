@@ -9,11 +9,13 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     let transactionRequests = 0;
     let paymentRequests = 0;
     let mutations = 0;
+    await context.route("**/*", route => new URL(route.request().url()).origin === "http://127.0.0.1:4173" ? route.continue() : route.abort());
     await context.route("**/api/v1/**", async (route) => {
       const request = route.request();
       const path = new URL(request.url()).pathname;
       const send = (data: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ success: true, data }) });
       if (request.method() !== "GET") mutations++;
+      if (path.endsWith("/payments/transactions/progress-order/pickup-qr")) return send({ transaction_id: "progress-order", qr_payload: "celestia-pickup-v2.fixture.signature", issued_at: new Date().toISOString() });
       if (path.endsWith("/FBND/store")) return send({ location_id: "progress-store", location_code: "FBND", location_name: "Farm Benda", product_stores: [] });
       if (path.endsWith("/payments/transactions/progress-order")) {
         paymentRequests++;
@@ -32,6 +34,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await page.clock.install();
     await page.goto("/FBND/commerce/payment-success/progress-order");
     await expect(page.getByRole("heading", { name: "Pembayaran berhasil" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "QR konfirmasi penyerahan barang" })).toBeVisible();
     const progress = page.getByRole("region", { name: "Status pesanan" });
     const currentStep = progress.locator('[aria-current="step"]');
     await expect(currentStep).toContainText("Menunggu persiapan");
@@ -54,6 +57,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await page.clock.fastForward(5000);
     await expect(currentStep).toContainText("Pesanan diterima");
     await expect(page.getByText("Transaksi berhasil diselesaikan")).toBeVisible();
+    await expect(page.getByRole("img", { name: "QR konfirmasi penyerahan barang" })).toHaveCount(0);
     await expect(progress.getByText(/Status diperbarui otomatis/)).toHaveCount(0);
     expect(transactionRequests).toBe(4);
     await page.clock.fastForward(20000);

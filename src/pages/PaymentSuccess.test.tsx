@@ -12,6 +12,7 @@ vi.mock("@/lib/services/paymentService", async (original) => ({
   ...await original<typeof import("@/lib/services/paymentService")>(), paymentService: mocks,
 }));
 vi.mock("@/components/layout/AppLayoutCommerce", () => ({ AppLayoutCommerce: ({ children }: { children: ReactNode }) => <main>{children}</main> }));
+vi.mock("@/components/commerce/CustomerPickupQR", () => ({ CustomerPickupQR: ({ transactionId }: { transactionId: string }) => <p>QR penyerahan: {transactionId}</p> }));
 const clients: QueryClient[] = [];
 beforeEach(() => {
   vi.resetAllMocks();
@@ -56,6 +57,7 @@ describe("verified payment success", () => {
     expect(screen.queryByText("Kode unik")).not.toBeInTheDocument();
     expect(mocks.downloadInvoice).not.toHaveBeenCalled();
     expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toHaveTextContent(label);
+    expect(screen.getByText("QR penyerahan: order-one")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Mulai persiapan|Upload Bukti/ })).not.toBeInTheDocument();
   });
 
@@ -64,6 +66,7 @@ describe("verified payment success", () => {
     renderStatus("COMPLETED");
     expect(await screen.findByText("Transaksi berhasil diselesaikan")).toBeInTheDocument();
     expect(screen.getByText(/Penerimaan barang telah tercatat/)).toBeInTheDocument();
+    expect(screen.queryByText("QR penyerahan: order-one")).not.toBeInTheDocument();
     expect(mocks.removePendingPayment).toHaveBeenCalledWith("order-one");
     expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toHaveTextContent("Pesanan diterima");
   });
@@ -73,6 +76,7 @@ describe("verified payment success", () => {
     renderStatus("WAITING_TO_PAYMENT");
     expect(await screen.findByRole("heading", { name: "Pembayaran berhasil" })).toBeInTheDocument();
     expect(screen.getByText("Menunggu pembaruan status")).toBeInTheDocument();
+    expect(screen.queryByText("QR penyerahan: order-one")).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Status pesanan" }).querySelector('[aria-current="step"]')).toBeNull();
   });
 
@@ -97,6 +101,7 @@ describe("verified payment success", () => {
     expect(fetch).toHaveBeenCalledTimes(4);
     expect(mocks.getStatus).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Status diperbarui otomatis/)).not.toBeInTheDocument();
+    expect(screen.queryByText("QR penyerahan: order-one")).not.toBeInTheDocument();
   });
 
   it("retains success and the last progress after a transient failure, then recovers on the next tick", async () => {
@@ -166,6 +171,7 @@ describe("verified payment success", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Gunakan browser tempat pesanan dibuat.");
     expect(screen.queryByRole("heading", { name: "Pembayaran berhasil" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Unduh invoice PDF" })).not.toBeInTheDocument();
+    expect(screen.queryByText("QR penyerahan: order-one")).not.toBeInTheDocument();
     expect(mocks.removePendingPayment).not.toHaveBeenCalled();
   });
 

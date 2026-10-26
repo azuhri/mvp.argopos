@@ -71,6 +71,21 @@ function renderDetail(search = "?doku_return=1&status=SUCCESS") {
 }
 
 describe("DOKU payment status and transaction synchronization", () => {
+  it("requires staff QR handover instead of customer self-confirmation for DOKU", async () => {
+    transactionStatus = "READY_TO_PICKUP";
+    paymentStatus = "PAID";
+    renderDetail("?view=order");
+    expect(await screen.findByRole("link", { name: "Tampilkan QR penyerahan" })).toHaveAttribute("href", "/STORE/commerce/payment-success/order-one");
+    expect(screen.queryByRole("button", { name: "Konfirmasi barang diterima" })).not.toBeInTheDocument();
+  });
+
+  it("keeps customer self-confirmation for manual orders", async () => {
+    transactionStatus = "READY_TO_PICKUP";
+    provider = "MANUAL";
+    renderDetail("?view=order");
+    expect(await screen.findByRole("button", { name: "Konfirmasi barang diterima" })).toBeEnabled();
+    expect(screen.queryByRole("link", { name: "Tampilkan QR penyerahan" })).not.toBeInTheDocument();
+  });
   it("explains outstanding server confirmation without trusting a successful return URL", async () => {
     renderDetail();
     expect(await screen.findByText("Menunggu konfirmasi pembayaran DOKU. Jika sudah membayar, jangan bayar ulang.")).toBeInTheDocument();

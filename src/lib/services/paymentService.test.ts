@@ -4,6 +4,36 @@ import { paymentAttemptKey, paymentService, validatedCheckoutUrl } from "./payme
 afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
 
 describe("gateway transport", () => {
+  it("fetches a pickup QR with the ownership cookie, no cache, and no bearer credential", async () => {
+    const data = { transaction_id: "order-one", qr_payload: "celestia-pickup-v2.body.signature", issued_at: "2026-10-23T10:00:00Z" };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data }) });
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await paymentService.getPickupQr("order-one")).toEqual(data);
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/payments\/transactions\/order-one\/pickup-qr$/);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: "include", cache: "no-store" });
+    expect(fetchMock.mock.calls[0][1].headers.has("Authorization")).toBe(false);
+  });
+
+  it.each([
+    { transaction_id: "other-order" }, { qr_payload: "bare-transaction-id" }, { issued_at: "bad-time" },
+    { qr_payload: "celestia-pickup-v3.body.signature" }, { qr_payload: "celestia-pickup-v2.body" },
+  ])("rejects malformed or mismatched pickup responses: %j", async (invalid) => {
+    const data = { transaction_id: "order-one", qr_payload: "celestia-pickup-v1.body.signature", issued_at: "2026-10-23T10:00:00Z", expires_at: "2026-10-23T10:05:00Z", ...invalid };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data }) }));
+    await expect(paymentService.getPickupQr("order-one")).rejects.toThrow("QR penyerahan belum tersedia");
+  });
+
+  it("accepts a legacy signed QR even after its old expires_at", async () => {
+    const data = { transaction_id: "order-one", qr_payload: "celestia-pickup-v1.body.signature", issued_at: "2020-01-01T00:00:00Z", expires_at: "2020-01-01T00:05:00Z" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data }) }));
+    expect(await paymentService.getPickupQr("order-one")).toEqual(data);
+  });
+
+  it.each([401, 409, 503])("preserves pickup HTTP %s without exposing server details", async (status) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status, json: async () => ({ success: false, error: { message: "private server data" } }) }));
+    await expect(paymentService.getPickupQr("order-one")).rejects.toMatchObject({ status });
+    await expect(paymentService.getPickupQr("order-one")).rejects.not.toThrow("private server data");
+  });
   it("reads public feature configuration without cross-origin cookies while payment status includes ownership cookies", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: { enabled: false, methods: [] } }) });
     vi.stubGlobal("fetch", fetchMock);

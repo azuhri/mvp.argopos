@@ -15,6 +15,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
 import { OrderFulfillmentProgress } from "@/components/commerce/OrderFulfillmentProgress";
+import { CustomerPickupQR } from "@/components/commerce/CustomerPickupQR";
 import { LoadingSpinner } from "@/components/shared/SkeletonLoader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -253,6 +254,9 @@ export default function PaymentSuccess() {
           </div>
         </motion.section>
 
+        {verifiedPaid && ["PAID", "PREPARING_PRODUCT", "READY_TO_PICKUP"].includes(transactionData.status) && (
+          <CustomerPickupQR key={transactionData.id} transactionId={transactionData.id} />
+        )}
         {isDoku && <OrderFulfillmentProgress status={transactionData.status} refreshFailed={Boolean(error)} />}
 
         <section className="commerce-panel overflow-hidden">

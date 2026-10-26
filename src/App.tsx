@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import ProductPage from "./pages/dashboard/ProductPage";
 import TransactionPage from "./pages/dashboard/TransactionPage";
 import TransactionApproval from "./pages/TransactionApproval";
+import PickupQrScanner from "./pages/PickupQrScanner";
 import Login from "./pages/Login";
 import AccessDenied from "./pages/AccessDenied";
 import Customers from "./pages/Customers";
@@ -86,6 +87,11 @@ const App = () => (
             <Route path="/transactions" element={
               <ProtectedRoute>
                 <TransactionPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/transactions/pickup-scan" element={
+              <ProtectedRoute menuKey="transactions" requireWrite>
+                <PickupQrScanner />
               </ProtectedRoute>
             } />
             <Route path="/payments" element={

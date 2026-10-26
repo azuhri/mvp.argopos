@@ -44,6 +44,13 @@ export interface ReconciliationRow {
   net_amount?: number | null;
 }
 export interface PaymentRefreshResult { session: PaymentSession; checked: boolean }
+export interface CustomerPickupQR {
+  transaction_id: string;
+  qr_payload: string;
+  issued_at: string;
+  /** Legacy v1 metadata; handover QR codes no longer expire. */
+  expires_at?: string;
+}
 interface Envelope<T> { success: boolean; data: T; meta?: { total?: number; checked?: boolean }; message?: string }
 
 export class PaymentRequestError extends Error {
@@ -139,6 +146,22 @@ function invoiceFilename(disposition: string | null, transactionId: string): str
 }
 
 export const paymentService = {
+  async getPickupQr(transactionId: string, signal?: AbortSignal): Promise<CustomerPickupQR> {
+    try {
+      const { data } = await request<CustomerPickupQR>(`/transactions/${encodeURIComponent(transactionId)}/pickup-qr`, { signal });
+      if (data?.transaction_id !== transactionId || typeof data.qr_payload !== "string" ||
+          !/^celestia-pickup-v[12]\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(data.qr_payload) || data.qr_payload.length > 1024 ||
+          !Number.isFinite(Date.parse(data.issued_at))) {
+        throw new PaymentRequestError("QR penyerahan belum tersedia. Coba muat ulang QR.", 0);
+      }
+      return data;
+    } catch (error) {
+      if (error instanceof PaymentRequestError && error.status === 409) {
+        throw new PaymentRequestError("QR belum tersedia untuk status pesanan ini. Periksa status pesanan atau hubungi admin toko.", 409);
+      }
+      throw error;
+    }
+  },
   async getConfig(): Promise<PaymentConfig> { return (await request<PaymentConfig>("/config", { credentials: "same-origin" })).data; },
   async getStatus(transactionId: string, signal?: AbortSignal): Promise<PaymentSession> {
     return (await request<PaymentSession>(`/transactions/${encodeURIComponent(transactionId)}`, { signal })).data;

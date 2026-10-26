@@ -9,7 +9,7 @@ import type { Transaction } from "@/lib/api";
 interface Props {
   transaction: Pick<Transaction, "id" | "status" | "payment_provider" | "path_proof_pickup">;
   onUpdated: () => void;
-  onUpload: () => void;
+  onUpload?: () => void;
   className?: string;
 }
 
@@ -26,7 +26,7 @@ export function DokuFulfillmentActions({ transaction, onUpdated, onUpload, class
     setPreparing(true);
     try {
       await transactionService.approveDelivery(transaction.id);
-      toast.success("Pesanan mulai disiapkan. Unggah bukti setelah barang siap diambil.");
+      toast.success(onUpload ? "Pesanan mulai disiapkan. Unggah bukti setelah barang siap diambil." : "Pesanan mulai disiapkan. Pindai QR pelanggan saat menyerahkan barang.");
       onUpdated();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Persiapan pesanan belum dapat dimulai.");
@@ -42,7 +42,7 @@ export function DokuFulfillmentActions({ transaction, onUpdated, onUpload, class
       {preparing ? "Memproses..." : "Mulai persiapan"}
     </Button>;
   }
-  if (["PREPARING_PRODUCT", "READY_TO_PICKUP", "COMPLETED"].includes(transaction.status) && !transaction.path_proof_pickup) {
+  if (onUpload && ["PREPARING_PRODUCT", "READY_TO_PICKUP", "COMPLETED"].includes(transaction.status) && !transaction.path_proof_pickup) {
     return <Button size="sm" className={className} disabled={!writable} onClick={onUpload}>
       <Camera className="mr-1 h-3 w-3" />Upload Bukti
     </Button>;

@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils";
 
 const steps = [
   { status: "PAID", label: "Menunggu persiapan", icon: Clock3, description: "Pembayaran diterima. Menunggu staf toko memulai persiapan pesanan." },
-  { status: "PREPARING_PRODUCT", label: "Sedang disiapkan", icon: Package, description: "Staf toko sedang menyiapkan pesanan. Setelah bukti diunggah, status akan berubah menjadi siap diambil." },
-  { status: "READY_TO_PICKUP", label: "Siap diambil", icon: ShoppingBag, description: "Pesanan Anda siap diambil. Buka detail transaksi untuk mengonfirmasi penerimaan setelah barang diterima." },
+  { status: "PREPARING_PRODUCT", label: "Sedang disiapkan", icon: Package, description: "Staf toko sedang menyiapkan pesanan. Tunjukkan QR penyerahan kepada admin toko saat menerima barang." },
+  { status: "READY_TO_PICKUP", label: "Siap diambil", icon: ShoppingBag, description: "Pesanan Anda siap diambil. Tunjukkan QR penyerahan kepada admin toko saat menerima barang." },
   { status: "COMPLETED", label: "Pesanan diterima", icon: PackageCheck, description: "Penerimaan pesanan telah dikonfirmasi. Terima kasih telah berbelanja." },
 ];
 

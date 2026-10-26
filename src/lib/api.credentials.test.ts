@@ -9,6 +9,14 @@ vi.mock("axios", () => ({ default: { create: () => ({
 import { apiClient } from "./api";
 
 describe("transaction cookie compatibility", () => {
+  it("confirms staff pickup with the signed QR on the protected endpoint", async () => {
+    await apiClient.confirmPickupQr("celestia-pickup-v1.fixture.signature");
+    expect(mocks.request.mock.calls[0][0]).toMatchObject({
+      url: "/transactions/required/confirm-pickup-qr", method: "POST",
+      data: { qr_payload: "celestia-pickup-v1.fixture.signature" },
+    });
+    expect(mocks.request.mock.calls[0][0].withCredentials).toBeUndefined();
+  });
   beforeEach(() => { mocks.request.mockReset(); mocks.request.mockResolvedValue({ success: true }); });
 
   it("keeps public transaction detail compatible with legacy wildcard CORS", async () => {

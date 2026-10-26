@@ -15,6 +15,7 @@ interface ReturnState {
 }
 
 async function mockReturn(context: BrowserContext, state: ReturnState) {
+  await context.route("**/*", route => new URL(route.request().url()).origin === "http://127.0.0.1:4173" ? route.continue() : route.abort());
   await context.route("**/api/v1/**", async (route: Route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -29,6 +30,7 @@ async function mockReturn(context: BrowserContext, state: ReturnState) {
     }
     if (path.includes("/payments/transactions/return-order")) {
       if (state.ownershipError) return fail(401);
+      if (path.endsWith("/pickup-qr")) return send({ transaction_id: "return-order", qr_payload: "celestia-pickup-v2.fixture.signature", issued_at: new Date().toISOString() });
       if (path.endsWith("/invoice")) { state.invoiceRequests++; return fail(503); }
       if (path.endsWith("/refresh")) {
         expect(request.method()).toBe("POST");

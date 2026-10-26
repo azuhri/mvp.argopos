@@ -381,13 +381,13 @@ export default function PaymentDetail() {
   };
 
   const handleConfirmReceipt = async () => {
-    if (!transactionId) return;
+    if (!transactionId || transactionData?.payment_provider === "DOKU") return;
     setIsConfirmingReceipt(true);
 
     try {
       const response = await fetch(`${config.apiUrl}/transactions/${transactionId}/confirm-receipt`, {
         method: "POST",
-        credentials: transactionData?.payment_provider === "DOKU" ? "include" : "same-origin",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
       });
       if (!response.ok) throw new Error("Gagal mengkonfirmasi penerimaan barang");
@@ -740,7 +740,13 @@ export default function PaymentDetail() {
                   </div>
                 )}
 
-                {isReadyToPickup && !confirmedReceipt && (
+                {isDoku && ["PAID", "PREPARING_PRODUCT", "READY_TO_PICKUP"].includes(transactionData.status) && (
+                  <Button asChild className="commerce-orange-button h-auto min-h-11 w-full rounded-md py-3 font-extrabold">
+                    <Link to={`/${locationCode}/commerce/payment-success/${transactionId}`}><QrCode aria-hidden="true" className="h-4 w-4" /> Tampilkan QR penyerahan</Link>
+                  </Button>
+                )}
+
+                {!isDoku && isReadyToPickup && !confirmedReceipt && (
                   <Button className="commerce-orange-button h-auto min-h-11 w-full rounded-md py-3 font-extrabold" onClick={handleConfirmReceipt} disabled={isConfirmingReceipt}>
                     {isConfirmingReceipt ? <LoadingSpinner size="sm" /> : <CheckCircle2 className="h-4 w-4" />}
                     {isConfirmingReceipt ? "Memproses..." : "Konfirmasi barang diterima"}
