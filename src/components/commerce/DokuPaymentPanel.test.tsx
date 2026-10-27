@@ -34,7 +34,7 @@ describe("DOKU payment panel", () => {
     expect(await screen.findByRole("heading", { name: "Menunggu verifikasi pembayaran" })).toBeInTheDocument();
     expect(mocks.createCheckout).not.toHaveBeenCalled();
     expect(mocks.refreshStatus).toHaveBeenCalledTimes(1);
-    expect(mocks.getStatus).not.toHaveBeenCalled();
+    expect(mocks.getStatus).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: /Bayar melalui DOKU|Lanjutkan ke DOKU/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Pembayaran berhasil" })).not.toBeInTheDocument();
   });
@@ -222,11 +222,11 @@ describe("DOKU payment panel", () => {
     expect(mocks.createCheckout).not.toHaveBeenCalled();
   });
 
-  it("observes a webhook's PAID result without a provider refresh on a reopened order", async () => {
+  it.each([false, true])("observes webhook PAID without a provider refresh (returnMode=%s)", async (returnMode) => {
     vi.useFakeTimers();
     const onVerifiedPaid = vi.fn();
     mocks.getStatus.mockResolvedValue({ ...pending, payment_id: "existing-attempt", status: "PAID" });
-    renderPanel({ onVerifiedPaid });
+    renderPanel({ returnMode, onVerifiedPaid });
     await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
     expect(onVerifiedPaid).toHaveBeenCalledTimes(1);
     expect(mocks.refreshStatus).not.toHaveBeenCalled();

@@ -61,6 +61,23 @@ async function mockReturn(context: BrowserContext, state: ReturnState) {
 const pending = (): ReturnState => ({ status: "PENDING", review: false, refreshes: 0, creates: 0, invoiceRequests: 0 });
 const returnURL = "/RETURN/commerce/payment/return-order?doku_return=1&status=SUCCESS";
 
+for (const width of [390, 1440]) {
+  for (const search of ["", "?doku_return=1&status=FAILED"]) {
+    test(`already-paid payment link opens success without POST refresh (${width}px, ${search || "plain link"})`, async ({ page, context }) => {
+      const state = { ...pending(), status: "PAID" };
+      state.refreshError = 503;
+      await mockReturn(context, state);
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`/RETURN/commerce/payment/return-order${search}`);
+      await expect(page).toHaveURL(/\/commerce\/payment-success\/return-order$/);
+      await expect(page.getByRole("heading", { name: "Pembayaran berhasil" })).toBeVisible();
+      await expect(page.getByRole("img", { name: "QR konfirmasi penyerahan barang" })).toBeVisible();
+      expect(state.refreshes).toBe(0);
+      expect(state.creates).toBe(0);
+    });
+  }
+}
+
 test("return polls every 5 seconds, recovers from a network failure, and stops after payment", async ({ page, context }) => {
   const state = pending();
   state.refreshError = 503;
@@ -81,7 +98,7 @@ test("return polls every 5 seconds, recovers from a network failure, and stops a
   await expect(page).toHaveURL(/\/commerce\/payment-success\/return-order$/);
   await expect(page.getByRole("heading", { name: "Pembayaran berhasil" })).toBeVisible();
   await page.clock.fastForward(20000);
-  expect(state.refreshes).toBe(3);
+  expect(state.refreshes).toBe(2);
   expect(state.creates).toBe(0);
 });
 

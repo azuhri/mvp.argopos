@@ -224,9 +224,9 @@ export default function PaymentDetail() {
     refetch: refetchTransaction,
   } = useQuery({
     queryKey: ["transaction", transactionId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!transactionId) return null;
-      const response = await fetch(`${config.apiUrl}/transactions/${transactionId}`);
+      const response = await fetch(`${config.apiUrl}/transactions/${transactionId}`, { signal, credentials: "include", cache: "no-store" });
       if (response.status === 404) removePendingPayment(transactionId);
       if (!response.ok) throw new Error("Gagal memuat data transaksi");
       const result = await response.json() as { data?: Transaction };
@@ -236,6 +236,8 @@ export default function PaymentDetail() {
       return result.data;
     },
     enabled: Boolean(transactionId),
+    staleTime: 0,
+    refetchOnMount: "always",
     refetchInterval: (query) => {
       const transaction = query.state.data as Transaction | undefined;
       return transaction && ["REJECTED", "COMPLETED"].includes(transaction.status) ? false : 5000;

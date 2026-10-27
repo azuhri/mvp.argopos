@@ -27,15 +27,19 @@ export function DokuPaymentPanel({ transactionId, returnMode, onVerifiedPaid }: 
     // too; a GET alone only observes notifications already stored by the API.
     // One Query owns the whole check, including cancellation and deduplication.
     queryFn: async ({ signal }) => {
-      if (returned) return (await paymentService.refreshStatus(transactionId, signal)).session;
       const latest = await paymentService.getStatus(transactionId, signal);
-      if (latest.payment_id && latest.status === "PENDING" && !latest.review_required && !refreshing.current) {
+      // Notifications may already have confirmed payment, including on return.
+      // Read canonical status first so PAID never depends on another provider check.
+      const checkProvider = returned ? latest.status !== "PAID" : Boolean(latest.payment_id) && latest.status === "PENDING";
+      if (checkProvider && !latest.review_required && !refreshing.current) {
         return (await paymentService.refreshStatus(transactionId, signal)).session;
       }
       return latest;
     },
     // Retry on the next polling tick, without additional immediate POSTs.
     retry: false,
+    staleTime: 0,
+    refetchOnMount: "always",
     refetchInterval: (query) => {
       if (query.state.error instanceof PaymentRequestError && [401, 403, 404].includes(query.state.error.status)) return false;
       const data = query.state.data;

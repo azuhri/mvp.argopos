@@ -64,13 +64,34 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-function renderDetail(search = "?doku_return=1&status=SUCCESS") {
+function renderDetail(search = "?doku_return=1&status=SUCCESS", cachedStatus?: PaymentSession["status"]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
+  if (cachedStatus) client.setQueryData(["doku-payment", "order-one"], {
+    payment_id: "attempt-one", transaction_id: "order-one", status: cachedStatus,
+    amount: 50000, expires_at: new Date(Date.now() + 3600000).toISOString(),
+  });
   clients.push(client);
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/STORE/commerce/payment/order-one${search}`]}><Routes><Route path="/:locationCode/commerce/payment/:transactionId" element={<PaymentDetail />} /><Route path="/:locationCode/commerce/payment-success/:transactionId" element={<p>Halaman pembayaran berhasil</p>} /></Routes></MemoryRouter></QueryClientProvider>);
 }
 
 describe("DOKU payment status and transaction synchronization", () => {
+  it("rechecks a cached pending payment immediately when reopening a paid order", async () => {
+    transactionStatus = "PAID";
+    paymentStatus = "PAID";
+    renderDetail("", "PENDING");
+    expect(await screen.findByText("Halaman pembayaran berhasil")).toBeInTheDocument();
+    expect(mocks.getStatus).toHaveBeenCalledTimes(1);
+    expect(mocks.refreshStatus).not.toHaveBeenCalled();
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
+  it("never redirects from cached PAID before the owned status is checked again", async () => {
+    renderDetail("", "PAID");
+    await waitFor(() => expect(mocks.getStatus).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("heading", { name: "Menunggu verifikasi pembayaran" })).toBeInTheDocument();
+    expect(screen.queryByText("Halaman pembayaran berhasil")).not.toBeInTheDocument();
+  });
+
   it("requires staff QR handover instead of customer self-confirmation for DOKU", async () => {
     transactionStatus = "READY_TO_PICKUP";
     paymentStatus = "PAID";
