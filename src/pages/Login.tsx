@@ -31,27 +31,7 @@ const getRoleRedirect = (role?: string) =>
 
 const assetUrl = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 const brandAsset = assetUrl("image/amp-mart-icon.png");
-
-const productVisuals = [
-  {
-    src: "image/BAKSO SAPI PACKSHOT.png",
-    className:
-      "bottom-[6.9rem] left-[7%] z-10 h-[13.5rem] w-auto -rotate-[2deg] 2xl:h-[15.5rem]",
-    clipPath: "polygon(20% 8%, 80% 8%, 88% 96%, 12% 96%)",
-  },
-  {
-    src: "image/SOSIS COCKTAIL PACKSHOT.png",
-    className:
-      "bottom-[6.6rem] left-1/2 z-20 h-[17.5rem] w-auto -translate-x-1/2 2xl:h-[20rem]",
-    clipPath: "polygon(10% 5%, 90% 5%, 96% 96%, 4% 96%)",
-  },
-  {
-    src: "image/NUGGET PACKSHOT.PNG",
-    className:
-      "bottom-[6.9rem] right-[7%] z-10 h-[13.5rem] w-auto rotate-[2deg] 2xl:h-[15.5rem]",
-    clipPath: "polygon(10% 5%, 90% 5%, 96% 96%, 4% 96%)",
-  },
-];
+const workspaceBannerAsset = assetUrl("image/celestia-login-podium.png");
 
 const workspaceFeatures = [
   { label: "Kelola produk", icon: Package },
@@ -134,31 +114,17 @@ function CircuitBackdrop() {
 
 function WorkspaceVisual() {
   return (
-    <div className="relative mt-3 min-h-[22rem] flex-1 2xl:min-h-[25rem]">
-      <div
-        className="absolute bottom-[4.55rem] left-1/2 z-0 h-20 w-[96%] -translate-x-1/2 rounded-b-[45%] bg-gradient-to-b from-[#e7edf7] via-[#d6e0ee] to-[#aebfd6] shadow-[0_28px_55px_rgba(0,0,0,0.3)]"
-        aria-hidden="true"
-      />
-      <div
-        className="absolute bottom-[7.25rem] left-1/2 z-[1] h-16 w-[96%] -translate-x-1/2 rounded-[50%] border border-white/75 bg-gradient-to-b from-white to-[#dfe7f3]"
-        aria-hidden="true"
+    <div className="relative z-10 mt-6 flex flex-1 flex-col justify-end gap-4">
+      <img
+        src={workspaceBannerAsset}
+        alt="Bakso sapi, sosis ayam cocktail, dan chicken nugget Celestia"
+        width={1774}
+        height={887}
+        className="block h-auto w-full shrink-0 object-contain"
+        decoding="async"
       />
 
-      <div className="absolute inset-0" aria-hidden="true">
-        {productVisuals.map((product) => (
-          <img
-            key={product.src}
-            src={assetUrl(product.src)}
-            alt=""
-            className={`absolute object-contain drop-shadow-[0_22px_22px_rgba(0,0,0,0.28)] ${product.className}`}
-            style={{ clipPath: product.clipPath }}
-            loading="lazy"
-            decoding="async"
-          />
-        ))}
-      </div>
-
-      <ul className="absolute inset-x-0 bottom-0 z-30 grid grid-cols-4 overflow-hidden rounded-xl border border-white/70 bg-white px-3 py-4 text-[#071a4f] shadow-[0_18px_50px_rgba(0,15,52,0.32)]">
+      <ul className="grid shrink-0 grid-cols-4 overflow-hidden rounded-xl border border-white/70 bg-white px-3 py-4 text-[#071a4f] shadow-[0_18px_50px_rgba(0,15,52,0.32)]">
         {workspaceFeatures.map((feature, index) => {
           const Icon = feature.icon;
           return (
@@ -270,7 +236,7 @@ export default function Login() {
                 <ShoppingBag className="h-6 w-6" aria-hidden="true" />
               </span>
               <div>
-                <p className="text-base font-bold tracking-wide">CELESTORE</p>
+                <p className="text-base font-bold tracking-wide">Commerce App</p>
                 <p className="mt-0.5 text-xs text-white/65">Commerce workspace</p>
               </div>
             </div>
@@ -308,7 +274,7 @@ export default function Login() {
                     AMP <span className="text-[#e30613]">Mart</span>
                   </p>
                   <p className="mt-1 truncate text-[10px] font-semibold text-slate-500">
-                    CELESTORE · Commerce workspace
+                    Commerce App · Commerce workspace
                   </p>
                 </div>
               </div>

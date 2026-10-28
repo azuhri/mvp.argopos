@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CELESTORE (formerly ArgoPOS) is a CMS + CRM + POS system for frozen food distribution to cooperativas. The frontend is a React + TypeScript + Vite application with glassmorphism UI, supporting both internal employees and external customers.
+Commerce App (formerly ArgoPOS) is a CMS + CRM + POS system for frozen food distribution to cooperativas. The frontend is a React + TypeScript + Vite application with glassmorphism UI, supporting both internal employees and external customers.
 
 ## Commands
 
