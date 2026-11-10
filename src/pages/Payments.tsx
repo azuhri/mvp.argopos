@@ -48,8 +48,8 @@ export default function Payments() {
   const [importError, setImportError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [reconciliationPage, setReconciliationPage] = useState(1);
-  const readable = canRead("transactions");
-  const writable = canWrite("transactions");
+  const readable = canRead("payments");
+  const writable = canWrite("payments");
   const canImport = user?.role === "super_admin" && writable;
   const report = useQuery({ queryKey: ["payments-admin", filters], queryFn: () => paymentService.list(filters), enabled: readable });
   const reconciliation = useQuery({ queryKey: ["payments-reconciliation", filters, reconciliationPage], queryFn: () => paymentService.reconciliation({ ...filters, page: reconciliationPage }), enabled: readable });
@@ -58,16 +58,23 @@ export default function Payments() {
     void queryClient.invalidateQueries({ queryKey: ["payments-reconciliation"] });
   };
   const reconcile = useMutation({
-    mutationFn: paymentService.reconcile,
+    mutationFn: (paymentId: string) => {
+      if (!writable) throw new Error("Izin Write pada Pembayaran DOKU diperlukan.");
+      return paymentService.reconcile(paymentId);
+    },
     onSuccess: () => { refreshReports(); toast.success("Status pembayaran telah diperiksa."); },
     onError: () => toast.error("Status belum dapat diperiksa. Coba kembali beberapa saat lagi."),
   });
   const importMutation = useMutation({
-    mutationFn: paymentService.importSettlements,
+    mutationFn: (records: SettlementRecord[]) => {
+      if (!canImport) throw new Error("Impor settlement tidak diizinkan.");
+      return paymentService.importSettlements(records);
+    },
     onSuccess: () => { refreshReports(); setPreview(null); setImportText(""); toast.success("Settlement berhasil diimpor."); },
     onError: () => setImportError("Settlement belum dapat diimpor. Periksa format dan duplikasi referensi laporan."),
   });
   const exportReport = async () => {
+    if (!readable) return;
     setExporting(true);
     try {
       const blob = await paymentService.exportReconciliation(filters);

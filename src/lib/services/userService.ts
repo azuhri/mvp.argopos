@@ -1,4 +1,5 @@
 import { apiClient, User, Role } from '@/lib/api';
+import { roleManagementService } from './roleManagementService';
 
 // Re-export types for use in components
 export type { User, Role };
@@ -90,13 +91,8 @@ class UserService {
 
   // Get available roles
   async getRoles(): Promise<Role[]> {
-    const response = await apiClient.getRoles();
-    if (!response.success || !response.data) {
-      throw new Error(response.message || 'Failed to get roles');
-    }
-    // Handle nested response structure: {success: true, data: [...], meta: {...}}
-    const responseData = response.data as any;
-    return responseData?.data || responseData || [];
+    // The assignment selector must include roles beyond the default first page.
+    return roleManagementService.list();
   }
 }
 

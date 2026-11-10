@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
@@ -7,7 +8,10 @@ import { AnimatedCounter } from "@/components/shared/AnimatedCounter";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { DokuFulfillmentActions } from "@/components/shared/DokuFulfillmentActions";
 import { StoreStockRequestPanel } from "@/components/master/StoreStockRequestPanel";
+import { StoreVoucherPanel } from "@/components/master/StoreVoucherPanel";
+import { VoucherTransactionBadge } from "@/components/shared/VoucherTransactionBadge";
 import { StorePaymentSettings } from "@/components/master/StorePaymentSettings";
+import { StockCatalogAccessInfo, StockCatalogStatus } from "@/components/master/StockCatalogStatus";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,18 +37,24 @@ import { parseIDR } from "@/lib/utils";
 import { getTransactionPaymentMethodLabel } from "@/lib/transactionPresentation";
 import CurrencyInput from "@/components/ui/input-currency";
 
-const storeDetailTabs = ["summary", "stock-management", "users", "transaction", "payment", "time-cutoff"] as const;
+const storeDetailTabs = ["summary", "stock-management", "users", "transaction", "payment", "vouchers", "time-cutoff"] as const;
 type StoreDetailTab = typeof storeDetailTabs[number];
 
 const isStoreDetailTab = (value: string | null): value is StoreDetailTab =>
   value !== null && storeDetailTabs.includes(value as StoreDetailTab);
 
 export default function KoperasiDetailPage() {
+  const { user, canWrite } = useAuth();
   const { locationId } = useParams<{ locationId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [store, setStore] = useState<StoreType | null>(null);
   const [loading, setLoading] = useState(true);
+  const assignedToStore = Boolean(user && (user.role === "super_admin" || store?.assigned_users.some(assigned => assigned.id === user.id)));
+  const canManageStore = canWrite("master_stores") && assignedToStore;
+  const canManageStock = (canWrite("master_stock") || canWrite("master_stores")) && assignedToStore;
+  const canManageTransactions = canWrite("transactions") && assignedToStore;
+  const canManageTimeCutoff = (canWrite("master_locations") || canWrite("master_stores")) && assignedToStore;
   const [activeTab, setActiveTab] = useState<StoreDetailTab>(() => {
     const requestedTab = searchParams.get("tab");
     return isStoreDetailTab(requestedTab) ? requestedTab : "summary";
@@ -293,6 +303,7 @@ export default function KoperasiDetailPage() {
 
   // Pickup proof handlers
   const openPickupProofModal = (tx: Transaction) => {
+    if (!canManageTransactions) return;
     setPickupProofTransaction(tx);
     setPickupProofFile(null);
     setPickupProofPreview(null);
@@ -324,6 +335,7 @@ export default function KoperasiDetailPage() {
   };
 
   const handleUploadProof = async () => {
+    if (!canManageTransactions) return;
     if (!pickupProofTransaction || !pickupProofFile) return;
     setPickupProofUploading(true);
     try {
@@ -342,13 +354,9 @@ export default function KoperasiDetailPage() {
   };
 
   const handleMarkReadyPickup = async (tx: Transaction) => {
+    if (!canManageTransactions) return;
     try {
-      const res = await fetch(`${config.apiUrl}/transactions/${tx.id}/mark-ready-pickup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || 'Failed');
+      await transactionService.markReadyPickup(tx.id);
       toast.success('Berhasil menandai siap diambil');
       loadTransactions();
     } catch (err: any) {
@@ -366,6 +374,7 @@ export default function KoperasiDetailPage() {
   };
 
   const openStockEdit = (stock: Stock) => {
+    if (!canManageStock) return;
     setStorePrice(
       new Intl.NumberFormat("id-ID").format(stock.base_price)
     );
@@ -389,7 +398,22 @@ export default function KoperasiDetailPage() {
     setStockEditOpen(true);
   };
 
+  const stockStatusControl = (stock: Stock) => (
+    <StockCatalogStatus
+      stockId={stock.id}
+      productName={stock.master_product?.product_name || stock.id}
+      status={stock.status !== false}
+      locationCode={store!.location_code}
+      assignedUserIds={store!.assigned_users.map(user => user.id)}
+      onSaved={(status) => setStore(prev => prev && ({
+        ...prev,
+        product_stores: prev.product_stores.map(item => item.id === stock.id ? { ...item, status } : item),
+      }))}
+    />
+  );
+
   const handleStockSave = async () => {
+    if (!canManageStock) return;
     if (!editingStock) return;
 
     try {
@@ -422,6 +446,7 @@ export default function KoperasiDetailPage() {
   };
 
   const handleTimeCutoffSave = async () => {
+    if (!canManageTimeCutoff) return;
     if (!locationId) return;
     setTimeCutoffSaving(true);
     try {
@@ -448,6 +473,7 @@ export default function KoperasiDetailPage() {
   const existingCutoff = store?.payment_methods.find(pm => pm.payment_type === 'cutoff_hutang');
 
   const openPaymentMethod = (type?: 'qris' | 'transfer_rekening' | 'cutoff_hutang', existingPm?: StorePaymentMethod) => {
+    if (!canManageStore) return;
     // Reset file upload states
     setQrisImageFile(null);
     setQrisImagePreview(null);
@@ -495,6 +521,7 @@ export default function KoperasiDetailPage() {
   };
 
   const handleOpenQris = () => {
+    if (!canManageStore) return;
     if (existingQris) {
       openPaymentMethod('qris', existingQris);
     } else {
@@ -503,6 +530,7 @@ export default function KoperasiDetailPage() {
   };
 
   const handleOpenCutoff = () => {
+    if (!canManageStore) return;
     if (existingCutoff) {
       openPaymentMethod('cutoff_hutang', existingCutoff);
     } else {
@@ -511,14 +539,17 @@ export default function KoperasiDetailPage() {
   };
 
   const handleOpenTransfer = () => {
+    if (!canManageStore) return;
     openPaymentMethod('transfer_rekening');
   };
 
   const handleEditPayment = (pm: StorePaymentMethod) => {
+    if (!canManageStore) return;
     openPaymentMethod(pm.payment_type as any, pm);
   };
 
   const handlePaymentSave = async () => {
+    if (!canManageStore) return;
     try {
       // Validate required fields based on payment type
       if (paymentFormData.payment_type === 'qris') {
@@ -612,11 +643,13 @@ export default function KoperasiDetailPage() {
   };
 
   const openDeletePayment = (pm: StorePaymentMethod) => {
+    if (!canManageStore) return;
     setDeletingPayment(pm);
     setDeletePaymentOpen(true);
   };
 
   const handleDeletePayment = async () => {
+    if (!canManageStore) return;
     if (!deletingPayment) return;
 
     try {
@@ -631,11 +664,13 @@ export default function KoperasiDetailPage() {
   };
 
   const handleApprovePayment = async (transactionId: string) => {
+    if (!canManageTransactions) return;
     setApprovingTransactionId(transactionId);
     setApprovePaymentOpen(true);
   };
 
   const handleConfirmApprovePayment = async () => {
+    if (!canManageTransactions) return;
     if (!approvingTransactionId) return;
 
     try {
@@ -738,6 +773,9 @@ export default function KoperasiDetailPage() {
             <CreditCard className="h-4 w-4 mr-2" />
             Payment Method
           </Button>
+          <Button variant={activeTab === 'vouchers' ? 'default' : 'outline'} onClick={() => handleTabChange('vouchers')} className="whitespace-nowrap">
+            <CreditCard className="mr-2 h-4 w-4" />Voucher Code
+          </Button>
           <Button
             variant={activeTab === 'time-cutoff' ? 'default' : 'outline'}
             onClick={() => handleTabChange('time-cutoff')}
@@ -749,6 +787,8 @@ export default function KoperasiDetailPage() {
         </div>
 
         {/* Summary Tab */}
+        <TabsContent value="vouchers"><StoreVoucherPanel locationId={locationId!} assignedUserIds={store.assigned_users.map((person) => person.id)} /></TabsContent>
+
         <TabsContent value="summary" className="space-y-4">
           <GlassCard>
             <div className="p-1">
@@ -839,6 +879,10 @@ export default function KoperasiDetailPage() {
           <GlassCard className="p-4">
             <div className="">
               <h4 className="font-semibold mb-3">Product Stock</h4>
+              <StockCatalogAccessInfo
+                assignedUserIds={store.assigned_users.map(user => user.id)}
+                onRefresh={loadStoreDetail}
+              />
               {/* Desktop/Tablet: Table View */}
               <div className="hidden md:block">
                 <Table>
@@ -852,6 +896,7 @@ export default function KoperasiDetailPage() {
                       <TableHead>Discount Price</TableHead>
                       <TableHead>Tax %</TableHead>
                       <TableHead>Final Price</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -879,8 +924,9 @@ export default function KoperasiDetailPage() {
                           <TableCell>{stock.discount_price ? formatCurrency(stock.discount_price) : '-'}</TableCell>
                           <TableCell>{stock.tax_percentage}%</TableCell>
                           <TableCell>{formatCurrency(calculateFinalPrice(stock))}</TableCell>
+                          <TableCell>{stockStatusControl(stock)}</TableCell>
                           <TableCell>
-                            <Button variant="secondary" size="sm" onClick={() => openStockEdit(stock)}>
+                            <Button disabled={!canManageStock} variant="secondary" size="sm" onClick={() => openStockEdit(stock)}>
                               <Pencil className="h-3 w-3" />
                             </Button>
                           </TableCell>
@@ -888,7 +934,7 @@ export default function KoperasiDetailPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-muted-foreground">
+                        <TableCell colSpan={10} className="text-center text-muted-foreground">
                           Tidak ada product stock
                         </TableCell>
                       </TableRow>
@@ -947,7 +993,11 @@ export default function KoperasiDetailPage() {
                             </div>
                           </div>
                           <div className="mt-3">
-                            <Button variant="secondary" className="w-full" size="sm" onClick={() => openStockEdit(stock)}>
+                            <div className="mb-3 flex items-center justify-between gap-2">
+                              <span className="text-sm text-muted-foreground">Status</span>
+                              {stockStatusControl(stock)}
+                            </div>
+                            <Button disabled={!canManageStock} variant="secondary" className="w-full" size="sm" onClick={() => openStockEdit(stock)}>
                               <Pencil className="h-3 w-3 mr-1" />
                               Edit
                             </Button>
@@ -1159,7 +1209,7 @@ export default function KoperasiDetailPage() {
                           <TableCell className="font-mono text-xs">{tx.transaction_code || '-'}</TableCell>
                           <TableCell>{tx.customer_name || '-'}</TableCell>
                           <TableCell>
-                            <StatusBadge status={getTransactionStatusBadge(tx.status)} />
+                            <div><StatusBadge status={getTransactionStatusBadge(tx.status)} /><VoucherTransactionBadge transaction={tx} /></div>
                           </TableCell>
                           <TableCell><Badge variant="secondary">{getTransactionPaymentMethodLabel(tx)}</Badge></TableCell>
                           <TableCell>{formatCurrency(tx.total_amount)}</TableCell>
@@ -1174,7 +1224,7 @@ export default function KoperasiDetailPage() {
                                 <Eye className="h-3 w-3 mr-1" /> Items
                               </Button>
                               {tx.status === 'WAITING_TO_PAYMENT' && (
-                                <Button
+                                <Button disabled={!canManageTransactions}
                                   variant="outline"
                                   size="sm"
                                   onClick={() => handleApprovePayment(tx.id)}
@@ -1185,7 +1235,7 @@ export default function KoperasiDetailPage() {
                               )}
                               <DokuFulfillmentActions transaction={tx} onUpdated={() => void loadTransactions()} onUpload={() => openPickupProofModal(tx)} />
                               {tx.payment_provider !== 'DOKU' && (tx.status === 'PAID' || tx.status === 'PREPARING_PRODUCT') && !tx.path_proof_pickup && (
-                                <Button
+                                <Button disabled={!canManageTransactions}
                                   size="sm"
                                   className="bg-blue-500 hover:bg-blue-600 text-white"
                                   onClick={() => openPickupProofModal(tx)}
@@ -1195,7 +1245,7 @@ export default function KoperasiDetailPage() {
                                 </Button>
                               )}
                               {tx.payment_provider !== 'DOKU' && tx.path_proof_pickup && (
-                                <Button
+                                <Button disabled={!canManageTransactions}
                                   size="sm"
                                   className="bg-green-500 hover:bg-green-600 text-white"
                                   onClick={() => handleMarkReadyPickup(tx)}
@@ -1237,7 +1287,7 @@ export default function KoperasiDetailPage() {
                         <p className="font-mono text-xs text-primary">{tx.transaction_code || '-'}</p>
                         <h4 className="font-semibold text-sm">{tx.customer_name || 'Guest'}</h4>
                       </div>
-                      <StatusBadge status={getTransactionStatusBadge(tx.status)} />
+                      <div><StatusBadge status={getTransactionStatusBadge(tx.status)} /><VoucherTransactionBadge transaction={tx} /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs mb-2">
                       <div>
@@ -1263,7 +1313,7 @@ export default function KoperasiDetailPage() {
                         <Eye className="h-3 w-3 mr-1" /> View Items
                       </Button>
                       {tx.status === 'WAITING_TO_PAYMENT' && (
-                        <Button
+                        <Button disabled={!canManageTransactions}
                           variant="outline"
                           size="sm"
                           className="w-full"
@@ -1275,7 +1325,7 @@ export default function KoperasiDetailPage() {
                       )}
                       <DokuFulfillmentActions transaction={tx} onUpdated={() => void loadTransactions()} onUpload={() => openPickupProofModal(tx)} className="w-full" />
                       {tx.payment_provider !== 'DOKU' && (tx.status === 'PAID' || tx.status === 'PREPARING_PRODUCT') && !tx.path_proof_pickup && (
-                        <Button
+                        <Button disabled={!canManageTransactions}
                           size="sm"
                           className="w-full bg-blue-500 hover:bg-blue-600 text-white"
                           onClick={() => openPickupProofModal(tx)}
@@ -1285,7 +1335,7 @@ export default function KoperasiDetailPage() {
                         </Button>
                       )}
                       {tx.payment_provider !== 'DOKU' && tx.path_proof_pickup && (
-                        <Button
+                        <Button disabled={!canManageTransactions}
                           size="sm"
                           className="w-full bg-green-500 hover:bg-green-600 text-white"
                           onClick={() => handleMarkReadyPickup(tx)}
@@ -1380,7 +1430,7 @@ export default function KoperasiDetailPage() {
                     </Button>
                   </div>
                 )}
-                <Button className="w-full" disabled={!pickupProofFile || pickupProofUploading} onClick={handleUploadProof}>
+                <Button className="w-full" disabled={!canManageTransactions || (!pickupProofFile || pickupProofUploading)} onClick={handleUploadProof}>
                   {pickupProofUploading ? (
                     <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />Mengupload... </>
                   ) : (
@@ -1406,12 +1456,12 @@ export default function KoperasiDetailPage() {
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   {/* QRIS Button */}
                   {existingQris ? (
-                    <Button size="sm" variant="outline" onClick={handleOpenQris} className="w-full sm:w-auto">
+                    <Button disabled={!canManageStore} size="sm" variant="outline" onClick={handleOpenQris} className="w-full sm:w-auto">
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit QRIS
                     </Button>
                   ) : (
-                    <Button size="sm" variant="outline" onClick={handleOpenQris} className="w-full sm:w-auto">
+                    <Button disabled={!canManageStore} size="sm" variant="outline" onClick={handleOpenQris} className="w-full sm:w-auto">
                       <Plus className="h-4 w-4 mr-2" />
                       Tambah QRIS
                     </Button>
@@ -1419,12 +1469,12 @@ export default function KoperasiDetailPage() {
 
                   {/* Transfer Button */}
                   {existingTransfer ? (
-                    <Button size="sm" variant="outline" onClick={handleOpenTransfer} className="w-full sm:w-auto">
+                    <Button disabled={!canManageStore} size="sm" variant="outline" onClick={handleOpenTransfer} className="w-full sm:w-auto">
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit Transfer
                     </Button>
                   ) : (
-                    <Button size="sm" variant="outline" onClick={handleOpenTransfer} className="w-full sm:w-auto">
+                    <Button disabled={!canManageStore} size="sm" variant="outline" onClick={handleOpenTransfer} className="w-full sm:w-auto">
                       <Plus className="h-4 w-4 mr-2" />
                       Tambah Transfer
                     </Button>
@@ -1432,12 +1482,12 @@ export default function KoperasiDetailPage() {
 
                   {/* Cutoff Button */}
                   {existingCutoff ? (
-                    <Button size="sm" variant="outline" onClick={handleOpenCutoff} className="w-full sm:w-auto">
+                    <Button disabled={!canManageStore} size="sm" variant="outline" onClick={handleOpenCutoff} className="w-full sm:w-auto">
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit Cutoff
                     </Button>
                   ) : (
-                    <Button size="sm" variant="outline" onClick={handleOpenCutoff} className="w-full sm:w-auto">
+                    <Button disabled={!canManageStore} size="sm" variant="outline" onClick={handleOpenCutoff} className="w-full sm:w-auto">
                       <Plus className="h-4 w-4 mr-2" />
                       Tambah Cutoff
                     </Button>
@@ -1489,10 +1539,10 @@ export default function KoperasiDetailPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleEditPayment(pm)}>
+                            <Button disabled={!canManageStore} variant="ghost" size="sm" onClick={() => handleEditPayment(pm)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => openDeletePayment(pm)}>
+                            <Button disabled={!canManageStore} variant="ghost" size="sm" onClick={() => openDeletePayment(pm)}>
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </div>
@@ -1522,10 +1572,10 @@ export default function KoperasiDetailPage() {
                         )}
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleEditPayment(pm)}>
+                        <Button disabled={!canManageStore} variant="ghost" size="sm" onClick={() => handleEditPayment(pm)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openDeletePayment(pm)}>
+                        <Button disabled={!canManageStore} variant="ghost" size="sm" onClick={() => openDeletePayment(pm)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
@@ -1566,10 +1616,10 @@ export default function KoperasiDetailPage() {
                         )}
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleEditPayment(pm)}>
+                        <Button disabled={!canManageStore} variant="ghost" size="sm" onClick={() => handleEditPayment(pm)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openDeletePayment(pm)}>
+                        <Button disabled={!canManageStore} variant="ghost" size="sm" onClick={() => openDeletePayment(pm)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
@@ -1617,7 +1667,7 @@ export default function KoperasiDetailPage() {
                     Atur jam operasional toko dan waktu pengambilan barang
                   </p>
                 </div>
-                <Button
+                <Button disabled={!canManageTimeCutoff}
                   variant="outline"
                   size="sm"
                   onClick={() => setTimeCutoffOpen(true)}
@@ -1841,7 +1891,7 @@ export default function KoperasiDetailPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStockEditOpen(false)}>Batal</Button>
-            <Button onClick={handleStockSave}>Simpan</Button>
+            <Button disabled={!canManageStock} onClick={handleStockSave}>Simpan</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1982,7 +2032,7 @@ export default function KoperasiDetailPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPaymentMethodOpen(false)}>Batal</Button>
-            <Button onClick={handlePaymentSave}>
+            <Button disabled={!canManageStore} onClick={handlePaymentSave}>
               {paymentMode === 'edit' ? 'Update' : 'Simpan'}
             </Button>
           </DialogFooter>
@@ -2000,7 +2050,7 @@ export default function KoperasiDetailPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeletePayment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction disabled={!canManageStore} onClick={handleDeletePayment} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Hapus
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -2023,7 +2073,7 @@ export default function KoperasiDetailPage() {
             }}>
               Cancel
             </Button>
-            <Button onClick={handleConfirmApprovePayment}>
+            <Button disabled={!canManageTransactions} onClick={handleConfirmApprovePayment}>
               Confirm
             </Button>
           </DialogFooter>
@@ -2096,7 +2146,7 @@ export default function KoperasiDetailPage() {
             <Button variant="outline" onClick={() => setTimeCutoffOpen(false)}>
               Batal
             </Button>
-            <Button onClick={handleTimeCutoffSave} disabled={timeCutoffSaving}>
+            <Button onClick={handleTimeCutoffSave} disabled={!canManageTimeCutoff || (timeCutoffSaving)}>
               {timeCutoffSaving ? (
                 <>
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />

@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-type StatusType = "active" | "inactive" | "pending" | "paid" | "hutang" | "approved" | "waiting_payment" | "preparing_product" | "ready_to_pickup" | "completed";
+type StatusType = "active" | "inactive" | "pending" | "paid" | "hutang" | "approved" | "waiting_payment" | "preparing_product" | "ready_to_pickup" | "completed" | "failed";
 
 const statusConfig: Record<StatusType, { label: string; className: string }> = {
   active: { label: "Active", className: "bg-success/10 text-success border-success/20" },
@@ -15,6 +15,7 @@ const statusConfig: Record<StatusType, { label: string; className: string }> = {
   preparing_product: { label: "Preparing", className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
   ready_to_pickup: { label: "Ready to Pickup", className: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
   completed: { label: "Completed", className: "bg-success/10 text-success border-success/20" },
+  failed: { label: "Failed", className: "bg-destructive/10 text-destructive border-destructive/20" },
 };
 
 export function StatusBadge({ status }: { status: StatusType }) {

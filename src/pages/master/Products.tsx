@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Plus, Edit, Trash2, Package, AlertTriangle, Filter, Settings, Loader2 } from "lucide-react";
@@ -48,6 +49,8 @@ const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
 export default function Products() {
+  const { canWrite } = useAuth();
+  const canManageProducts = canWrite("master_products");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "product_code">("all");
@@ -218,7 +221,7 @@ export default function Products() {
   // Create product mutation
   const createMutation = useMutation({
     mutationFn: (product: CreateProductRequest) =>
-      productService.createProduct(product, newImageFile || undefined, newImageCollectionFiles),
+      { if (!canManageProducts) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return productService.createProduct(product, newImageFile || undefined, newImageCollectionFiles); },
     onSuccess: async () => {
       toast.success("Product created successfully");
       setIsCreateOpen(false);
@@ -233,13 +236,13 @@ export default function Products() {
   // Update product mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, product }: { id: string; product: UpdateProductRequest }) =>
-      productService.updateProduct(
+      { if (!canManageProducts) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return productService.updateProduct(
         id,
         product,
         newImageFile || undefined,
         newImageCollectionFiles,
         imagesToDelete,
-      ),
+      ); },
     onSuccess: async () => {
       toast.success("Product updated successfully");
       setIsCreateOpen(false);
@@ -253,7 +256,7 @@ export default function Products() {
 
   // Delete product mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => productService.deleteProduct(id),
+    mutationFn: (id: string) => { if (!canManageProducts) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return productService.deleteProduct(id); },
     onSuccess: () => {
       toast.success("Product deleted successfully");
       // Invalidate all products queries with proper key structure
@@ -287,6 +290,7 @@ export default function Products() {
   };
 
   const handleEditProduct = (product: Product) => {
+    if (!canManageProducts) return;
     setEditingProduct(product);
     setNewProductName(product.product_name);
     setNewProductCode(product.product_code);
@@ -322,6 +326,7 @@ export default function Products() {
   };
 
   const handleSaveProduct = async () => {
+    if (!canManageProducts) return;
     if (!newProductName.trim()) {
       toast.error("Product name is required");
       return;
@@ -361,6 +366,7 @@ export default function Products() {
   };
 
   const handleDeleteProduct = async () => {
+    if (!canManageProducts) return;
     if (!deletingProduct) return;
 
     try {
@@ -373,6 +379,7 @@ export default function Products() {
   };
 
   const openDeleteDialog = (product: Product) => {
+    if (!canManageProducts) return;
     setDeletingProduct(product);
     setIsDeleteOpen(true);
   };
@@ -444,7 +451,7 @@ export default function Products() {
             }
           }}>
             <DialogTrigger asChild>
-              <Button className="admin-accent-button btn-tap">
+              <Button disabled={!canManageProducts} className="admin-accent-button btn-tap">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Product
               </Button>
@@ -642,7 +649,7 @@ export default function Products() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button className="flex-1" onClick={handleSaveProduct} disabled={isCreating}>
+                  <Button className="flex-1" onClick={handleSaveProduct} disabled={!canManageProducts || (isCreating)}>
                     {isCreating ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -748,7 +755,7 @@ export default function Products() {
 
                             {/* Action Buttons */}
                             <div className="flex items-center gap-2">
-                              <Button
+                              <Button disabled={!canManageProducts}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleEditProduct(product)}
@@ -756,7 +763,7 @@ export default function Products() {
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
-                              <Button
+                              <Button disabled={!canManageProducts}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => openDeleteDialog(product)}
@@ -849,14 +856,14 @@ export default function Products() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <Button
+                          <Button disabled={!canManageProducts}
                             size="sm"
                             variant="outline"
                             onClick={() => handleEditProduct(product)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
+                          <Button disabled={!canManageProducts}
                             size="sm"
                             variant="outline"
                             onClick={() => openDeleteDialog(product)}
@@ -948,7 +955,7 @@ export default function Products() {
               <Button
                 variant="destructive"
                 onClick={handleDeleteProduct}
-                disabled={deleteMutation.isPending}
+                disabled={!canManageProducts || (deleteMutation.isPending)}
                 className="flex-1"
               >
                 {deleteMutation.isPending ? (

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarDays,
+  MapPin,
   ChevronDown,
   Search,
   ShoppingBag,
@@ -95,7 +96,7 @@ export function TopBarCommerce({
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
       <div className="mx-auto w-full max-w-[1440px] px-3 py-3 md:px-6">
         <div className="flex min-h-11 items-center gap-2 md:gap-4">
-          <CommerceBrand className="mr-auto md:mr-0" />
+          <CommerceBrand className="mr-auto md:mr-0" to={locationCode ? `/${encodeURIComponent(locationCode)}/commerce` : "/commerce"} />
 
           {showStore && (
             openModalInfo ? (
@@ -223,6 +224,13 @@ export function TopBarCommerce({
             </DropdownMenu>
           </div>
         </div>
+
+        {locationCode && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2">
+            <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-600 md:text-sm"><MapPin className="h-4 w-4 shrink-0 text-[#e30613]" /><span className="truncate">Lokasi belanja: <strong className="text-[#071a4f]">{showStore ? title : locationCode}</strong></span></span>
+            <Link className="shrink-0 rounded px-2 py-1.5 text-xs font-bold text-[#071a4f] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 md:text-sm" to={`/commerce/locations?location=${encodeURIComponent(locationCode)}`}>Ganti lokasi</Link>
+          </div>
+        )}
 
         <div className="mt-3 flex items-center gap-2 md:hidden">
           {showStore && (

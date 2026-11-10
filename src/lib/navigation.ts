@@ -3,16 +3,12 @@ import {
   Building2,
   LayoutDashboard,
   MapPin,
-  Package,
   ReceiptText,
-  ShoppingBag,
-  ShoppingCart,
   ShieldCheck,
   Store,
   Users,
   Warehouse,
   PackageOpenIcon,
-  IdCardIcon,
   BadgeDollarSign,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -30,18 +26,16 @@ export interface NavItemConfig {
 }
 export interface NavGroupConfig {
   group: string;
-  role?: string;
   listMenus: NavItemConfig[];
 }
 
 export const NAV_GROUPS_MENUS: NavGroupConfig[] = [
   {
     group: "basic",
-    role: "basic",
     listMenus: [
       { key: "dashboard", path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, mobile: true },
       { key: "transactions", path: "/transactions", label: "Transactions", icon: BadgeDollarSign, mobile: true },
-      { key: "transactions", path: "/payments", label: "Pembayaran DOKU", icon: ReceiptText },
+      { key: "payments", path: "/payments", label: "Pembayaran DOKU", icon: ReceiptText },
       { key: "customers", path: "/customers", label: "Customers", icon: Users, mobile: true },
       // { key: "products", path: "/products", label: "Products", icon: Package, mobile: true },
       { key: "koperasi", path: "/master/store", label: "Koperasi", icon: Building2, mobile: true },
@@ -49,7 +43,6 @@ export const NAV_GROUPS_MENUS: NavGroupConfig[] = [
   },
   {
     group: "master data",
-    role: "super_admin",
     listMenus: [
       { key: "master_users", path: "/master/users", label: "User Management", icon: Users },
       { key: "master_products", path: "/master/products", label: "Product Management", icon: PackageOpenIcon },
@@ -65,16 +58,13 @@ export const NAV_GROUPS_MENUS: NavGroupConfig[] = [
   // { key: "cart", path: "/store/cart", label: "Cart", icon: ReceiptText, group: "commerce" },
 ];
 
-export function getFilteredNavigation(assignedStoresCount: number): NavGroupConfig[] {
+export function getFilteredNavigation(canRead: (menuKey: MenuKey) => boolean): NavGroupConfig[] {
   return NAV_GROUPS_MENUS.map(group => ({
     ...group,
-    listMenus: group.listMenus.filter(menu => {
-      // Hide products and customers if user has more than 2 assigned stores (admin)
-      if (((menu.key === "products" || menu.key === "customers") && assignedStoresCount > 2)) {
-        return false;
-      }
-      
-      return true;
-    }),
+    listMenus: group.listMenus.filter(menu => canRead(menu.key)),
   })).filter(group => group.listMenus.length > 0);
+}
+
+export function getDefaultAdminPath(canRead: (menuKey: MenuKey) => boolean): string {
+  return getFilteredNavigation(canRead)[0]?.listMenus[0]?.path ?? "/access-denied";
 }

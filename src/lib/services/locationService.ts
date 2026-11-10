@@ -66,10 +66,11 @@ export class LocationService {
 
   async getListStore(): Promise<Location[]> {
     const response = await apiClient.getListStore();
-    if (response.data.length < 1) {
+    if (!response.success) {
       throw new Error('Failed to get list store');
     }
-    return response.data;
+    // All stores may be inactive. An empty public catalog is a valid result.
+    return (response.data ?? []).filter(isLocationActive);
   }
 
   // Get locations with pagination and filtering

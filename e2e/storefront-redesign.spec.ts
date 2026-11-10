@@ -213,6 +213,7 @@ test("storefront journey matches the retail reference on desktop and mobile", as
   await mockStorefrontApi(page);
   await page.addInitScript(({ imageUrl }) => {
     localStorage.setItem("selectedLocationCode", "AMP-JKT");
+    sessionStorage.setItem("argopos.commerce.location-confirmed.v1", "AMP-JKT");
     localStorage.setItem(
       "argopos.store.cart",
       JSON.stringify([

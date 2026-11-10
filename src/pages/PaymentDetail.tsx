@@ -1,3 +1,4 @@
+import type { VoucherTransactionFields } from "@/lib/voucherTypes";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -80,7 +81,7 @@ interface TransactionCart {
   };
 }
 
-interface Transaction {
+interface Transaction extends VoucherTransactionFields {
   id: string;
   payment_provider?: string;
   master_location_id: string;
@@ -130,6 +131,7 @@ function PaymentMethodIcon({ paymentType }: { paymentType?: string }) {
 
 function getStatusMessage(status: string, paymentProvider?: string) {
   if (paymentProvider === "DOKU") {
+    if (status === "FAILED") return "Pembuatan pembayaran DOKU gagal. Periksa informasi di bawah.";
     if (status === "WAITING_TO_PAYMENT") return "Menunggu konfirmasi pembayaran DOKU. Jika sudah membayar, jangan bayar ulang.";
     if (status === "PAID") return "Pembayaran DOKU telah diterima. Periksa detail verifikasi di bawah.";
     if (status === "REJECTED") return "Pesanan telah dibatalkan. Periksa status pembayaran DOKU di bawah sebelum membuat pesanan baru.";
@@ -171,6 +173,9 @@ export default function PaymentDetail() {
   const handleVerifiedPaid = useCallback(() => {
     if (!viewOrder) navigate(`/${locationCode}/commerce/payment-success/${transactionId}`, { replace: true });
   }, [locationCode, transactionId, navigate, viewOrder]);
+  const handleMaintenance = useCallback(() => {
+    navigate(`/${locationCode}/commerce/payment-maintenance/${transactionId}`, { replace: true });
+  }, [locationCode, transactionId, navigate]);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isSavingForLater, setIsSavingForLater] = useState(false);
   const [recoveryExpiry, setRecoveryExpiry] = useState<{
@@ -481,6 +486,7 @@ export default function PaymentDetail() {
   const items = transactionData.transaction_carts || [];
   const totalItems = getTransactionItemCount(transactionData.total_item, items);
   const isWaiting = transactionData.status === "WAITING_TO_PAYMENT";
+  const isFailed = ["FAILED", "REJECTED"].includes(transactionData.status);
   const isDoku = transactionData.payment_provider === "DOKU";
   const isReadyToPickup = transactionData.status === "READY_TO_PICKUP";
   const qrisUrl = selectedPaymentMethod?.image_url
@@ -519,12 +525,12 @@ export default function PaymentDetail() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className={`commerce-panel flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-5 ${
-            isWaiting ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"
+            isFailed ? "border-red-200 bg-red-50" : isWaiting ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"
           }`}
         >
           <div className="flex items-center gap-3">
-            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${isWaiting ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
-              {isWaiting ? <Clock3 className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${isFailed ? "bg-red-100 text-red-700" : isWaiting ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+              {isFailed ? <XCircle className="h-5 w-5" /> : isWaiting ? <Clock3 className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -561,7 +567,7 @@ export default function PaymentDetail() {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            {isDoku && <DokuPaymentPanel key={transactionData.id} transactionId={transactionData.id} returnMode={returnMode} onVerifiedPaid={handleVerifiedPaid} />}
+            {isDoku && <DokuPaymentPanel key={transactionData.id} transactionId={transactionData.id} returnMode={returnMode} onVerifiedPaid={handleVerifiedPaid} onMaintenance={handleMaintenance} />}
             <section className="commerce-panel overflow-hidden">
               <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-4 md:px-5">
                 <Package className="h-5 w-5 text-[#e30613]" />
@@ -703,6 +709,7 @@ export default function PaymentDetail() {
                   </span>
                 </div>
                 <div className="flex justify-between gap-3 text-sm"><span className="text-slate-500">Subtotal</span><span className="font-bold">{formatCurrency(transactionData.base_amount)}</span></div>
+                {transactionData.voucher_code && <div className="flex justify-between gap-3 text-sm text-emerald-700"><span>Voucher {transactionData.voucher_code}</span><span className="font-bold">−{formatCurrency(transactionData.discount_amount ?? 0)}</span></div>}
                 {!isDoku && <div className="flex justify-between gap-3 text-sm"><span className="text-slate-500">Kode unik</span><span className="font-bold">{transactionData.payment_code || transactionData.nominal_code}</span></div>}
                 <Separator />
                 <div>

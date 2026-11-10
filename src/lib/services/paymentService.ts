@@ -5,15 +5,29 @@ export interface PaymentSession {
   transaction_id: string;
   invoice_number: string;
   status: "PENDING" | "PAID" | "FAILED" | "EXPIRED";
+  /** Commerce state; a failed initialization can still await provider verification. */
+  transaction_status?: string;
   amount: number;
   checkout_url?: string;
   expires_at: string;
   verification_pending: boolean;
+  /** Server permission to create an uninitiated/rejected checkout for this order. */
+  can_retry_checkout?: boolean;
+  /** Resume the exact persisted request for an uncertain creation, not a new attempt. */
+  can_resume_checkout?: boolean;
+  checkout_retry_expires_at?: string | null;
   creation_state?: string;
   review_required?: boolean;
   channel?: string;
   doku_payment_method?: string;
   created_at?: string;
+}
+
+export const DOKU_MAINTENANCE_MESSAGE = "Mohon maaf, kami sedang melakukan maintanance. Untuk sementara system pembarayan, belum bisa diguanakan. Cobalah beberapa saat lagi";
+
+export function checkoutCreationFailed(session: PaymentSession): boolean {
+  return session.status !== "PAID" && !session.review_required &&
+    (session.transaction_status === "FAILED" || ["UNCERTAIN", "REJECTED"].includes(session.creation_state || ""));
 }
 
 export interface PaymentConfig { enabled: boolean; methods: string[] }
@@ -98,7 +112,23 @@ async function request<T>(path: string, options: RequestInit = {}, filters?: Pay
 }
 
 const attemptKeys = new Map<string, string>();
+const checkoutRecoveries = new Set<string>();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function markCheckoutRecovery(transactionId: string) {
+  checkoutRecoveries.add(transactionId);
+  try { sessionStorage.setItem(`argopos.checkout-recovery.${transactionId}`, "1"); } catch { /* Keep the in-memory recovery marker. */ }
+}
+
+export function hasCheckoutRecovery(transactionId: string): boolean {
+  try { return sessionStorage.getItem(`argopos.checkout-recovery.${transactionId}`) === "1" || checkoutRecoveries.has(transactionId); }
+  catch { return checkoutRecoveries.has(transactionId); }
+}
+
+export function clearCheckoutRecovery(transactionId: string) {
+  checkoutRecoveries.delete(transactionId);
+  try { sessionStorage.removeItem(`argopos.checkout-recovery.${transactionId}`); } catch { /* The in-memory marker is already cleared. */ }
+}
 
 // Retry metadata only. Ownership credentials remain in the HttpOnly cookie.
 export function paymentAttemptKey(transactionId: string): string {
@@ -132,6 +162,15 @@ export function validatedCheckoutUrl(value: string): string {
     throw new Error("Tautan pembayaran tidak valid. Hubungi admin outlet.");
   }
   return url.href;
+}
+
+export function openDokuCheckout(transactionId: string, value: string) {
+  const url = validatedCheckoutUrl(value);
+  // A normal hosted return must not offer another payment. If navigation fails,
+  // retain the marker so the original order can recover its existing session.
+  clearCheckoutRecovery(transactionId);
+  try { window.location.assign(url); }
+  catch (error) { markCheckoutRecovery(transactionId); throw error; }
 }
 
 function invoiceFilename(disposition: string | null, transactionId: string): string {
@@ -197,6 +236,7 @@ export const paymentService = {
     } finally { window.clearTimeout(timeout); }
   },
   async createCheckout(transactionId: string, rejectedPaymentId?: string): Promise<PaymentSession> {
+    markCheckoutRecovery(transactionId);
     return (await request<PaymentSession>("/checkout", {
       method: "POST", headers: { "Idempotency-Key": rejectedPaymentId ? retryAttemptKey(transactionId, rejectedPaymentId) : paymentAttemptKey(transactionId) },
       body: JSON.stringify({ transaction_id: transactionId }),

@@ -276,6 +276,79 @@ test("location management follows the catalog design system", async ({ page }, t
   await page.screenshot({ path: testInfo.outputPath("master-locations-mobile.png"), fullPage: true });
 });
 
+test("location toggle persists on desktop and mobile and hides inactive commerce locations", async ({ page }, testInfo) => {
+  const id = "660e8400-e29b-41d4-a716-446655440001";
+  let status = "active";
+  let failSave = false;
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  const location = () => ({ id, location_code: "TEST", location_name: "Toko Toggle Test", type: "store", status,
+    is_active: status === "active", created_at: "2026-11-05T00:00:00Z" });
+  const other = { id: "other-store", location_code: "OTHER", location_name: "Toko Tetap Aktif", type: "store", status: "active", created_at: "2026-11-05T00:00:00Z" };
+  await page.route("**/*", async route => {
+    if (["fetch", "xhr"].includes(route.request().resourceType())) {
+      await route.fulfill({ status: 501, json: { success: false } });
+    } else { await route.continue(); }
+  });
+  await mockAuthenticatedAdmin(page);
+  await page.route("**/locations/list?**", route => route.fulfill({ json: { success: true,
+    data: { locations: [location()], meta: { page: 1, page_size: 10, total: 1 } } } }));
+  await page.route(`**/locations/${id}`, async route => {
+    expect(route.request().method()).toBe("PUT");
+    if (failSave) { await route.fulfill({ status: 500, json: { success: false } }); return; }
+    const body = route.request().postDataJSON();
+    expect(Object.keys(body).sort()).toEqual(["is_active", "status"]);
+    expect(body.is_active).toBe(body.status === "active");
+    status = body.status;
+    await route.fulfill({ json: { success: true, data: location() } });
+  });
+  await page.route("**/location/stores", route => route.fulfill({ json: { success: true, data: status === "active" ? [location(), other] : [other] } }));
+  await page.route("**/location/stores/operational-status?**", route => route.fulfill({ json: { success: true, data: { is_open: true, is_within_pickup_window: true } } }));
+  await page.route("**/OTHER/store", route => route.fulfill({ json: { success: true, data: {
+    location_id: other.id, location_code: "OTHER", location_name: other.location_name, total_stock: 0, product_stores: [],
+  } } }));
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${appUrl}/master/locations`);
+    const toggle = page.getByRole("switch", { name: "Status lokasi Toko Toggle Test" });
+    await expect(toggle).toBeChecked();
+    if (width === 1440) {
+      failSave = true;
+      await toggle.click();
+      await expect(page.getByText("Gagal menyimpan status lokasi. Coba lagi.").first()).toBeVisible();
+      await expect(toggle).toBeEnabled();
+      await expect(toggle).toBeChecked();
+      failSave = false;
+    }
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
+    await page.reload();
+    await expect(toggle).not.toBeChecked();
+    await expect(page.locator(".glass-card").filter({ has: toggle }).last()).toHaveCSS("opacity", "1");
+    await page.screenshot({ path: testInfo.outputPath(`location-status-${width}.png`), fullPage: true });
+    await page.evaluate(() => {
+      localStorage.setItem("selectedLocationCode", "TEST");
+      sessionStorage.setItem("argopos.commerce.location-confirmed.v1", "TEST");
+    });
+    await page.goto(`${appUrl}/commerce`);
+    await expect(page.getByRole("heading", { name: "Pilih lokasi belanja" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "Toko Tetap Aktif", exact: true })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "Toko Toggle Test", exact: true })).toHaveCount(0);
+    // Inactive saved locations no longer silently switch shopping/cart ownership.
+    expect(await page.evaluate(() => localStorage.getItem("selectedLocationCode"))).toBe("TEST");
+    await page.getByRole("button", { name: "Lanjutkan belanja", exact: true }).click();
+    await expect(page).toHaveURL(`${appUrl}/OTHER/commerce`);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("selectedLocationCode"))).toBe("OTHER");
+    await page.goto(`${appUrl}/master/locations`);
+    await toggle.click();
+    await expect(toggle).toBeChecked();
+    await page.goto(`${appUrl}/commerce/locations`);
+    await expect(page.getByRole("radio", { name: "Toko Toggle Test", exact: true })).toBeVisible();
+  }
+  expect(errors).toEqual([]);
+});
+
 test("login remains usable on desktop and mobile viewports", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${appUrl}/auth/sign-in`);
@@ -296,6 +369,121 @@ test("login remains usable on desktop and mobile viewports", async ({ page }, te
   expect(hasHorizontalOverflow).toBe(false);
 
   await page.screenshot({ path: testInfo.outputPath("login-mobile.png"), fullPage: true });
+});
+
+test("store product catalog status saves false and true on desktop and mobile", async ({ page }, testInfo) => {
+  const storeId = "0d43fee5-6dd3-4050-8cb9-b107cfbe2043";
+  const stockId = "00000000-0000-0000-0000-000000000001";
+  let status = true;
+  let storeWrite = false;
+  const writes: boolean[] = [];
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.route("**/*", async route => {
+    if (["fetch", "xhr"].includes(route.request().resourceType())) {
+      await route.fulfill({ status: 501, json: { success: false } });
+    } else { await route.continue(); }
+  });
+  await mockAuthenticatedAdmin(page);
+  await page.route("**/access-roles/role/role-super-admin/with-access", route => route.fulfill({ json: {
+    success: true,
+    data: {
+      id: "role-super-admin", role_name: "super_admin",
+      access_roles: menuNames.filter(name => storeWrite || name !== "master_stores").map((name, index) => ({
+        id: `access-${index}`, access_type: "write", menu: { id: `menu-${index}`, menu_name: name },
+      })),
+    },
+  } }));
+  await page.route(`**/stores/${storeId}`, route => route.fulfill({ json: {
+    success: true, data: {
+      location_id: storeId, location_name: "Farm Benda", location_code: "FBND",
+      total_revenue: 0, total_transactions: 0, total_stock: 10, assigned_users: [], payment_methods: [],
+      product_stores: [{ id: stockId, status, stock: 10, base_price: 10000, discount_price: 0, tax_percentage: 0,
+        master_product: { product_name: "Sosis Test", base_price: 10000 } }],
+    },
+  } }));
+  await page.route("**/dashboard/analytics/overview**", route => route.fulfill({ json: { success: true } }));
+  await page.route(`**/stocks/${stockId}/status`, async route => {
+    expect(route.request().method()).toBe("PATCH");
+    const body = route.request().postDataJSON();
+    expect(Object.keys(body)).toEqual(["status"]);
+    expect(typeof body.status).toBe("boolean");
+    status = body.status;
+    writes.push(status);
+    await route.fulfill({ json: { success: true, data: { id: stockId, status } } });
+  });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${appUrl}/master/store/${storeId}`);
+    const toggle = page.getByRole("switch", { name: "Status katalog Sosis Test" });
+    if (!storeWrite) {
+      await expect(toggle).toBeDisabled();
+      await expect(page.getByText(/akses Write pada Store Management/)).toBeVisible();
+      storeWrite = true;
+      await page.getByRole("button", { name: "Periksa ulang akses" }).click();
+      await expect(toggle).toBeEnabled();
+      await expect(page.getByText(/akses Write pada Store Management/)).toHaveCount(0);
+    }
+    await expect(toggle).toBeChecked();
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
+    await expect(toggle).toBeEnabled();
+    await page.reload();
+    await expect(toggle).not.toBeChecked();
+    await toggle.scrollIntoViewIfNeeded();
+    await expect(page.locator(".glass-card").filter({ has: toggle }).last()).toHaveCSS("opacity", "1");
+    await page.screenshot({ path: testInfo.outputPath(`stock-status-${width}.png`), fullPage: true });
+    await toggle.click();
+    await expect(toggle).toBeChecked();
+    await expect(toggle).toBeEnabled();
+  }
+  expect(writes).toEqual([false, true, false, true]);
+  expect(errors).toEqual([]);
+});
+
+test("store detail handles null collections on desktop and mobile", async ({ page }, testInfo) => {
+  const storeId = "store-without-users";
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.route("**/*", async (route) => {
+    if (["xhr", "fetch"].includes(route.request().resourceType())) {
+      await route.fulfill({ status: 501, json: { success: false } });
+    } else {
+      await route.continue();
+    }
+  });
+  await mockAuthenticatedAdmin(page);
+  await page.route(`**/stores/${storeId}`, (route) => route.fulfill({ json: {
+    success: true,
+    data: {
+      location_id: storeId, location_name: "Toko Tanpa User", location_code: "EMPTY",
+      total_revenue: 0, total_transactions: 0, total_stock: 0,
+      assigned_users: null, product_stores: null, payment_methods: null,
+    },
+  } }));
+  await page.route("**/dashboard/analytics/overview**", (route) => route.fulfill({ json: {
+    success: true,
+    data: { summary: { total_revenue: 0, total_transactions: 0, internal_customers: 0, external_customers: 0 } },
+  } }));
+  await page.route(`**/stores/${storeId}/payment-settings`, (route) => route.fulfill({ json: {
+    success: true,
+    data: { location_id: storeId, payment_mode: "MANUAL", doku_available: false, doku_methods: [] },
+  } }));
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${appUrl}/master/store/${storeId}`);
+    await expect(page.getByText("Summary Metrics")).toBeVisible();
+    await expect(page.getByText("Tidak ada product stock").filter({ visible: true })).toBeVisible();
+    await page.getByRole("button", { name: "User Assigned", exact: true }).click();
+    await expect(page.getByText("User Assigned (0)", { exact: true })).toBeVisible();
+    await expect(page.getByText("Tidak ada user assigned")).toBeVisible();
+    await expect(page.locator(".glass-card").filter({ hasText: "Tidak ada user assigned" })).toHaveCSS("opacity", "1");
+    await page.screenshot({ path: testInfo.outputPath(`store-empty-users-${width}.png`), fullPage: true });
+    await page.getByRole("button", { name: "Payment Method", exact: true }).click();
+    await expect(page.getByText("Metode Pembayaran Manual", { exact: true })).toBeVisible();
+  }
+  expect(pageErrors).toEqual([]);
 });
 
 test("store stock management handles receipt approval and approval-letter download", async ({ page }, testInfo) => {

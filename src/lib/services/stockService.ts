@@ -15,6 +15,14 @@ import type {
 } from '@/lib/api';
 
 export class StockService {
+  async setStockStatus(id: string, status: boolean): Promise<{ id: string; status: boolean }> {
+    const response = await apiClient.setStockStatus(id, status);
+    if (!response.success || !response.data || response.data.id !== id || typeof response.data.status !== 'boolean') {
+      throw new Error(response.message || 'Gagal menyimpan status produk');
+    }
+    return response.data;
+  }
+
   async getStocks(
     page = 1,
     pageSize = 20,

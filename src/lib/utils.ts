@@ -23,6 +23,8 @@ export const badgeOderStatus = (status: string) => {
   switch (status) {
     case "REJECTED":
       return "DIBATALKAN";
+    case "FAILED":
+      return "GAGAL";
     case "PAID":
       return "PAID";
     case "READY_TO_PICKUP":
@@ -57,6 +59,7 @@ export const getStatusBadgeKey = (status: string) => {
     READY_TO_PICKUP: "ready_to_pickup",
     COMPLETED: "completed",
     REJECTED: "inactive",
+    FAILED: "failed",
   };
   return map[status] || "inactive";
 };

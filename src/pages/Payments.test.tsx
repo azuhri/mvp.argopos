@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   role: "admin", write: false,
   list: vi.fn(), reconciliation: vi.fn(), reconcile: vi.fn(), importSettlements: vi.fn(), exportReconciliation: vi.fn(),
 }));
-vi.mock("@/lib/auth", () => ({ useAuth: () => ({ user: { role: mocks.role }, canRead: () => true, canWrite: () => mocks.write }) }));
+vi.mock("@/lib/auth", () => ({ useAuth: () => ({ user: { role: mocks.role }, canRead: (key: string) => key === "payments", canWrite: (key: string) => key === "payments" && mocks.write }) }));
 vi.mock("@/lib/services/paymentService", () => ({ paymentService: mocks }));
 vi.mock("@/components/layout/AppLayout", () => ({ AppLayout: ({ children }: { children: ReactNode }) => <main>{children}</main> }));
 const settlement = { external_id: "statement-1", invoice_number: "CEL-ONE", gross_amount: 50000, fee_amount: 500, net_amount: 49500, settled_at: "2026-10-22T10:00:00+07:00" };
@@ -44,7 +44,15 @@ describe("payment finance report", () => {
     fireEvent.click(screen.getByRole("button", { name: "Periksa data impor" }));
     expect(mocks.importSettlements).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Konfirmasi impor settlement" }));
-    await waitFor(() => expect(mocks.importSettlements).toHaveBeenCalledWith([settlement], expect.anything()));
+    await waitFor(() => expect(mocks.importSettlements).toHaveBeenCalledWith([settlement]));
+  });
+  it("lets a custom role reconcile with payments write without granting settlement import", async () => {
+    mocks.role = "finance_operator"; mocks.write = true;
+    mocks.reconcile.mockResolvedValue({ success: true });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Periksa" }));
+    await waitFor(() => expect(mocks.reconcile).toHaveBeenCalledWith("attempt-one"));
+    expect(screen.queryByText("Impor settlement")).not.toBeInTheDocument();
   });
   it("rejects duplicate settlement identifiers within one import", async () => {
     mocks.role = "super_admin"; mocks.write = true; renderPage();

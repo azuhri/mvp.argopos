@@ -14,20 +14,11 @@ import {
   Users,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { RoleName, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
+import { getDefaultAdminPath } from "@/lib/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-
-const roleRedirectMap: Record<RoleName, string> = {
-  super_admin: "/dashboard",
-  admin: "/dashboard",
-  staff_internal: "/dashboard",
-  sales_external: "/store",
-};
-
-const getRoleRedirect = (role?: string) =>
-  roleRedirectMap[role as RoleName] ?? "/dashboard";
 
 const assetUrl = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 const brandAsset = assetUrl("image/amp-mart-icon.png");
@@ -151,7 +142,7 @@ function WorkspaceVisual() {
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
-  const { login, user } = useAuth();
+  const { login, user, loading, canRead, permissionsRefreshing } = useAuth();
   const reduceMotion = useReducedMotion();
 
   const [email, setEmail] = useState("");
@@ -171,14 +162,14 @@ export default function Login() {
   const showPasswordError = Boolean(touched.password && errors.password);
 
   useEffect(() => {
-    if (user) {
+    if (user && !loading && !permissionsRefreshing) {
       const targetPath = location.state?.from;
       navigate(
-        targetPath && targetPath !== "/auth/sign-in" ? targetPath : getRoleRedirect(user.role),
+        targetPath && targetPath !== "/auth/sign-in" ? targetPath : getDefaultAdminPath(canRead),
         { replace: true },
       );
     }
-  }, [location.state?.from, navigate, user]);
+  }, [location.state?.from, navigate, user, loading, canRead, permissionsRefreshing]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -195,13 +186,7 @@ export default function Login() {
 
       toast.success("Login berhasil");
 
-      const targetPath = location.state?.from;
-      if (targetPath && targetPath !== "/auth/sign-in") {
-        navigate(targetPath, { replace: true });
-        return;
-      }
-
-      navigate(getRoleRedirect(result.data?.user?.role?.role_name), { replace: true });
+      // The effect redirects only after the authenticated profile and menu grants load.
     } catch (error) {
       toast.error((error as Error).message || "Login gagal");
     } finally {

@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
     },
     loading: false,
     canWrite: vi.fn(() => true),
+    canRead: vi.fn(() => true),
   },
   getCurrentUser: vi.fn(),
   getStockTransferRequests: vi.fn(),
@@ -149,6 +150,7 @@ describe("StoreStockRequestPanel", () => {
     mocks.auth.user.role = "admin";
     mocks.auth.loading = false;
     mocks.auth.canWrite.mockReturnValue(true);
+    mocks.auth.canRead.mockReturnValue(true);
     mocks.getCurrentUser.mockResolvedValue({
       ...mocks.auth.user,
       role: { id: "role-admin", role_name: "admin", created_at: "", updated_at: "" },
@@ -159,6 +161,15 @@ describe("StoreStockRequestPanel", () => {
       meta: { page: 1, page_size: 10, total: 0, total_pages: 1 },
     });
     mocks.getAllLocations.mockResolvedValue([currentLocation, otherLocation]);
+  });
+
+  it("allows assigned readers to inspect requests without approval or create actions", async () => {
+    mocks.auth.canWrite.mockReturnValue(false);
+    mocks.getStockTransferRequests.mockResolvedValue({ requests: [makeRequest()], meta: { page: 1, page_size: 10, total: 1, total_pages: 1 } });
+    renderPanel();
+    expect((await screen.findAllByText("Produk Test")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Setujui sumber" })).not.toBeInTheDocument();
+    expect(mocks.approveStockTransferSource).not.toHaveBeenCalled();
   });
 
   it("uses location_id so incoming and outgoing requests are loaded together", async () => {

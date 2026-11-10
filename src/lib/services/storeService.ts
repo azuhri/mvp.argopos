@@ -10,6 +10,12 @@ import type {
 } from "@/lib/api";
 
 export class StoreService {
+  async getStoreCustomers(locationId: string) {
+    const response = await apiClient.getStoreCustomers(locationId);
+    if (!response.success || !response.data) throw new Error(response.message || "Failed to get store customers");
+    return response.data.customers ?? [];
+  }
+
   async getStoreMetrics(locationId: string): Promise<StoreMetrics> {
     const response = await apiClient.getStoreMetrics(locationId);
 
@@ -57,7 +63,14 @@ export class StoreService {
       throw new Error(response.message || "Failed to get store detail");
     }
 
-    return response.data;
+    const data = response.data;
+    return {
+      ...data,
+      product_stores: data.product_stores ?? [],
+      assigned_users: data.assigned_users ?? [],
+      payment_methods: data.payment_methods ?? [],
+      transactions: data.transactions ?? [],
+    };
   }
 
   async getStoreAssignedUsers(locationId: string): Promise<StoreAssignedUser[]> {

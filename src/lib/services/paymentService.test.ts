@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { paymentAttemptKey, paymentService, validatedCheckoutUrl } from "./paymentService";
+import { clearCheckoutRecovery, hasCheckoutRecovery, openDokuCheckout, paymentAttemptKey, paymentService, validatedCheckoutUrl } from "./paymentService";
 
 afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
 
@@ -131,6 +131,17 @@ describe("gateway transport", () => {
     expect(replacementKey).not.toBe(originalKey);
     expect(fetchMock.mock.calls[1][1].headers.get("Idempotency-Key")).toBe(replacementKey);
     expect(paymentAttemptKey("order-retry")).toBe(replacementKey);
+  });
+
+  it("keeps only a recovery marker when a checkout response is lost", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Connection lost")));
+    await expect(paymentService.createCheckout("order-lost", "failed-one")).rejects.toThrow("Koneksi pembayaran terputus");
+    expect(hasCheckoutRecovery("order-lost")).toBe(true);
+    expect(sessionStorage.getItem("argopos.checkout-recovery.order-lost")).toBe("1");
+    expect(() => openDokuCheckout("order-lost", "https://untrusted.test/pay")).toThrow();
+    expect(hasCheckoutRecovery("order-lost")).toBe(true);
+    clearCheckoutRecovery("order-lost");
+    expect(hasCheckoutRecovery("order-lost")).toBe(false);
   });
 
   it.each([

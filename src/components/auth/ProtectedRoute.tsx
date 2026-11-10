@@ -6,7 +6,7 @@ import { ShieldX } from "lucide-react";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
-  menuKey?: MenuKey;
+  menuKey?: MenuKey | MenuKey[];
   requireWrite?: boolean;
   fallback?: JSX.Element;
 }
@@ -37,9 +37,10 @@ export function ProtectedRoute({
     return <Navigate to="/auth/sign-in" replace state={{ from: returnTo }} />;
   }
 
-  // Check menu permissions if menuKey is provided
+  // Shared detail pages can be reached from either owning menu.
   if (menuKey) {
-    const hasPermission = requireWrite ? canWrite(menuKey) : canRead(menuKey);
+    const menuKeys = Array.isArray(menuKey) ? menuKey : [menuKey];
+    const hasPermission = menuKeys.some(key => requireWrite ? canWrite(key) : canRead(key));
     
     if (!hasPermission) {
       if (fallback) {

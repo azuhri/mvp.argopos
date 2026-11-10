@@ -40,7 +40,8 @@ interface UserFormErrors {
 }
 
 export default function UsersManagement() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, canWrite } = useAuth();
+  const canManageUsers = canWrite("master_users");
   
   // Data state
   const [users, setUsers] = useState<UserListResponse | null>(null);
@@ -178,6 +179,7 @@ export default function UsersManagement() {
 
   // Handle create user
   const handleCreateUser = async () => {
+    if (!canManageUsers) return;
     if (!validateForm()) return;
 
     try {
@@ -207,6 +209,7 @@ export default function UsersManagement() {
 
   // Handle update user
   const handleUpdateUser = async () => {
+    if (!canManageUsers) return;
     if (!selectedUser || !validateForm(true)) return;
 
     try {
@@ -241,6 +244,7 @@ export default function UsersManagement() {
 
   // Handle delete user
   const handleDeleteUser = async () => {
+    if (!canManageUsers) return;
     if (!selectedUser) return;
 
     try {
@@ -259,6 +263,7 @@ export default function UsersManagement() {
 
   // Open edit dialog
   const openEditDialog = (user: User) => {
+    if (!canManageUsers) return;
     setSelectedUser(user);
 
     // Use assigned_stores from user data
@@ -281,6 +286,7 @@ export default function UsersManagement() {
 
   // Open delete dialog
   const openDeleteDialog = (user: User) => {
+    if (!canManageUsers) return;
     setSelectedUser(user);
     setIsDeleteOpen(true);
   };
@@ -344,7 +350,7 @@ export default function UsersManagement() {
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="admin-accent-button btn-tap">
+              <Button disabled={!canManageUsers} className="admin-accent-button btn-tap">
                 <Plus size={16} className="mr-2" /> Add User
               </Button>
             </DialogTrigger>
@@ -501,7 +507,7 @@ export default function UsersManagement() {
                 <div className="flex gap-3 pt-4">
                   <Button
                     onClick={handleCreateUser}
-                    disabled={isSubmitting}
+                    disabled={!canManageUsers || (isSubmitting)}
                     className="flex-1"
                   >
                     {isSubmitting ? (
@@ -658,15 +664,15 @@ export default function UsersManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
+                          <Button disabled={!canManageUsers}
                             size="sm"
                             variant="ghost"
                             onClick={() => openEditDialog(user)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          {currentUser?.role === 'super_admin' && (
-                            <Button
+                          {canManageUsers && (
+                            <Button disabled={!canManageUsers}
                               size="sm"
                               variant="ghost"
                               className="text-destructive hover:text-destructive"
@@ -731,15 +737,15 @@ export default function UsersManagement() {
 
                 <div className="flex items-center justify-between">
                   <div className="flex gap-1">
-                    <Button 
+                    <Button disabled={!canManageUsers}
                       size="sm" 
                       variant="ghost"
                       onClick={() => openEditDialog(user)}
                     >
                       <Edit className="h-3 w-3" />
                     </Button>
-                    {currentUser?.role === 'super_admin' && (
-                      <Button 
+                    {canManageUsers && (
+                      <Button disabled={!canManageUsers}
                         size="sm" 
                         variant="ghost" 
                         className="text-destructive"
@@ -1060,7 +1066,7 @@ export default function UsersManagement() {
             <div className="flex gap-3 pt-4">
               <Button
                 onClick={handleUpdateUser}
-                disabled={isSubmitting}
+                disabled={!canManageUsers || (isSubmitting)}
                 className="flex-1"
               >
                 {isSubmitting ? (
@@ -1112,7 +1118,7 @@ export default function UsersManagement() {
               <Button
                 variant="destructive"
                 onClick={handleDeleteUser}
-                disabled={isSubmitting}
+                disabled={!canManageUsers || (isSubmitting)}
                 className="flex-1"
               >
                 {isSubmitting ? (

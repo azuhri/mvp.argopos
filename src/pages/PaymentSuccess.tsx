@@ -1,3 +1,4 @@
+import type { VoucherTransactionFields } from "@/lib/voucherTypes";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -37,7 +38,7 @@ interface TransactionCart {
   };
 }
 
-interface TransactionData {
+interface TransactionData extends VoucherTransactionFields {
   id: string;
   payment_provider?: string;
   transaction_code: string;
@@ -300,6 +301,7 @@ export default function PaymentSuccess() {
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-4 md:px-5">
             <div className="ml-auto max-w-sm space-y-3">
               <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span className="font-bold">{formatCurrency(transactionData.base_amount)}</span></div>
+              {transactionData.voucher_code && <div className="flex justify-between gap-3 text-sm text-emerald-700"><span>Voucher {transactionData.voucher_code}</span><span className="font-bold">−{formatCurrency(transactionData.discount_amount ?? 0)}</span></div>}
               {transactionData.payment_provider !== "DOKU" && <div className="flex justify-between text-sm"><span className="text-slate-500">Kode unik</span><span className="font-bold">{transactionData.payment_code || transactionData.nominal_code}</span></div>}
               <Separator />
               <div className="flex justify-between text-base font-extrabold text-[#071a4f]"><span>Total</span><span>{formatCurrency(transactionData.total_amount)}</span></div>

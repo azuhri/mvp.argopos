@@ -6,10 +6,14 @@ import Login from "./Login";
 const mocks = vi.hoisted(() => ({
   login: vi.fn(),
   navigate: vi.fn(),
+  user: null as null | { role: string },
+  loading: false,
+  refreshing: false,
+  canRead: vi.fn((key: string) => key === "dashboard"),
 }));
 
 vi.mock("@/lib/auth", () => ({
-  useAuth: () => ({ login: mocks.login, user: null }),
+  useAuth: () => ({ login: mocks.login, user: mocks.user, loading: mocks.loading, permissionsRefreshing: mocks.refreshing, canRead: mocks.canRead }),
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -28,6 +32,8 @@ describe("Login", () => {
   beforeEach(() => {
     mocks.login.mockReset();
     mocks.navigate.mockReset();
+    mocks.user = null; mocks.loading = false; mocks.refreshing = false;
+    mocks.canRead.mockImplementation((key: string) => key === "dashboard");
   });
 
   it("shows accessible validation messages for an empty form", () => {
@@ -45,9 +51,9 @@ describe("Login", () => {
   });
 
   it("submits credentials and routes admin users to the dashboard", async () => {
-    mocks.login.mockResolvedValue({
-      ok: true,
-      data: { user: { role: { role_name: "admin" } } },
+    mocks.login.mockImplementation(async () => {
+      mocks.user = { role: "admin" };
+      return { ok: true, data: { user: { role: { role_name: "admin" } } } };
     });
 
     render(
@@ -71,9 +77,9 @@ describe("Login", () => {
   });
 
   it("returns authenticated users to the protected route they requested", async () => {
-    mocks.login.mockResolvedValue({
-      ok: true,
-      data: { user: { role: { role_name: "admin" } } },
+    mocks.login.mockImplementation(async () => {
+      mocks.user = { role: "admin" };
+      return { ok: true, data: { user: { role: { role_name: "admin" } } } };
     });
 
     render(
@@ -96,6 +102,31 @@ describe("Login", () => {
       expect(mocks.login).toHaveBeenCalledWith("admin@celestia.test", "x");
       expect(mocks.navigate).toHaveBeenCalledWith("/transactions", { replace: true });
     });
+  });
+
+  it("waits for canonical grants and routes a custom role to its first readable menu", () => {
+    mocks.user = { role: "finance_readonly" };
+    mocks.loading = true;
+    mocks.canRead.mockImplementation((key: string) => key === "payments");
+    const { rerender } = render(<MemoryRouter><Login /></MemoryRouter>);
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    mocks.loading = false;
+    rerender(<MemoryRouter><Login /></MemoryRouter>);
+    expect(mocks.navigate).toHaveBeenCalledWith("/payments", { replace: true });
+  });
+
+  it("keeps an explicit deep link so the route guard can deny hidden access", () => {
+    mocks.user = { role: "finance_readonly" };
+    mocks.canRead.mockImplementation((key: string) => key === "payments");
+    render(<MemoryRouter initialEntries={[{ pathname: "/auth/sign-in", state: { from: "/master/roles?mode=view" } }]}><Login /></MemoryRouter>);
+    expect(mocks.navigate).toHaveBeenCalledWith("/master/roles?mode=view", { replace: true });
+  });
+
+  it("sends a role with no grants to access denied", () => {
+    mocks.user = { role: "super_admin" };
+    mocks.canRead.mockReturnValue(false);
+    render(<MemoryRouter><Login /></MemoryRouter>);
+    expect(mocks.navigate).toHaveBeenCalledWith("/access-denied", { replace: true });
   });
 
   it("provides a named password visibility control", () => {

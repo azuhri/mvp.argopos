@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth";
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
@@ -36,6 +37,8 @@ interface CategoryFormData {
 }
 
 export default function Categories() {
+  const { canWrite } = useAuth();
+  const canManageProducts = canWrite("master_products");
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,6 +65,7 @@ export default function Categories() {
   };
 
   const handleCreate = () => {
+    if (!canManageProducts) return;
     setIsCreating(true);
     setEditingId(null);
     setFormData({
@@ -72,6 +76,7 @@ export default function Categories() {
   };
 
   const handleEdit = (category: Category) => {
+    if (!canManageProducts) return;
     setIsCreating(false);
     setEditingId(category.id);
     setFormData({
@@ -82,6 +87,7 @@ export default function Categories() {
   };
 
   const handleSave = async () => {
+    if (!canManageProducts) return;
     if (!formData.name.trim()) {
       toast.error("Category name is required");
       return;
@@ -104,6 +110,7 @@ export default function Categories() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canManageProducts) return;
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -139,7 +146,7 @@ export default function Categories() {
             />
           </div>
           
-          <Button onClick={handleCreate} className="btn-tap">
+          <Button disabled={!canManageProducts} onClick={handleCreate} className="btn-tap">
             <Plus className="h-4 w-4 mr-1" />
             Add Category
           </Button>
@@ -198,7 +205,7 @@ export default function Categories() {
               </div>
 
               <div className="flex gap-2 pt-4">
-                <Button onClick={handleSave} className="btn-tap">
+                <Button disabled={!canManageProducts} onClick={handleSave} className="btn-tap">
                   <Save className="h-4 w-4 mr-2" />
                   {isCreating ? "Create" : "Update"}
                 </Button>
@@ -245,7 +252,7 @@ export default function Categories() {
                     </div>
 
                     <div className="flex items-center gap-2 ml-4">
-                      <Button
+                      <Button disabled={!canManageProducts}
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEdit(category)}
@@ -253,7 +260,7 @@ export default function Categories() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
+                      <Button disabled={!canManageProducts}
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(category.id)}

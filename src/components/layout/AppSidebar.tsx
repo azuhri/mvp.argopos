@@ -1,12 +1,10 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { CommerceBrand } from "@/components/shared/CommerceBrand";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { getFilteredNavigation } from "@/lib/navigation";
-import { userService } from "@/lib/services/userService";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -20,22 +18,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const { canRead, user } = useAuth();
 
-  const { data: fullUser } = useQuery({
-    queryKey: ["current-user"],
-    queryFn: () => userService.getCurrentUser(),
-  });
-
-  const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
-  const visibleGroups = getFilteredNavigation(assignedStoresCount)
-    .map((group) => ({
-      ...group,
-      listMenus: group.listMenus.filter((item) => {
-        if (!canRead(item.key)) return false;
-        if (group.role === "super_admin" && user?.role !== "super_admin") return false;
-        return true;
-      }),
-    }))
-    .filter((group) => group.listMenus.length > 0);
+  const visibleGroups = getFilteredNavigation(canRead);
 
   const userInitial = user?.username?.charAt(0).toUpperCase() || "U";
 

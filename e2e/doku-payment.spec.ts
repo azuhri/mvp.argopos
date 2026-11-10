@@ -36,6 +36,7 @@ for (const width of [1440, 390]) {
       const request = route.request();
       const path = new URL(request.url()).pathname;
       const respond = (data: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ success: true, data }) });
+      if (path.endsWith("/location/stores")) return respond([{ id: store.location_id, location_code: store.location_code, location_name: store.location_name, type: "store", status: "active" }]);
       if (path.endsWith("/DOKU-STORE/store")) return respond(store);
       if (path.endsWith("/payment-methods") || path.endsWith("/assigned-users")) return respond([]);
       if (path.endsWith("/payment-settings")) return respond({ location_id: store.location_id, payment_mode: storeMode, doku_available: true, doku_methods: ["QRIS", "VIRTUAL_ACCOUNT_BCA"] });
@@ -86,6 +87,7 @@ for (const width of [1440, 390]) {
       if (sessionStorage.getItem("test.cart-initialized")) return;
       sessionStorage.setItem("test.cart-initialized", "1");
       localStorage.setItem("selectedLocationCode", "DOKU-STORE");
+    sessionStorage.setItem("argopos.commerce.location-confirmed.v1", "DOKU-STORE");
       localStorage.setItem("argopos.store.cart", JSON.stringify([{ productId: "stock-doku", productStockId: "stock-doku", qty: 1, productName: "Produk uji pembayaran", productPrice: 50000, productStock: 10, productImageUrl: "", tax_percentage: 0 }]));
     });
     await page.goto("/DOKU-STORE/commerce/cart");
@@ -137,7 +139,7 @@ for (const width of [1440, 390]) {
     expect(credentialRequests.some((request) => request.path.endsWith("/payments/config"))).toBe(false);
     expect(credentialRequests.find((request) => request.path.endsWith("/payments/checkout"))?.credentials).toBe("include");
     expect(credentialRequests.find((request) => request.path.endsWith("/payments/transactions/order-doku/refresh"))?.credentials).toBe("include");
-    expect(credentialRequests.find((request) => request.path.endsWith("/transactions/order-doku") && !request.path.includes("/payments/"))?.credentials).toBe("same-origin");
+    expect(credentialRequests.find((request) => request.path.endsWith("/transactions/order-doku") && !request.path.includes("/payments/"))?.credentials).toBe("include");
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`doku-pending-${width}.png`), fullPage: true });
     await expect.poll(() => paymentChecks).toBeGreaterThanOrEqual(1);

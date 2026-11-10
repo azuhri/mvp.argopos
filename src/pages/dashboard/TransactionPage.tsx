@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -8,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DashboardMobileNav } from "@/components/layout/DashboardMobileNav";
 import { GlassCard } from "@/components/shared/GlassCard";
+import { VoucherTransactionBadge } from "@/components/shared/VoucherTransactionBadge";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { DokuFulfillmentActions } from "@/components/shared/DokuFulfillmentActions";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,7 @@ const STATUS_OPTIONS = [
   { label: "Ready", value: "READY_TO_PICKUP" },
   { label: "Completed", value: "COMPLETED" },
   { label: "Rejected", value: "REJECTED" },
+  { label: "Failed", value: "FAILED" },
 ];
 
 const formatCurrency = (value: number) =>
@@ -71,11 +74,14 @@ const getStatusBadgeKey = (status: string) => {
     READY_TO_PICKUP: "ready_to_pickup",
     COMPLETED: "completed",
     REJECTED: "inactive",
+    FAILED: "failed",
   };
   return map[status] || "inactive";
 };
 
 export default function TransactionPage() {
+  const { canWrite } = useAuth();
+  const canManageTransactions = canWrite("transactions");
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -120,13 +126,9 @@ export default function TransactionPage() {
   };
 
   const handleMarkReadyPickup = async (tx: Transaction) => {
+    if (!canManageTransactions) return;
     try {
-      const res = await fetch(`${config.apiUrl}/transactions/${tx.id}/mark-ready-pickup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || 'Failed');
+      await transactionService.markReadyPickup(tx.id);
       toast.success('Berhasil menandai siap diambil');
       transactionsQuery.refetch();
     } catch (err: any) {
@@ -244,6 +246,7 @@ export default function TransactionPage() {
 
   const approveMutation = useMutation({
     mutationFn: async () => {
+    if (!canManageTransactions) throw new Error("Akses hanya lihat. Izin Write diperlukan.");
       if (!approvalTarget) return;
       if (approvalTarget.action === "payment") {
         await transactionService.approvePayment(approvalTarget.transaction.id);
@@ -490,7 +493,7 @@ export default function TransactionPage() {
                           <TableCell>{tx.location_name || "-"}</TableCell>
                           <TableCell>{tx.customer_name || "Guest"}</TableCell>
                           <TableCell>
-                            <StatusBadge status={getStatusBadgeKey(tx.status)} />
+                            <div><StatusBadge status={getStatusBadgeKey(tx.status)} /><VoucherTransactionBadge transaction={tx} /></div>
                           </TableCell>
                           <TableCell><Badge variant="secondary">{getTransactionPaymentMethodLabel(tx)}</Badge></TableCell>
                           <TableCell>{formatCurrency(tx.total_amount)}</TableCell>
@@ -501,7 +504,7 @@ export default function TransactionPage() {
                                 <Eye className="h-3 w-3 mr-1" /> Items
                               </Button>
                               {tx.status === "WAITING_TO_PAYMENT" && tx.payment_provider !== "DOKU" && (
-                                <Button size="sm" variant="outline" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
+                                <Button disabled={!canManageTransactions} size="sm" variant="outline" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                   Approve Payment
                                 </Button>
@@ -562,7 +565,7 @@ export default function TransactionPage() {
                           <h4 className="font-semibold text-sm">{tx.customer_name || "Guest"}</h4>
                           <p className="text-xs text-muted-foreground">{tx.location_name || "-"}</p>
                         </div>
-                        <StatusBadge status={getStatusBadgeKey(tx.status)} />
+                        <div><StatusBadge status={getStatusBadgeKey(tx.status)} /><VoucherTransactionBadge transaction={tx} /></div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
@@ -584,13 +587,13 @@ export default function TransactionPage() {
                         </Button>
                         <div className="flex gap-2">
                           {tx.status === "WAITING_TO_PAYMENT" && tx.payment_provider !== "DOKU" && (
-                            <Button className="flex-1" variant="outline" size="sm" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
+                            <Button disabled={!canManageTransactions} className="flex-1" variant="outline" size="sm" onClick={() => setApprovalTarget({ transaction: tx, action: "payment" })}>
                               <CheckCircle className="h-3 w-3 mr-1" /> Approve Payment
                             </Button>
                           )}
                           <DokuFulfillmentActions transaction={tx} onUpdated={() => void transactionsQuery.refetch()} className="flex-1" />
                           {tx.payment_provider !== "DOKU" && tx.path_proof_pickup && (
-                            <Button className="flex-1 bg-green-500 hover:bg-green-600 text-white" size="sm" onClick={() => handleMarkReadyPickup(tx)}>
+                            <Button disabled={!canManageTransactions} className="flex-1 bg-green-500 hover:bg-green-600 text-white" size="sm" onClick={() => handleMarkReadyPickup(tx)}>
                               <CheckCircle className="h-3 w-3 mr-1" /> Siap Diambil
                             </Button>
                           )}
@@ -709,7 +712,7 @@ export default function TransactionPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={approveMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={approveMutation.isPending} onClick={() => approveMutation.mutate()}>
+            <AlertDialogAction disabled={!canManageTransactions || (approveMutation.isPending)} onClick={() => approveMutation.mutate()}>
               {approveMutation.isPending ? "Processing..." : "Confirm"}
             </AlertDialogAction>
           </AlertDialogFooter>

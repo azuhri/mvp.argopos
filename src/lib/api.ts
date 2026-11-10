@@ -1,3 +1,4 @@
+import type { StoreVoucher, StoreVoucherInput, VoucherCartLine, VoucherQuote, VoucherUsage, VoucherTransactionFields } from "./voucherTypes";
 import axios, { type AxiosRequestConfig } from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -88,6 +89,15 @@ export interface Role {
   created_at: string;
   updated_at: string;
   access_roles?: AccessRole[];
+  user_count?: number;
+  name_locked?: boolean;
+  deletable?: boolean;
+}
+
+export interface RoleSaveRequest {
+  role_name: string;
+  description: string;
+  menu_accesses: { menu_id: string; access_type: 'hidden' | 'read' | 'write' }[];
 }
 
 export interface Menu {
@@ -173,7 +183,7 @@ export interface TransactionCart {
   };
 }
 
-export interface Transaction {
+export interface Transaction extends VoucherTransactionFields {
   id: string;
   payment_provider?: string;
   doku_payment_method?: string;
@@ -361,6 +371,15 @@ export interface Store {
   time_end_pickup?: string;
 }
 
+// The API may serialize empty store relations as null or omit them.
+// StoreService normalizes these collections before passing them to the UI.
+export interface StoreDetailResponse extends Omit<Store, 'product_stores' | 'assigned_users' | 'payment_methods' | 'transactions'> {
+  product_stores?: Stock[] | null;
+  assigned_users?: StoreAssignedUser[] | null;
+  payment_methods?: StorePaymentMethod[] | null;
+  transactions?: Transaction[] | null;
+}
+
 export interface Product {
   id: string;
   product_code: string;
@@ -460,6 +479,7 @@ export interface OperationalStatus {
 // Stock Management Interfaces
 export interface Stock {
   id: string;
+  status?: boolean;
   master_location?: {
     id: string;
     location_code: string;
@@ -781,6 +801,7 @@ class ApiClient {
             /^\/[\w-]+\/commerce\/product\/[\w-]+$/,
             /^\/[\w-]+\/commerce\/payment\/[\w-]+$/,
             /^\/[\w-]+\/commerce\/payment-success$/,
+            /^\/[\w-]+\/commerce\/payment-maintenance(?:\/[\w-]+)?$/,
             /^\/commerce$/,
             /^\/commerce\/cart$/,
             /^\/commerce\/product\/[\w-]+$/,
@@ -896,14 +917,14 @@ class ApiClient {
     return this.request<Role>(`/access-roles/role/${id}`);
   }
 
-  async createRole(role: Partial<Role>): Promise<ApiResponse<Role>> {
+  async createRole(role: Partial<Role> | RoleSaveRequest): Promise<ApiResponse<Role>> {
     return this.request<Role>('/access-roles/role', {
       method: 'POST',
       data: role,
     });
   }
 
-  async updateRole(id: string, role: Partial<Role>): Promise<ApiResponse<Role>> {
+  async updateRole(id: string, role: Partial<Role> | RoleSaveRequest): Promise<ApiResponse<Role>> {
     return this.request<Role>(`/access-roles/role/${id}`, {
       method: 'PUT',
       data: role,
@@ -918,6 +939,10 @@ class ApiClient {
 
   async getAllRoles(): Promise<ApiResponse<Role[]>> {
     return this.request<Role[]>('/access-roles/roles');
+  }
+
+  async getRoleManagementPage(page = 1): Promise<ApiResponse<{ roles: Role[]; meta?: { total: number; page: number; page_size: number } }>> {
+    return this.request(`/access-roles/roles?page=${page}&page_size=100`);
   }
 
   // Access Role endpoints
@@ -1263,6 +1288,13 @@ class ApiClient {
     });
   }
 
+  async setStockStatus(id: string, status: boolean): Promise<ApiResponse<{ id: string; status: boolean }>> {
+    return this.request<{ id: string; status: boolean }>(`/stocks/${id}/status`, {
+      method: 'PATCH',
+      data: { status },
+    });
+  }
+
   async distributeStock(request: DistributeStockRequest): Promise<ApiResponse<void>> {
     // console.log("API distributeStock called with:", request);
     return this.request<void>(`/stocks/distribute`, {
@@ -1301,8 +1333,15 @@ class ApiClient {
     return this.request<StoreStockList[]>(`/stores/stocks`);
   }
 
-  async getStoreDetail(locationId: string): Promise<ApiResponse<Store>> {
-    return this.request<Store>(`/stores/${locationId}`);
+  async getStoreDetail(locationId: string): Promise<ApiResponse<StoreDetailResponse>> {
+    return this.request<StoreDetailResponse>(`/stores/${locationId}`);
+  }
+
+  async getStoreCustomers(locationId: string): Promise<ApiResponse<{ customers: Array<{
+    id: string; name: string; email: string; no_wa?: string; employee_code?: string;
+    type: "internal" | "external"; status: "active" | "inactive"; created_at?: string;
+  }> }>> {
+    return this.request(`/stores/${encodeURIComponent(locationId)}/customers`);
   }
 
   async getStoreAssignedUsers(locationId: string): Promise<ApiResponse<StoreAssignedUser[]>> {
@@ -1339,6 +1378,29 @@ class ApiClient {
     const queryString = queryParams.toString();
     const url = queryString ? `/stores/${locationId}/transactions?${queryString}` : `/stores/${locationId}/transactions`;
     return this.request<Transaction[]>(url);
+  }
+
+  async listStoreVouchers(locationId: string, page = 1, pageSize = 20): Promise<ApiResponse<StoreVoucher[]>> {
+    return this.request(`/stores/${encodeURIComponent(locationId)}/vouchers?page=${page}&page_size=${pageSize}`);
+  }
+
+  async saveStoreVoucher(locationId: string, data: StoreVoucherInput, voucherId?: string): Promise<ApiResponse<StoreVoucher>> {
+    const path = `/stores/${encodeURIComponent(locationId)}/vouchers${voucherId ? `/${encodeURIComponent(voucherId)}` : ""}`;
+    return this.request(path, { method: voucherId ? "PUT" : "POST", data });
+  }
+
+  async listVoucherTransactions(locationId: string, params: { voucher_id?: string; settlement_status?: string; page: number; page_size: number }): Promise<ApiResponse<VoucherUsage[]>> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => { if (value !== undefined && value !== "") query.set(key, String(value)); });
+    return this.request(`/stores/${encodeURIComponent(locationId)}/voucher-transactions?${query}`);
+  }
+
+  async settleVoucherTransaction(locationId: string, transactionId: string): Promise<ApiResponse<VoucherUsage>> {
+    return this.request(`/stores/${encodeURIComponent(locationId)}/voucher-transactions/${encodeURIComponent(transactionId)}/settle`, { method: "POST", data: {} });
+  }
+
+  async quoteStoreVoucher(locationId: string, voucher_code: string, carts: VoucherCartLine[]): Promise<ApiResponse<VoucherQuote>> {
+    return this.request(`/stores/${encodeURIComponent(locationId)}/vouchers/quote`, { method: "POST", data: { voucher_code, carts } });
   }
 
   async getStorePaymentMethods(locationId: string): Promise<ApiResponse<StorePaymentMethod[]>> {
@@ -1415,6 +1477,12 @@ class ApiClient {
 
   async approveTransactionDelivery(transactionId: string): Promise<ApiResponse<void>> {
     return this.request<void>(`/transactions/required/${transactionId}/approve-delivery`, {
+      method: 'POST',
+    });
+  }
+
+  async markTransactionReadyPickup(transactionId: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`/transactions/${encodeURIComponent(transactionId)}/mark-ready-pickup`, {
       method: 'POST',
     });
   }

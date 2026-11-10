@@ -43,6 +43,7 @@ const getStatusLabel = (status: string) => {
     case 'READY_TO_PICKUP': return 'Siap Diambil';
     case 'COMPLETED': return 'Selesai';
     case 'REJECTED': return 'Ditolak';
+    case 'FAILED': return 'Gagal';
     default: return status || '-';
   }
 };
@@ -59,6 +60,9 @@ export const exportTransactionsToCSV = (transactions: Transaction[]) => {
     'Payment Code',
     'Created At',
     'Location',
+    'Voucher Code',
+    'Voucher Discount (IDR)',
+    'Voucher Settlement',
   ];
 
   const rows = transactions.map((tx) => [
@@ -71,6 +75,9 @@ export const exportTransactionsToCSV = (transactions: Transaction[]) => {
     tx.payment_code || '-',
     new Date(tx.created_at).toLocaleString('id-ID'),
     tx.location_name || '-',
+    tx.voucher_code || '-',
+    String(tx.discount_amount || 0),
+    tx.voucher_settlement_required ? tx.voucher_settlement_status || 'UNSETTLED' : '-',
   ]);
 
   const csvContent = [
@@ -95,6 +102,10 @@ export const exportTransactionsToXLSX = (transactions: Transaction[]) => {
     'Location': tx.location_name || '-',
     'Paid At': tx.paid_at ? formatDateId(tx.paid_at) : '-',
     'Pickup At': tx.pickup_at ? formatDateId(tx.pickup_at) : '-',
+    'Voucher Code': tx.voucher_code || '-',
+    'Voucher Discount (IDR)': tx.discount_amount || 0,
+    'Voucher Settlement': tx.voucher_settlement_required ? tx.voucher_settlement_status || 'UNSETTLED' : '-',
+    'Voucher Settled At': tx.voucher_settled_at ? formatDateId(tx.voucher_settled_at) : '-',
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data);
@@ -114,6 +125,10 @@ export const exportTransactionsToXLSX = (transactions: Transaction[]) => {
     { wch: 20 }, // Location
     { wch: 20 }, // Paid At
     { wch: 20 }, // Pickup At
+    { wch: 22 }, // Voucher Code
+    { wch: 22 }, // Voucher Discount
+    { wch: 22 }, // Voucher Settlement
+    { wch: 24 }, // Voucher Settled At
   ];
 
   XLSX.writeFile(workbook, 'transactions.xlsx');
@@ -175,7 +190,17 @@ export const exportTransactionInvoiceToPDF = async (transaction: Transaction, ca
   });
 
   // Summary
-  const finalY = (doc as any).lastAutoTable?.finalY || 120;
+  let finalY = (doc as any).lastAutoTable?.finalY || 120;
+  if (finalY + (transaction.voucher_code ? 67 : 47) > doc.internal.pageSize.getHeight() - 14) {
+    doc.addPage();
+    finalY = 10;
+  }
+  if (transaction.voucher_code) {
+    doc.setFontSize(10);
+    doc.text(`Subtotal: ${formatCurrencyId(transaction.base_amount || 0)}`, 14, finalY + 12);
+    doc.text(`Voucher ${transaction.voucher_code}: -${formatCurrencyId(transaction.discount_amount || 0)}`, 14, finalY + 19);
+    finalY += 20;
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
@@ -232,7 +257,7 @@ export const exportAllTransactionsInvoiceToPDF = async (transactions: Transactio
     (index + 1).toString(),
     tx.transaction_code || tx.id.slice(0, 8),
     tx.customer_name || 'Guest',
-    getStatusLabel(tx.status),
+    [getStatusLabel(tx.status), tx.voucher_code && `Voucher: ${tx.voucher_code}`, tx.voucher_code && `-${formatCurrencyId(tx.discount_amount || 0)}`, tx.voucher_settlement_required && (tx.voucher_settlement_status || 'UNSETTLED')].filter(Boolean).join('\n'),
     getPaymentMethodLabel(tx.payment_type),
     formatCurrencyId(tx.total_amount || 0),
   ]);

@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Package, Edit, Trash2, Filter, Settings, Loader2, ArrowUpDown, ChevronDown, ChevronRight, Building2, AlertCircle, Plus, ArrowRightLeft } from "lucide-react";
@@ -24,6 +25,11 @@ const formatCurrency = (amount: number) => {
 };
 
 export default function MasterStocks() {
+  const { canWrite, user } = useAuth();
+  const canManageStock = canWrite("master_stock");
+  const canSyncStock = canWrite("master_stores");
+  const canTransferStock = canWrite("master_stock_mutations") && (user?.role === "admin" || user?.role === "super_admin");
+  const canDistributeStock = canWrite("master_stock_mutations") && user?.role === "super_admin";
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -136,7 +142,7 @@ export default function MasterStocks() {
 
   // Update stock mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, stock }: { id: string; stock: any }) => stockService.updateStock(id, stock),
+    mutationFn: ({ id, stock }: { id: string; stock: any }) => { if (!canManageStock) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return stockService.updateStock(id, stock); },
     onSuccess: () => {
       toast.success("Stock updated successfully");
       queryClient.invalidateQueries({ queryKey: ['stocks'] });
@@ -149,7 +155,7 @@ export default function MasterStocks() {
 
   // Create stock mutation
   const createMutation = useMutation({
-    mutationFn: (stock: any) => stockService.createStock(stock),
+    mutationFn: (stock: any) => { if (!canManageStock) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return stockService.createStock(stock); },
     onSuccess: () => {
       toast.success("Stock created successfully");
       setIsCreateStockOpen(false);
@@ -172,6 +178,7 @@ export default function MasterStocks() {
   // Distribute stock mutation
   const distributeMutation = useMutation({
     mutationFn: async (distributionData: Array<{ from_location_id: string; to_location_id: string; master_product_id: string; quantity: number }>) => {
+    if (!canDistributeStock) throw new Error("Akses hanya lihat. Izin Write diperlukan.");
       console.log("Distribution Data:", distributionData);
       for (const item of distributionData) {
         console.log("Distributing:", item);
@@ -201,7 +208,7 @@ export default function MasterStocks() {
 
   // Transfer stock mutation
   const transferMutation = useMutation({
-    mutationFn: (request: any) => stockService.transferStock(request),
+    mutationFn: (request: any) => { if (!canTransferStock) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return stockService.transferStock(request); },
     onSuccess: () => {
       toast.success("Stock transferred successfully");
       setIsTransferStockOpen(false);
@@ -221,7 +228,7 @@ export default function MasterStocks() {
 
   // Sync products mutation
   const syncMutation = useMutation({
-    mutationFn: (locationId: string) => stockService.syncProducts(locationId),
+    mutationFn: (locationId: string) => { if (!canSyncStock) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return stockService.syncProducts(locationId); },
     onSuccess: () => {
       toast.success("Products synced successfully");
       queryClient.invalidateQueries({ queryKey: ['stocks'] });
@@ -248,6 +255,7 @@ export default function MasterStocks() {
   };
 
   const handleStockUpdate = (stock: Stock, newStock: number) => {
+    if (!canManageStock) return;
     updateMutation.mutate({
       id: stock.id,
       stock: {
@@ -316,7 +324,7 @@ export default function MasterStocks() {
           <div className="md:col-span-5 grid grid-cols-3 gap-2">
             <Dialog open={isCreateStockOpen} onOpenChange={setIsCreateStockOpen}>
               <DialogTrigger asChild>
-                <Button className="admin-accent-button btn-tap">
+                <Button disabled={!canManageStock} className="admin-accent-button btn-tap">
                   <Plus className="h-4 w-4 mr-2" /> Create
                 </Button>
               </DialogTrigger>
@@ -395,7 +403,7 @@ export default function MasterStocks() {
                   <div className="flex gap-2 pt-2">
                     <Button
                       onClick={() => createMutation.mutate(createStockForm)}
-                      disabled={createMutation.isPending || !createStockForm.master_location_id || !createStockForm.master_product_id}
+                      disabled={!canManageStock || (createMutation.isPending || !createStockForm.master_location_id || !createStockForm.master_product_id)}
                     >
                       {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
                     </Button>
@@ -407,7 +415,7 @@ export default function MasterStocks() {
 
             <Dialog open={isDistributeStockOpen} onOpenChange={setIsDistributeStockOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="bg-card border-border">
+                <Button disabled={!canDistributeStock} variant="outline" className="bg-card border-border">
                   <ArrowRightLeft className="h-4 w-4 mr-2" /> Distribute
                 </Button>
               </DialogTrigger>
@@ -512,7 +520,7 @@ export default function MasterStocks() {
                           }));
                         distributeMutation.mutate(distributionData);
                       }}
-                      disabled={distributeMutation.isPending}
+                      disabled={!canDistributeStock || (distributeMutation.isPending)}
                     >
                       {distributeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Distribute"}
                     </Button>
@@ -524,7 +532,7 @@ export default function MasterStocks() {
 
             <Dialog open={isTransferStockOpen} onOpenChange={setIsTransferStockOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="bg-card border-border">
+                <Button disabled={!canTransferStock} variant="outline" className="bg-card border-border">
                   <ArrowRightLeft className="h-4 w-4 mr-2" /> Transfer
                 </Button>
               </DialogTrigger>
@@ -600,7 +608,7 @@ export default function MasterStocks() {
                         }
                         transferMutation.mutate(transferStockForm);
                       }}
-                      disabled={transferMutation.isPending}
+                      disabled={!canTransferStock || (transferMutation.isPending)}
                     >
                       {transferMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Transfer"}
                     </Button>
@@ -684,7 +692,7 @@ export default function MasterStocks() {
                             e.stopPropagation();
                             syncMutation.mutate(group.location_id);
                           }}
-                          disabled={syncMutation.isPending}
+                          disabled={!canSyncStock || (syncMutation.isPending)}
                           className="text-[10px] sm:text-xs px-2 py-1 h-6 sm:h-8"
                         >
                           {syncMutation.isPending ? <Loader2 className="h-3 w-3 sm:h-4 w-4 animate-spin" /> : "Sync"}

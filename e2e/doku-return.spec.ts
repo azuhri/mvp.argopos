@@ -144,13 +144,17 @@ for (const terminal of ["FAILED", "EXPIRED"]) {
     await mockReturn(context, state);
     await page.clock.install();
     await page.goto(returnURL);
-    await expect.poll(() => state.refreshes).toBe(1);
     await expect(page.getByRole("region", { name: "Pembayaran DOKU", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Periksa status pembayaran" })).toBeEnabled();
     await page.clock.fastForward(20000);
-    expect(state.refreshes).toBe(1);
+    expect(state.refreshes).toBe(0);
     await expect(page).toHaveURL(/\/payment\/return-order\?/);
     await expect(page.getByRole("heading", { name: "Pembayaran berhasil" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Unduh invoice|Bayar melalui DOKU/i })).toHaveCount(0);
+    await page.getByRole("button", { name: "Periksa status pembayaran" }).click();
+    await expect.poll(() => state.refreshes).toBe(1);
+    await page.clock.fastForward(20000);
+    expect(state.refreshes).toBe(1);
     expect(state.creates).toBe(0);
   });
 }

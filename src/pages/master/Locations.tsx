@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth";
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Search, Plus, Edit, Trash2, MapPin, Building, Phone, Mail, ChevronLeft, ChevronRight, Loader2, ExternalLink } from "lucide-react";
@@ -14,6 +15,7 @@ import { toast } from "sonner";
 import { locationService } from "@/lib/services/locationService";
 import { type Location, type CreateLocationRequest, type UpdateLocationRequest } from "@/lib/api";
 import MapPicker from '@/components/ui/MapPicker';
+import { LocationStatusToggle } from "@/components/master/LocationStatusToggle";
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
@@ -33,6 +35,8 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 export default function MasterLocations() {
+  const { canWrite } = useAuth();
+  const canManageLocations = canWrite("master_locations");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "warehouse" | "store">("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -92,7 +96,7 @@ export default function MasterLocations() {
 
   // Create location mutation
   const createMutation = useMutation({
-    mutationFn: (location: CreateLocationRequest) => locationService.createLocation(location),
+    mutationFn: (location: CreateLocationRequest) => { if (!canManageLocations) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return locationService.createLocation(location); },
     onSuccess: () => {
       toast.success("Location created successfully");
       setIsCreateOpen(false);
@@ -107,7 +111,7 @@ export default function MasterLocations() {
   // Update location mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, location }: { id: string; location: UpdateLocationRequest }) => 
-      locationService.updateLocation(id, location),
+      { if (!canManageLocations) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return locationService.updateLocation(id, location); },
     onSuccess: () => {
       toast.success("Location updated successfully");
       setIsCreateOpen(false);
@@ -121,7 +125,7 @@ export default function MasterLocations() {
 
   // Delete location mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => locationService.deleteLocation(id),
+    mutationFn: (id: string) => { if (!canManageLocations) throw new Error("Akses hanya lihat. Izin Write diperlukan."); return locationService.deleteLocation(id); },
     onSuccess: () => {
       toast.success("Location deleted successfully");
       queryClient.invalidateQueries({ queryKey: ['locations'] });
@@ -143,6 +147,7 @@ export default function MasterLocations() {
   };
 
   const handleEditLocation = (location: Location) => {
+    if (!canManageLocations) return;
     setEditingLocation(location);
     setNewLocationCode(location.location_code);
     setNewLocationName(location.location_name);
@@ -163,6 +168,7 @@ export default function MasterLocations() {
   };
 
   const handleSaveLocation = async () => {
+    if (!canManageLocations) return;
     if (!newLocationCode.trim() || !newLocationName.trim()) {
       toast.error("Location code and name are required");
       return;
@@ -226,6 +232,7 @@ export default function MasterLocations() {
   };
 
   const handleDeleteLocation = async () => {
+    if (!canManageLocations) return;
     if (!deletingLocation) return;
 
     try {
@@ -238,6 +245,7 @@ export default function MasterLocations() {
   };
 
   const openDeleteDialog = (location: Location) => {
+    if (!canManageLocations) return;
     setDeletingLocation(location);
     setIsDeleteOpen(true);
   };
@@ -288,7 +296,7 @@ export default function MasterLocations() {
     }
   }}>
             <DialogTrigger asChild>
-              <Button className="admin-accent-button btn-tap w-full sm:w-auto" onClick={() => {
+              <Button disabled={!canManageLocations} className="admin-accent-button btn-tap w-full sm:w-auto" onClick={() => {
                 console.log('Tambah Lokasi button clicked!');
               }}>
                 <Plus className="h-4 w-4 mr-1" /> Tambah Lokasi
@@ -352,7 +360,7 @@ export default function MasterLocations() {
                   readOnly
                 />
                 <div className="flex gap-2 pt-2">
-                  <Button className="flex-1" onClick={handleSaveLocation} disabled={isCreating}>
+                  <Button className="flex-1" onClick={handleSaveLocation} disabled={!canManageLocations || (isCreating)}>
                     {isCreating ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -400,6 +408,7 @@ export default function MasterLocations() {
                   <TableHead>Name</TableHead>
                   <TableHead>Code</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Longitude</TableHead>
                   <TableHead>Latitude</TableHead>
                   <TableHead>Created At</TableHead>
@@ -422,7 +431,7 @@ export default function MasterLocations() {
                   ))
                 ) : !locationsData?.locations || locationsData.locations.length === 0 ? (
                   <tr>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <div className="flex flex-col items-center justify-center py-8">
                         <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                         <p className="text-muted-foreground">Lokasi tidak ditemukan</p>
@@ -451,6 +460,7 @@ export default function MasterLocations() {
                         {location.type}
                       </Badge>
                     </TableCell>
+                    <TableCell><LocationStatusToggle location={location} /></TableCell>
                     <TableCell>{location.longitude || "-"}</TableCell>
                     <TableCell>{location.latitude || "-"}</TableCell>
                     <TableCell>{new Date(location.created_at).toLocaleDateString()}</TableCell>
@@ -466,10 +476,10 @@ export default function MasterLocations() {
                             <ExternalLink className="h-3 w-3" />
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => handleEditLocation(location)}>
+                        <Button disabled={!canManageLocations} size="sm" variant="ghost" onClick={() => handleEditLocation(location)}>
                           <Edit className="h-3 w-3" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => openDeleteDialog(location)}>
+                        <Button disabled={!canManageLocations} size="sm" variant="ghost" className="text-destructive" onClick={() => openDeleteDialog(location)}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -633,12 +643,16 @@ export default function MasterLocations() {
                     </div>
                   </div>
 
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <LocationStatusToggle location={location} />
+                  </div>
                   <div className="flex gap-1">
-                    <Button size="sm" variant="ghost" className="flex-1" onClick={() => handleEditLocation(location)}>
+                    <Button disabled={!canManageLocations} size="sm" variant="ghost" className="flex-1" onClick={() => handleEditLocation(location)}>
                       <Edit className="h-3 w-3 mr-1" />
                       Edit
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDeleteLocation(location)}>
+                    <Button disabled={!canManageLocations} size="sm" variant="ghost" className="text-destructive" onClick={() => openDeleteDialog(location)}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -738,7 +752,7 @@ export default function MasterLocations() {
             <Button
               variant="destructive"
               onClick={handleDeleteLocation}
-              disabled={deleteMutation.isPending}
+              disabled={!canManageLocations || (deleteMutation.isPending)}
               className="flex-1"
             >
               {deleteMutation.isPending ? (

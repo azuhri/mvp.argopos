@@ -6,9 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { getFilteredNavigation } from "@/lib/navigation";
-import { userService } from "@/lib/services/userService";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -27,21 +25,9 @@ export function TopBar({ title }: TopBarProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const { data: fullUser } = useQuery({
-    queryKey: ["current-user"],
-    queryFn: () => userService.getCurrentUser(),
-  });
-  const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
-
   const searchableMenus = useMemo(
-    () =>
-      getFilteredNavigation(assignedStoresCount).flatMap((group) =>
-        group.listMenus.filter((item) => {
-          if (!canRead(item.key)) return false;
-          return group.role !== "super_admin" || user?.role === "super_admin";
-        }),
-      ),
-    [assignedStoresCount, canRead, user?.role],
+    () => getFilteredNavigation(canRead).flatMap((group) => group.listMenus),
+    [canRead],
   );
 
   const searchResults = useMemo(() => {

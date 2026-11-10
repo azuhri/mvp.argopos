@@ -221,6 +221,7 @@ test("customer can recover and resume the original pending payment", async ({ co
   await mockPendingPaymentApi(context, state);
   await context.addInitScript(({ imageUrl }) => {
     localStorage.setItem("selectedLocationCode", "AMP-JKT");
+    sessionStorage.setItem("argopos.commerce.location-confirmed.v1", "AMP-JKT");
     localStorage.setItem(
       "argopos.store.cart",
       JSON.stringify([
@@ -267,7 +268,11 @@ test("customer can recover and resume the original pending payment", async ({ co
   expect(state.detailRequestedFromCart).toBe(true);
   const credentialRequests = await transactionCredentials(page);
   expect(credentialRequests.find((request) => request.path.endsWith("/transactions") && request.method === "POST")?.credentials).toBe("same-origin");
-  expect(credentialRequests.filter((request) => request.path.includes("/transactions/")).every((request) => request.credentials === "same-origin")).toBe(true);
+  // Owned payment detail includes its capability cookie; the pending index
+  // reconciler retains its existing same-origin read contract.
+  const detailReads = credentialRequests.filter((request) => request.path.endsWith(`/transactions/${transaction.id}`) && request.method === "GET");
+  expect(detailReads.map((request) => request.credentials)).toContain("include");
+  expect(detailReads.every((request) => ["include", "same-origin"].includes(request.credentials))).toBe(true);
 
   const expectedPendingStorage = {
     version: 1,

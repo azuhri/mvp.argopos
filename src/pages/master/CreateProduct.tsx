@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/auth";
 import { useState, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { GlassCard } from "@/components/shared/GlassCard";
@@ -51,6 +52,8 @@ interface FormErrors {
 }
 
 export default function CreateProduct() {
+  const { canWrite } = useAuth();
+  const canManageProducts = canWrite("master_products");
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -203,6 +206,7 @@ export default function CreateProduct() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    if (!canManageProducts) return;
     e.preventDefault();
 
     if (!validateForm()) {
@@ -490,7 +494,7 @@ export default function CreateProduct() {
             </Link>
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={!canManageProducts || (isSubmitting)}
               className="btn-tap"
             >
               {isSubmitting ? (

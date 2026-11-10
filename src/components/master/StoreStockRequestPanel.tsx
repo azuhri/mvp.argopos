@@ -149,7 +149,7 @@ export function StoreStockRequestPanel({
 }: StoreStockRequestPanelProps) {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, canWrite, loading: authLoading } = useAuth();
+  const { user, canRead, canWrite, loading: authLoading } = useAuth();
   const [page, setPage] = useState(1);
   const [movementFilter, setMovementFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -165,11 +165,12 @@ export function StoreStockRequestPanel({
   const isSuperAdmin = user?.role === "super_admin";
   const isStoreAdmin = user?.role === "admin";
   const hasWritePermission = canWrite("master_stock_mutations");
+  const hasReadPermission = canRead("master_stock_mutations");
 
   const currentUserQuery = useQuery({
     queryKey: ["current-user"],
     queryFn: () => userService.getCurrentUser(),
-    enabled: Boolean(user && hasWritePermission && !isSuperAdmin),
+    enabled: Boolean(user && hasReadPermission && !isSuperAdmin),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -178,10 +179,10 @@ export function StoreStockRequestPanel({
     [currentUserQuery.data?.assigned_stores],
   );
   const assignmentResolved = isSuperAdmin || currentUserQuery.isSuccess;
-  const canViewCurrentStore = hasWritePermission && (
+  const canViewCurrentStore = hasReadPermission && (
     isSuperAdmin || (assignmentResolved && assignedLocationIds.has(locationId))
   );
-  const canManageCurrentStore = canViewCurrentStore && (isSuperAdmin || isStoreAdmin);
+  const canManageCurrentStore = hasWritePermission && canViewCurrentStore && (isSuperAdmin || isStoreAdmin);
 
   useEffect(() => {
     setPage(1);
@@ -258,6 +259,7 @@ export function StoreStockRequestPanel({
 
   const createMutation = useMutation({
     mutationFn: () => {
+      if (!canManageCurrentStore) throw new Error("Tidak memiliki akses Write untuk stock request ini.");
       if (!selectedSourceStock?.master_product?.id) {
         throw new Error("Pilih produk yang tersedia di lokasi sumber");
       }
@@ -283,7 +285,11 @@ export function StoreStockRequestPanel({
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => stockService.approveStockTransferSource(id),
+    mutationFn: (id: string) => {
+      const request = requests.find(item => item.id === id);
+      if (!request || !canApproveSource(request)) throw new Error("Persetujuan stock request tidak diizinkan.");
+      return stockService.approveStockTransferSource(id);
+    },
     onSuccess: async () => {
       toast.success("Persetujuan sumber berhasil disimpan");
       setApprovalRequest(null);
@@ -293,7 +299,11 @@ export function StoreStockRequestPanel({
   });
 
   const receiveMutation = useMutation({
-    mutationFn: (id: string) => stockService.receiveStockTransferRequest(id),
+    mutationFn: (id: string) => {
+      const request = requests.find(item => item.id === id);
+      if (!request || !canReceiveDestination(request)) throw new Error("Penerimaan stock request tidak diizinkan.");
+      return stockService.receiveStockTransferRequest(id);
+    },
     onSuccess: async () => {
       toast.success("Penerimaan stock berhasil dikonfirmasi");
       setReceiveRequest(null);
@@ -304,9 +314,11 @@ export function StoreStockRequestPanel({
   });
 
   const rejectMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) => (
-      stockService.rejectStockTransferRequest(id, reason)
-    ),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => {
+      const request = requests.find(item => item.id === id);
+      if (!request || !canRejectAtCurrentStage(request)) throw new Error("Penolakan stock request tidak diizinkan.");
+      return stockService.rejectStockTransferRequest(id, reason);
+    },
     onSuccess: async () => {
       toast.success("Stock request berhasil ditolak");
       setRejectRequest(null);
@@ -318,6 +330,7 @@ export function StoreStockRequestPanel({
 
   const handleCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!canManageCurrentStore) return;
     const quantity = Number(createForm.quantity);
 
     if (!createForm.sourceLocationId) {
@@ -342,6 +355,7 @@ export function StoreStockRequestPanel({
 
   const handleReject = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!canManageCurrentStore) return;
     const reason = rejectReason.trim();
     if (!reason) {
       toast.error("Alasan penolakan wajib diisi");
@@ -502,14 +516,14 @@ export function StoreStockRequestPanel({
     );
   }
 
-  if (!hasWritePermission) {
+  if (!hasReadPermission) {
     return (
       <GlassCard>
         <Alert>
           <ShieldAlert className="h-4 w-4" aria-hidden="true" />
           <AlertTitle>Akses terbatas</AlertTitle>
           <AlertDescription>
-            Anda memerlukan akses write pada Stock Mutations untuk melihat dan memproses stock request.
+            Anda memerlukan akses Read pada Stock Mutations untuk melihat stock request, dan Write untuk memprosesnya.
           </AlertDescription>
         </Alert>
       </GlassCard>

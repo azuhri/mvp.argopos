@@ -3,27 +3,15 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import { getFilteredNavigation, type NavItemConfig } from "@/lib/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { userService } from "@/lib/services/userService";
 import { ScanLine } from "lucide-react";
 
 export function BottomNav() {
   const location = useLocation();
-  const { canRead, canWrite, user } = useAuth();
+  const { canRead, canWrite } = useAuth();
   const canScan = canWrite("transactions");
 
-  // Fetch full user data to get assigned_stores
-  const { data: fullUser } = useQuery({
-    queryKey: ['current-user'],
-    queryFn: () => userService.getCurrentUser(),
-  });
-  const assignedStoresCount = fullUser?.assigned_stores?.length || 0;
-  const filteredNav = getFilteredNavigation(assignedStoresCount);
-
-  const visibleNavItems = filteredNav.flatMap((group) => {
-    if (group.role === "super_admin" && user?.role !== "super_admin") return [];
-    return group.listMenus.filter((item) => item.mobile && canRead(item.key));
-  });
+  const visibleNavItems = getFilteredNavigation(canRead)
+    .flatMap((group) => group.listMenus.filter((item) => item.mobile));
 
   const renderNavItem = (item: NavItemConfig) => {
     const isActive = (location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)) && location.pathname !== "/transactions/pickup-scan";

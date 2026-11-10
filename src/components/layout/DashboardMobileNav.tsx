@@ -1,28 +1,31 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, Package, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth, type MenuKey } from "@/lib/auth";
 
 interface NavItem {
   id: string;
   label: string;
   icon: React.ElementType;
   path: string;
+  menuKey: MenuKey;
 }
 
 const navItems: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { id: "product", label: "Product", icon: Package, path: "/dashboard/products" },
-  { id: "transaction", label: "Transaction", icon: ShoppingCart, path: "/transactions" },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard", menuKey: "dashboard" },
+  { id: "product", label: "Product", icon: Package, path: "/dashboard/products", menuKey: "master_products" },
+  { id: "transaction", label: "Transaction", icon: ShoppingCart, path: "/transactions", menuKey: "transactions" },
 ];
 
 export function DashboardMobileNav() {
+  const { canRead } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   return (
     <div className="md:hidden mb-4">
       <div className="flex gap-2 overflow-x-auto pb-2">
-        {navItems.map((item) => {
+        {navItems.filter(item => canRead(item.menuKey)).map((item) => {
           const isActive = location.pathname === item.path || 
                           (item.id !== "dashboard" && location.pathname.startsWith(item.path));
           const Icon = item.icon;

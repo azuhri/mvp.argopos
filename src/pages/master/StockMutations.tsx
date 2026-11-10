@@ -15,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
+import { userService } from "@/lib/services/userService";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Badge } from "@/components/ui/badge";
@@ -129,6 +131,15 @@ const buildStockRange = (before?: number, after?: number) => {
 };
 
 export default function StockMutations() {
+  const { user, canWrite } = useAuth();
+  const isSuperAdmin = user?.role === "super_admin";
+  const canManageRequests = canWrite("master_stock_mutations") && (isSuperAdmin || user?.role === "admin");
+  const { data: profile } = useQuery({
+    queryKey: ["current-user"], queryFn: () => userService.getCurrentUser(), enabled: !!user,
+  });
+  const canManageLocation = (locationId: string) => canManageRequests && (
+    isSuperAdmin || Boolean(profile?.assigned_stores?.some(location => location.id === locationId))
+  );
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("mutations");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -222,7 +233,12 @@ export default function StockMutations() {
   };
 
   const createRequestMutation = useMutation({
-    mutationFn: (request: CreateStockTransferRequest) => stockService.createStockTransferRequest(request),
+    mutationFn: (request: CreateStockTransferRequest) => {
+      if (!canManageLocation(request.to_location_id) || (request.movement_type === "distribution" && !isSuperAdmin)) {
+        throw new Error("Izin Write dan penugasan lokasi tujuan diperlukan.");
+      }
+      return stockService.createStockTransferRequest(request);
+    },
     onSuccess: () => {
       toast.success("Stock request created");
       setIsCreateOpen(false);
@@ -242,7 +258,11 @@ export default function StockMutations() {
   });
 
   const approveSourceMutation = useMutation({
-    mutationFn: (id: string) => stockService.approveStockTransferSource(id),
+    mutationFn: (id: string) => {
+      const request = requests.find(item => item.id === id);
+      if (!request || !canManageLocation(request.from_location_id)) throw new Error("Persetujuan sumber tidak diizinkan.");
+      return stockService.approveStockTransferSource(id);
+    },
     onSuccess: () => {
       toast.success("Source approval saved");
       invalidateStockMutationQueries();
@@ -253,9 +273,11 @@ export default function StockMutations() {
   });
 
   const rejectRequestMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) => (
-      stockService.rejectStockTransferRequest(id, reason)
-    ),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => {
+      const request = requests.find(item => item.id === id);
+      if (!request || !canManageLocation(request.status === "requested" ? request.from_location_id : request.to_location_id)) throw new Error("Penolakan stock request tidak diizinkan.");
+      return stockService.rejectStockTransferRequest(id, reason);
+    },
     onSuccess: () => {
       toast.success("Request rejected");
       invalidateStockMutationQueries();
@@ -266,7 +288,11 @@ export default function StockMutations() {
   });
 
   const receiveRequestMutation = useMutation({
-    mutationFn: (id: string) => stockService.receiveStockTransferRequest(id),
+    mutationFn: (id: string) => {
+      const request = requests.find(item => item.id === id);
+      if (!request || !canManageLocation(request.to_location_id)) throw new Error("Penerimaan stock request tidak diizinkan.");
+      return stockService.receiveStockTransferRequest(id);
+    },
     onSuccess: () => {
       toast.success("Stock received and mutation logged");
       invalidateStockMutationQueries();
@@ -288,6 +314,7 @@ export default function StockMutations() {
 
   const handleCreateRequest = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!canManageRequests) return;
 
     if (!createForm.from_location_id || !createForm.to_location_id || !createForm.master_product_id) {
       toast.error("Source, destination, and product are required");
@@ -327,7 +354,7 @@ export default function StockMutations() {
 
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="admin-accent-button gap-2">
+              <Button disabled={!canManageRequests} className="admin-accent-button gap-2">
                 <Plus className="h-4 w-4" />
                 Request Stock
               </Button>
@@ -352,7 +379,7 @@ export default function StockMutations() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="transfer">Store to Store</SelectItem>
-                        <SelectItem value="distribution">Warehouse to Store</SelectItem>
+                        <SelectItem value="distribution" disabled={!isSuperAdmin}>Warehouse to Store</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -447,7 +474,7 @@ export default function StockMutations() {
                 </div>
 
                 <DialogFooter>
-                  <Button type="submit" disabled={createRequestMutation.isPending} className="gap-2">
+                  <Button type="submit" disabled={!canManageRequests || createRequestMutation.isPending} className="gap-2">
                     {createRequestMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                     Create Request
                   </Button>
@@ -811,7 +838,7 @@ export default function StockMutations() {
                                   title="Approve source"
                                   variant="outline"
                                   size="icon"
-                                  disabled={isActionLoading}
+                                  disabled={!canManageLocation(request.from_location_id) || isActionLoading}
                                   onClick={() => approveSourceMutation.mutate(request.id)}
                                 >
                                   <Check className="h-4 w-4" />
@@ -820,7 +847,7 @@ export default function StockMutations() {
                                   title="Reject request"
                                   variant="outline"
                                   size="icon"
-                                  disabled={isActionLoading}
+                                  disabled={!canManageLocation(request.from_location_id) || isActionLoading}
                                   onClick={() => rejectRequestMutation.mutate({
                                     id: request.id,
                                     reason: "Rejected from stock mutation page",
@@ -835,7 +862,7 @@ export default function StockMutations() {
                                 title="Receive stock"
                                 variant="outline"
                                 size="icon"
-                                disabled={isActionLoading}
+                                disabled={!canManageLocation(request.to_location_id) || isActionLoading}
                                 onClick={() => receiveRequestMutation.mutate(request.id)}
                               >
                                 <ArrowDownToLine className="h-4 w-4" />

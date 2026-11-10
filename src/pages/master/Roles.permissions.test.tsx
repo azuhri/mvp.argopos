@@ -1,145 +1,131 @@
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import type { Menu, Role, RoleSaveRequest } from "@/lib/api";
+import { matrixPayload, roleMatrix, type PermissionMatrix } from "@/lib/services/roleManagementService";
 import MasterRoles from "./Roles";
 
 const mocks = vi.hoisted(() => ({
-  getAllRoles: vi.fn(), getAllMenus: vi.fn(), getRolePermissions: vi.fn(),
-  setRolePermissions: vi.fn(), updateRole: vi.fn(),
-  toastError: vi.fn(), refreshCallbacks: [] as Array<() => Promise<void>>,
+  list: vi.fn(), menus: vi.fn(), get: vi.fn(), save: vi.fn(), replacePermissions: vi.fn(), remove: vi.fn(),
+  getRolePermissions: vi.fn(), getCurrentUser: vi.fn(),
+}));
+vi.mock("@/lib/services/roleManagementService", async importOriginal => ({
+  ...await importOriginal<object>(), roleManagementService: mocks,
 }));
 vi.mock("@/lib/services/accessRoleService", () => ({ accessRoleService: mocks }));
+vi.mock("@/lib/services/userService", () => ({ userService: mocks }));
 vi.mock("@/components/layout/AppLayout", () => ({ AppLayout: ({ children }: { children: ReactNode }) => <main>{children}</main> }));
-vi.mock("@/lib/navigation", () => ({ NAV_GROUPS_MENUS: [{ listMenus: [{ key: "master_stores", label: "Store Management", icon: () => null }] }] }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: mocks.toastError } }));
-vi.mock("@/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: ReactNode }) => <select value={value} onChange={(event) => onValueChange(event.target.value)}><option value="">Choose role</option>{children}</select>,
-  SelectTrigger: () => null, SelectValue: () => null,
-  SelectContent: ({ children }: { children: ReactNode }) => <>{children}</>,
-  SelectItem: ({ value, children }: { value: string; children: ReactNode }) => <option value={value}>{children}</option>,
-}));
+vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 
-function PermissionProbe() {
-  const { canWrite, refreshPermissions, permissionsRefreshing } = useAuth();
-  useEffect(() => { mocks.refreshCallbacks.push(refreshPermissions); }, [refreshPermissions]);
-  return <>
-    <output data-testid="store-access">{canWrite("master_stores") ? "write" : "hidden"}</output>
-    <button disabled={permissionsRefreshing} onClick={() => void refreshPermissions()}>Refresh current access</button>
-  </>;
-}
-
+const menus: Menu[] = [{ id: "roles-menu", menu_name: "master_roles" }, { id: "stores-menu", menu_name: "master_stores" }];
+const profile = { id: "staff-one", username: "staff", email: "staff@example.test", role_id: "staff-role", role: { role_name: "staff_internal" }, created_at: "", updated_at: "" };
 const clients: QueryClient[] = [];
-let serverPermissions: Record<string, { master_stores: "hidden" | "write" }>;
-
-function renderSession({ cached = "hidden", showRoles = true, signedIn = true }: { cached?: "hidden" | "write"; showRoles?: boolean; signedIn?: boolean } = {}) {
-  if (signedIn) localStorage.setItem("argopos.auth.user", JSON.stringify({ id: "staff-one", role: "staff_internal", role_id: "staff-role" }));
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+let roles: Role[];
+function setGrants(id: string, matrix: PermissionMatrix) {
+  const role = roles.find(role => role.id === id)!;
+  role.access_roles = matrixPayload(menus, matrix).map(grant => ({ ...grant, role_id: id, id: grant.menu_id, created_at: "", updated_at: "" }));
+}
+function PermissionProbe() {
+  const { canWrite } = useAuth();
+  return <output data-testid="store-access">{canWrite("master_stores") ? "write" : "hidden"}</output>;
+}
+function renderSession(path = "/master/roles/staff-role/edit") {
+  localStorage.setItem("argopos.auth.user", JSON.stringify({ ...profile, role: "staff_internal" }));
+  localStorage.setItem("argopos.auth.token", "fixture");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
-  client.setQueryData(["role-permissions", "staff-role"], { master_stores: cached });
   client.setQueryData(["role-permissions", "source-role"], { master_stores: "write" });
-  render(<QueryClientProvider client={client}><AuthProvider><PermissionProbe />{showRoles && <MasterRoles />}</AuthProvider></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><AuthProvider><PermissionProbe /><Routes>
+    <Route path="/master/roles" element={<MasterRoles />} />
+    <Route path="/master/roles/:roleId/edit" element={<MasterRoles mode="edit" />} />
+    <Route path="/master/roles/:roleId" element={<MasterRoles mode="view" />} />
+  </Routes></AuthProvider></MemoryRouter></QueryClientProvider>);
   return client;
 }
 
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.refreshCallbacks.length = 0;
-  const storedValues = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
-    getItem: (key: string) => storedValues.get(key) ?? null,
-    setItem: (key: string, value: string) => { storedValues.set(key, String(value)); },
-    removeItem: (key: string) => { storedValues.delete(key); },
-    clear: () => storedValues.clear(),
-    key: (index: number) => Array.from(storedValues.keys())[index] ?? null,
-    get length() { return storedValues.size; },
+  vi.clearAllMocks();
+  const storage = new Map<string, string>();
+  vi.stubGlobal("localStorage", { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) });
+  roles = [
+    { id: "staff-role", role_name: "staff_internal", description: "Operational", user_count: 1, name_locked: true, deletable: false, created_at: "", updated_at: "" },
+    { id: "source-role", role_name: "source", description: "Template", user_count: 0, name_locked: false, deletable: true, created_at: "", updated_at: "" },
+  ];
+  setGrants("staff-role", { "roles-menu": "write", "stores-menu": "hidden" });
+  setGrants("source-role", { "roles-menu": "write", "stores-menu": "write" });
+  mocks.list.mockImplementation(async () => structuredClone(roles));
+  mocks.menus.mockResolvedValue(menus);
+  mocks.get.mockImplementation(async (id: string) => structuredClone(roles.find(role => role.id === id)));
+  mocks.getCurrentUser.mockResolvedValue(profile);
+  mocks.getRolePermissions.mockImplementation(async (id: string) => {
+    const matrix = roleMatrix(roles.find(role => role.id === id), menus);
+    return Object.fromEntries(menus.map(menu => [menu.menu_name, matrix[menu.id]]));
   });
-  vi.spyOn(console, "log").mockImplementation(() => undefined);
-  vi.spyOn(console, "error").mockImplementation(() => undefined);
-  serverPermissions = { "staff-role": { master_stores: "hidden" }, "source-role": { master_stores: "write" } };
-  mocks.getAllRoles.mockResolvedValue([{ id: "staff-role", role_name: "staff_internal" }, { id: "source-role", role_name: "permission_source" }]);
-  mocks.getAllMenus.mockResolvedValue([{ id: "store-menu", menu_name: "master_stores" }]);
-  mocks.getRolePermissions.mockImplementation(async (roleId: string) => ({ ...serverPermissions[roleId] }));
-  mocks.updateRole.mockResolvedValue({});
-  mocks.setRolePermissions.mockImplementation(async (roleId: string, permissions: { master_stores: "hidden" | "write" }) => { serverPermissions[roleId] = { ...permissions }; });
+  mocks.save.mockImplementation(async (id: string, payload: RoleSaveRequest) => {
+    const role = roles.find(role => role.id === id)!;
+    role.description = payload.description;
+    setGrants(id, Object.fromEntries(payload.menu_accesses.map(grant => [grant.menu_id, grant.access_type])));
+    return structuredClone(role);
+  });
+  mocks.replacePermissions.mockImplementation(async (id: string, _menus: Menu[], matrix: PermissionMatrix) => setGrants(id, matrix));
 });
-afterEach(() => { clients.splice(0).forEach((client) => client.clear()); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { clients.splice(0).forEach(client => client.clear()); vi.unstubAllGlobals(); });
 
-describe("role permission cache synchronization", () => {
-  it("refreshes the mounted AuthProvider after saving a grant while its hidden cache is still fresh", async () => {
+describe("role editor and active-session permissions", () => {
+  it("saves metadata plus the complete matrix atomically and refreshes the active role", async () => {
     const client = renderSession();
-    fireEvent.click((await screen.findAllByRole("button", { name: "Edit" }))[0]);
-    const dialog = screen.getByRole("dialog");
-    fireEvent.click(within(dialog).getByText("Write", { exact: true }));
+    const grant = await screen.findByRole("radio", { name: "Store Management: Write" });
+    await waitFor(() => expect(grant).toBeEnabled());
+    expect(screen.getByLabelText(/Nama role/)).toBeDisabled();
+    fireEvent.click(grant);
+    fireEvent.change(screen.getByLabelText("Deskripsi"), { target: { value: "Updated description" } });
     expect(screen.getByTestId("store-access")).toHaveTextContent("hidden");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Update" }));
+    fireEvent.click(screen.getByRole("button", { name: "Simpan Perubahan" }));
     await waitFor(() => expect(screen.getByTestId("store-access")).toHaveTextContent("write"));
-    expect(mocks.setRolePermissions).toHaveBeenCalledWith("staff-role", { master_stores: "write" });
+    expect(mocks.save).toHaveBeenCalledExactlyOnceWith("staff-role", {
+      role_name: "staff_internal", description: "Updated description",
+      menu_accesses: [{ menu_id: "roles-menu", access_type: "write" }, { menu_id: "stores-menu", access_type: "write" }],
+    });
     expect(client.getQueryState(["role-permissions", "source-role"])?.isInvalidated).toBe(false);
   });
 
-  it("does not grant access or invalidate cached permissions when saving fails", async () => {
-    const client = renderSession();
-    mocks.setRolePermissions.mockRejectedValue(new Error("save failed"));
-    fireEvent.click((await screen.findAllByRole("button", { name: "Edit" }))[0]);
-    const dialog = screen.getByRole("dialog");
-    fireEvent.click(within(dialog).getByText("Write", { exact: true }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Update" }));
-    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith("save failed"));
+  it("retains draft changes and original session permissions when an atomic save fails", async () => {
+    mocks.save.mockRejectedValueOnce(new Error("Role could not be saved"));
+    renderSession();
+    const grant = await screen.findByRole("radio", { name: "Store Management: Write" });
+    await waitFor(() => expect(grant).toBeEnabled());
+    fireEvent.click(grant);
+    fireEvent.change(screen.getByLabelText("Deskripsi"), { target: { value: "Keep this draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan Perubahan" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Role could not be saved");
+    expect(screen.getByLabelText("Deskripsi")).toHaveValue("Keep this draft");
+    expect(grant).toBeChecked();
     expect(screen.getByTestId("store-access")).toHaveTextContent("hidden");
-    expect(client.getQueryData(["role-permissions", "staff-role"])).toEqual({ master_stores: "hidden" });
-    expect(client.getQueryState(["role-permissions", "staff-role"])?.isInvalidated).toBe(false);
-  });
-
-  it("removes a cached write grant after successfully resetting that role", async () => {
-    serverPermissions["staff-role"] = { master_stores: "write" };
-    renderSession({ cached: "write" });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    expect(mocks.getRolePermissions).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Simpan Perubahan" }));
     await waitFor(() => expect(screen.getByTestId("store-access")).toHaveTextContent("write"));
-    fireEvent.click((await screen.findAllByRole("button", { name: "Reset" }))[0]);
-    await waitFor(() => expect(screen.getByTestId("store-access")).toHaveTextContent("hidden"));
-    expect(mocks.setRolePermissions).toHaveBeenCalledWith("staff-role", { master_stores: "hidden" });
   });
 
-  it("refreshes the target role rather than the source after copying permissions", async () => {
-    const client = renderSession();
-    await screen.findByRole("heading", { name: "staff_internal" });
-    fireEvent.click(screen.getByRole("button", { name: "Copy Permissions" }));
+  it("copies permissions to the selected target and leaves the source cache unchanged", async () => {
+    const client = renderSession("/master/roles");
+    fireEvent.click(await screen.findByRole("button", { name: "Copy Permissions" }));
     const dialog = screen.getByRole("dialog");
-    const selects = within(dialog).getAllByRole("combobox");
-    fireEvent.change(selects[0], { target: { value: "source-role" } });
-    fireEvent.change(selects[1], { target: { value: "staff-role" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Copy" }));
+    fireEvent.change(within(dialog).getByLabelText("Role sumber"), { target: { value: "source-role" } });
+    fireEvent.change(within(dialog).getByLabelText("Role tujuan"), { target: { value: "staff-role" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Salin permission" }));
     await waitFor(() => expect(screen.getByTestId("store-access")).toHaveTextContent("write"));
-    expect(mocks.setRolePermissions).toHaveBeenCalledWith("staff-role", { master_stores: "write" });
+    expect(mocks.replacePermissions).toHaveBeenCalledExactlyOnceWith("staff-role", menus, { "roles-menu": "write", "stores-menu": "write" });
     expect(client.getQueryState(["role-permissions", "source-role"])?.isInvalidated).toBe(false);
   });
 
-  it("explicitly refreshes a still-fresh cache and keeps the refresh callback stable", async () => {
-    renderSession({ showRoles: false });
-    await waitFor(() => expect(mocks.refreshCallbacks).toHaveLength(2));
-    expect(mocks.getRolePermissions).not.toHaveBeenCalled();
-    serverPermissions["staff-role"] = { master_stores: "write" };
-    fireEvent.click(screen.getByRole("button", { name: "Refresh current access" }));
-    await waitFor(() => expect(screen.getByTestId("store-access")).toHaveTextContent("write"));
-    expect(mocks.getRolePermissions).toHaveBeenCalledWith("staff-role");
-    expect(mocks.refreshCallbacks).toHaveLength(2);
-  });
-
-  it("keeps access denied when the explicit permission refresh fails", async () => {
-    renderSession({ showRoles: false });
-    await waitFor(() => expect(mocks.refreshCallbacks).toHaveLength(2));
-    mocks.getRolePermissions.mockRejectedValue(new Error("unavailable"));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh current access" }));
-    await waitFor(() => expect(mocks.getRolePermissions).toHaveBeenCalledWith("staff-role"));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Refresh current access" })).toBeEnabled());
-    expect(screen.getByTestId("store-access")).toHaveTextContent("hidden");
-  });
-
-  it("does not fetch permissions without a signed-in role", async () => {
-    renderSession({ showRoles: false, signedIn: false });
-    fireEvent.click(screen.getByRole("button", { name: "Refresh current access" }));
-    expect(mocks.getRolePermissions).not.toHaveBeenCalled();
-    expect(screen.getByTestId("store-access")).toHaveTextContent("hidden");
+  it("keeps View immutable even for a writer", async () => {
+    renderSession("/master/roles/staff-role");
+    expect(await screen.findByRole("heading", { name: "Detail Role" })).toBeVisible();
+    screen.getAllByRole("radio").forEach(radio => expect(radio).toBeDisabled());
+    expect(screen.queryByRole("button", { name: "Simpan Perubahan" })).not.toBeInTheDocument();
+    expect(mocks.save).not.toHaveBeenCalled();
   });
 });

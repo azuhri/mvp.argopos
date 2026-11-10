@@ -33,9 +33,10 @@ import StoreManagement from "./pages/master/StoreManagement";
 import KoperasiDetailPage from "./pages/master/KoperasiDetailPage";
 import PaymentApprovalPage from "./pages/master/PaymentApprovalPage";
 import Payments from "./pages/Payments";
-import CommerceCatalog from "./pages/CommerceCatalog";
+import { CommerceLocationGate } from "./components/commerce/CommerceLocationGate";
 import PaymentDetail from "./pages/PaymentDetail";
 import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentMaintenance from "./pages/PaymentMaintenance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,16 +51,18 @@ const App = () => (
           <Routes>
             {/* Public Commerce Routes */}
             <Route path="/" element={<Navigate to="/commerce" replace />} />
-            <Route path="/:locationCode/commerce" element={<CommerceCatalog />} />
-            <Route path="/:locationCode/commerce/cart" element={<StoreCart />} />
-            <Route path="/:locationCode/commerce/product/:productId" element={<StoreProductDetail />} />
+            <Route path="/:locationCode/commerce" element={<CommerceLocationGate><Store /></CommerceLocationGate>} />
+            <Route path="/:locationCode/commerce/cart" element={<CommerceLocationGate><StoreCart /></CommerceLocationGate>} />
+            <Route path="/:locationCode/commerce/product/:productId" element={<CommerceLocationGate><StoreProductDetail /></CommerceLocationGate>} />
             <Route path="/:locationCode/commerce/payment/:transactionId" element={<PaymentDetail />} />
             <Route path="/:locationCode/commerce/payment-success/:transactionId" element={<PaymentSuccess />} />
+            <Route path="/:locationCode/commerce/payment-maintenance/:transactionId?" element={<PaymentMaintenance />} />
 
             {/* Legacy Commerce Routes */}
-            <Route path="/commerce" element={<Store />} />
-            <Route path="/commerce/cart" element={<StoreCart />} />
-            <Route path="/commerce/product/:productId" element={<StoreProductDetail />} />
+            <Route path="/commerce" element={<CommerceLocationGate />} />
+            <Route path="/commerce/locations" element={<CommerceLocationGate forceSelection />} />
+            <Route path="/commerce/cart" element={<CommerceLocationGate />} />
+            <Route path="/commerce/product/:productId" element={<CommerceLocationGate />} />
 
             <Route path="/transactions/:transactionId/approve-payment" element={
               <ProtectedRoute menuKey="transactions" requireWrite>
@@ -73,19 +76,19 @@ const App = () => (
 
             {/* Protected Dashboard Routes */}
             <Route path="/dashboard" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="dashboard">
                 <Index />
               </ProtectedRoute>
             } />
 
             <Route path="/dashboard/products" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_products">
                 <ProductPage />
               </ProtectedRoute>
             } />
 
             <Route path="/transactions" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="transactions">
                 <TransactionPage />
               </ProtectedRoute>
             } />
@@ -95,13 +98,13 @@ const App = () => (
               </ProtectedRoute>
             } />
             <Route path="/payments" element={
-              <ProtectedRoute menuKey="transactions">
+              <ProtectedRoute menuKey="payments">
                 <Payments />
               </ProtectedRoute>
             } />
 
             <Route path="/customers" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="customers">
                 <Customers />
               </ProtectedRoute>
             } />
@@ -109,25 +112,25 @@ const App = () => (
             <Route path="/store" element={<Navigate to="/master/store" replace />} />
 
             <Route path="/master/store" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="koperasi">
                 <KoperasiPage />
               </ProtectedRoute>
             } />
 
             <Route path="/master/store/:locationId" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey={["koperasi", "master_stores"]}>
                 <KoperasiDetailPage />
               </ProtectedRoute>
             } />
 
             <Route path="/master/store/:locationId/payment-approval" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="transactions" requireWrite>
                 <PaymentApprovalPage />
               </ProtectedRoute>
             } />
 
             <Route path="/products" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_products">
                 <Products />
               </ProtectedRoute>
             } />
@@ -146,60 +149,76 @@ const App = () => (
 
             <Route path="/store/cart" element={
               <ProtectedRoute>
-                <StoreCart />
+                <Navigate to="/commerce/cart" replace />
               </ProtectedRoute>
             } />
 
             <Route path="/master/users" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_users">
                 <MasterUserManagement />
               </ProtectedRoute>
             } />
 
             <Route path="/master/locations" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_locations">
                 <MasterLocations />
               </ProtectedRoute>
             } />
 
+            <Route path="/master/roles/new" element={
+              <ProtectedRoute menuKey="master_roles" requireWrite>
+                <MasterRoles mode="create" />
+              </ProtectedRoute>
+            } />
+            <Route path="/master/roles/:roleId/edit" element={
+              <ProtectedRoute menuKey="master_roles" requireWrite>
+                <MasterRoles mode="edit" />
+              </ProtectedRoute>
+            } />
+            <Route path="/master/roles/:roleId" element={
+              <ProtectedRoute menuKey="master_roles">
+                <MasterRoles mode="view" />
+              </ProtectedRoute>
+            } />
+
             <Route path="/master/roles" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_roles">
                 <MasterRoles />
               </ProtectedRoute>
             } />
 
             <Route path="/master/stocks" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_stock">
                 <MasterStocks />
               </ProtectedRoute>
             } />
 
             <Route path="/master/stock-mutations" element={
-              <ProtectedRoute menuKey="master_stock_mutations" requireWrite>
+              <ProtectedRoute menuKey="master_stock_mutations">
                 <StockMutations />
               </ProtectedRoute>
             } />
 
             <Route path="/master/stores" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_stores">
                 <StoreManagement />
               </ProtectedRoute>
             } />
 
             <Route path="/master/products" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_products">
                 <MasterProducts />
               </ProtectedRoute>
             } />
 
             <Route path="/master/products/create" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_products" requireWrite>
                 <CreateProduct />
               </ProtectedRoute>
             } />
 
             <Route path="/master/categories" element={
-              <ProtectedRoute>
+              <ProtectedRoute menuKey="master_products">
                 <MasterCategories />
               </ProtectedRoute>
             } />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertCircle,
@@ -17,12 +17,12 @@ import {
   Tag,
   type LucideIcon,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
 import CardProduct from "@/components/shared/CardProduct";
 import { Button } from "@/components/ui/button";
 import { ProductCardSkeleton } from "@/components/shared/SkeletonLoader";
-import { addToCart, getCartSummary, removeFromCart } from "@/lib/storefront";
+import { addToCart, getCartSummary } from "@/lib/storefront";
 import { toast } from "sonner";
 import { config } from "@/lib/config";
 import { locationService } from "@/lib/services/locationService";
@@ -32,6 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatCurrency } from "@/lib/mockData";
 import { PendingPaymentSection } from "@/components/commerce/PendingPaymentSection";
+import { getConfirmedCommerceLocation, getPreferredCommerceLocation } from "@/lib/commerceLocation";
 
 const STORE_HERO_IMAGE = `${import.meta.env.BASE_URL}image/storefront-frozen-food-hero.png`;
 
@@ -134,12 +135,9 @@ function StatCard({
 }
 
 export default function Store() {
-  const [shouldRedirectToAnalytics] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return Boolean(localStorage.getItem("umami.auth"));
-  });
+  const { locationCode: selectedLocationCode = "" } = useParams<{ locationCode: string }>();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [selectedLocationCode, setSelectedLocationCode] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [onlyDiscount, setOnlyDiscount] = useState(false);
   const [onlyReadyStock, setOnlyReadyStock] = useState(false);
@@ -156,21 +154,6 @@ export default function Store() {
     message: string;
   } | null>(null);
 
-  const handleClearCart = useCallback(() => {
-    const currentItems = getCartSummary().items;
-    if (currentItems.length === 0) return;
-
-    currentItems.forEach((item) => removeFromCart(item.product.id));
-    toast.success("Keranjang dikosongkan");
-    window.dispatchEvent(new Event("storage"));
-  }, []);
-
-  useEffect(() => {
-    if (shouldRedirectToAnalytics) {
-      window.location.replace("/analytics");
-    }
-  }, [shouldRedirectToAnalytics]);
-
   // Fetch list of stores
   const { data: storeList, isLoading: storesLoading } = useQuery({
     queryKey: ["stores"],
@@ -178,32 +161,7 @@ export default function Store() {
       const listStores = await locationService.getListStore();
       return listStores as Location[];
     },
-    enabled: !shouldRedirectToAnalytics,
   });
-
-  useEffect(() => {
-    const saved = localStorage.getItem("selectedLocationCode");
-    if (saved) {
-      setSelectedLocationCode(saved);
-    }
-  }, []);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("selectedLocationCode");
-    if (storeList && storeList.length > 0 && !selectedLocationCode) {
-      setSelectedLocationCode(saved ?? storeList[0].location_code);
-    }
-  }, [storeList, selectedLocationCode]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("selectedLocationCode");
-    if (selectedLocationCode && selectedLocationCode !== saved) {
-      handleClearCart();
-    }
-    if (selectedLocationCode) {
-      localStorage.setItem("selectedLocationCode", selectedLocationCode);
-    }
-  }, [handleClearCart, selectedLocationCode]);
 
   const { data: storeData, error, isLoading: storeDataLoading } = useQuery({
     queryKey: ["store", selectedLocationCode],
@@ -216,7 +174,7 @@ export default function Store() {
       const result = await response.json();
       return result.data as StoreData;
     },
-    enabled: !!selectedLocationCode && !shouldRedirectToAnalytics,
+    enabled: !!selectedLocationCode,
   });
 
   const { data: operationalStatus } = useQuery({
@@ -229,7 +187,7 @@ export default function Store() {
       }
       return response.data as OperationalStatus;
     },
-    enabled: !!storeData?.location_id && !shouldRedirectToAnalytics,
+    enabled: !!storeData?.location_id,
     refetchInterval: 60000, // Check every minute
   });
 
@@ -317,6 +275,10 @@ export default function Store() {
     productStock: number,
     tax_percentage: number,
   ) => {
+    if (getConfirmedCommerceLocation() !== selectedLocationCode || getPreferredCommerceLocation() !== selectedLocationCode) {
+      navigate(`/commerce/locations?location=${encodeURIComponent(selectedLocationCode)}`);
+      return;
+    }
     if (operationalStatus && !operationalStatus.is_open) {
       setStoreInfo({
         storeName: storeData?.location_name || "Toko",
@@ -360,12 +322,8 @@ export default function Store() {
     toast.success(`${productName} ditambahkan ke keranjang`);
   };
 
-  const handleStoreChange = (locationCode: string) => {
-    setSelectedLocationCode(locationCode);
-    setSearch("");
-    setSelectedCategories([]);
-    setOnlyDiscount(false);
-    setOnlyReadyStock(false);
+  const handleStoreChange = (code: string) => {
+    navigate(`/commerce/locations?location=${encodeURIComponent(code)}`);
   };
 
   const openModalInfoStore = () => {
@@ -386,10 +344,6 @@ export default function Store() {
         : [...current, category]
     );
   };
-
-  if (shouldRedirectToAnalytics) {
-    return null;
-  }
 
   return (
     <AppLayoutCommerce
@@ -510,7 +464,7 @@ export default function Store() {
           )}
         </div>
 
-        <PendingPaymentSection />
+        <PendingPaymentSection locationCode={selectedLocationCode} />
 
         <div className="commerce-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 lg:hidden">
           <button type="button" className="commerce-pill h-9 shrink-0 px-4" onClick={() => setMobileFiltersOpen(true)}>

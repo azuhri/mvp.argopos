@@ -68,3 +68,19 @@ describe("LocationService.getAllLocations", () => {
     expect(locations.at(-1)?.id).toBe("location-124");
   });
 });
+
+describe("public store visibility", () => {
+  it.each([{ data: null }, { data: [] as Location[] }])("accepts an empty public catalog ($data)", async ({ data }) => {
+    vi.spyOn(apiClient, "getListStore").mockResolvedValue({ success: true, data });
+    await expect(new LocationService().getListStore()).resolves.toEqual([]);
+  });
+  it("excludes inactive locations", async () => {
+    const active = { ...makeLocation(1), status: "active" };
+    vi.spyOn(apiClient, "getListStore").mockResolvedValue({ success: true, data: [active, { ...makeLocation(2), status: "inactive" }] });
+    await expect(new LocationService().getListStore()).resolves.toEqual([active]);
+  });
+  it("preserves API errors", async () => {
+    vi.spyOn(apiClient, "getListStore").mockResolvedValue({ success: false });
+    await expect(new LocationService().getListStore()).rejects.toThrow("Failed to get list store");
+  });
+});

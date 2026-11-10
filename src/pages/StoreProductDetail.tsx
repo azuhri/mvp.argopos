@@ -18,6 +18,7 @@ import {
   removeFromCart
 } from "@/lib/storefront";
 import { formatCurrency } from "@/lib/mockData";
+import { getConfirmedCommerceLocation, getPreferredCommerceLocation } from "@/lib/commerceLocation";
 import { config } from "@/lib/config";
 import { toast } from "sonner";
 import { AppLayoutCommerce } from "@/components/layout/AppLayoutCommerce";
@@ -76,6 +77,17 @@ interface ProductDetail {
 // All hooks must be at the top level
 export default function StoreProductDetail() {
   const { locationCode, productId } = useParams<{ locationCode: string; productId: string }>();
+  const mounted = useRef(true);
+  const checkoutNavigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (checkoutNavigationTimer.current) clearTimeout(checkoutNavigationTimer.current);
+    };
+  }, []);
+  const isShoppingContextCurrent = () => mounted.current && Boolean(locationCode) &&
+    getConfirmedCommerceLocation() === locationCode && getPreferredCommerceLocation() === locationCode;
 
   // State hooks - all at the top
   const [quantity, setQuantity] = useState(1);
@@ -236,6 +248,7 @@ export default function StoreProductDetail() {
   };
 
   const handleAddToCart = async () => {
+    if (!isShoppingContextCurrent()) return;
     if (product.isOutOfStock) {
       toast.error("Produk tidak tersedia (stok habis)");
       return;
@@ -243,6 +256,10 @@ export default function StoreProductDetail() {
 
     setIsAddingToCart(true);
     await new Promise(resolve => setTimeout(resolve, 500));
+    if (!isShoppingContextCurrent()) {
+      if (mounted.current) setIsAddingToCart(false);
+      return;
+    }
 
     const result = addToCart(product.id, quantity, {
       name: product.name,
@@ -265,6 +282,7 @@ export default function StoreProductDetail() {
   };
 
   const handleBuyNow = async () => {
+    if (!isShoppingContextCurrent()) return;
     if (product.isOutOfStock) {
       toast.error("Produk tidak tersedia (stok habis)");
       return;
@@ -272,6 +290,10 @@ export default function StoreProductDetail() {
 
     setIsBuyingNow(true);
     await new Promise(resolve => setTimeout(resolve, 500));
+    if (!isShoppingContextCurrent()) {
+      if (mounted.current) setIsBuyingNow(false);
+      return;
+    }
 
     if (items.length > 0) {
       items.forEach(item => removeFromCart(item.productId));
@@ -291,8 +313,8 @@ export default function StoreProductDetail() {
 
     if (result.success) {
       toast.success("Produk ditambahkan, mengalihkan ke checkout...");
-      setTimeout(() => {
-        window.location.href = `/${locationCode}/commerce/cart`;
+      checkoutNavigationTimer.current = setTimeout(() => {
+        if (isShoppingContextCurrent()) window.location.href = `/${locationCode}/commerce/cart`;
       }, 1000);
     } else {
       toast.error(result.message);
@@ -301,6 +323,7 @@ export default function StoreProductDetail() {
   };
 
   const handleClearCart = () => {
+    if (!isShoppingContextCurrent()) return;
     if (items.length > 0) {
       items.forEach(item => removeFromCart(item.productId));
       toast.success("Keranjang dikosongkan");

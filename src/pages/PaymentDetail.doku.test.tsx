@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaymentSession } from "@/lib/services/paymentService";
 import PaymentDetail from "./PaymentDetail";
+import PaymentMaintenance from "./PaymentMaintenance";
 
 const mocks = vi.hoisted(() => ({
   getStatus: vi.fn(), refreshStatus: vi.fn(), createCheckout: vi.fn(), removePendingPayment: vi.fn(),
@@ -71,10 +72,27 @@ function renderDetail(search = "?doku_return=1&status=SUCCESS", cachedStatus?: P
     amount: 50000, expires_at: new Date(Date.now() + 3600000).toISOString(),
   });
   clients.push(client);
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/STORE/commerce/payment/order-one${search}`]}><Routes><Route path="/:locationCode/commerce/payment/:transactionId" element={<PaymentDetail />} /><Route path="/:locationCode/commerce/payment-success/:transactionId" element={<p>Halaman pembayaran berhasil</p>} /></Routes></MemoryRouter></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/STORE/commerce/payment/order-one${search}`]}><Routes><Route path="/:locationCode/commerce/payment/:transactionId" element={<PaymentDetail />} /><Route path="/:locationCode/commerce/payment-success/:transactionId" element={<p>Halaman pembayaran berhasil</p>} /><Route path="/:locationCode/commerce/payment-maintenance/:transactionId" element={<PaymentMaintenance />} /></Routes></MemoryRouter></QueryClientProvider>);
 }
 
 describe("DOKU payment status and transaction synchronization", () => {
+  it("replaces old waiting-payment detail with the full maintenance page for uncertain creation", async () => {
+    // Older backends can still expose WAITING_TO_PAYMENT on the commerce order.
+    // Persisted creation failure is enough to select the correct page.
+    const uncertain: PaymentSession = {
+      payment_id: "attempt-one", transaction_id: "order-one", invoice_number: "CEL-ONE", status: "PENDING", amount: 50000,
+      expires_at: new Date(Date.now() + 3600000).toISOString(), verification_pending: true, creation_state: "UNCERTAIN",
+    };
+    mocks.getStatus.mockResolvedValue(uncertain);
+    mocks.refreshStatus.mockResolvedValue({ session: uncertain, checked: false });
+    renderDetail("");
+    expect(await screen.findByRole("heading", { level: 1, name: "Pembayaran sedang maintenance" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Detail pembayaran" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Ringkasan transaksi")).not.toBeInTheDocument();
+    expect(screen.queryByText("Waiting Payment")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("payment-countdown")).not.toBeInTheDocument();
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
   it("rechecks a cached pending payment immediately when reopening a paid order", async () => {
     transactionStatus = "PAID";
     paymentStatus = "PAID";

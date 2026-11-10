@@ -55,43 +55,12 @@ export default function Customers() {
     ? fullUser.assigned_stores[0].id
     : null;
 
-  // Fetch transactions for the assigned store to get customers
-  const { data: transactionsData, isLoading } = useQuery({
-    queryKey: ['store-transactions', assignedStoreId],
-    queryFn: () => assignedStoreId
-      ? storeService.getStoreTransactions(assignedStoreId, { page: 1, page_size: 1000 })
-      : Promise.resolve({ transactions: [], total: 0 }),
+  // The customer permission exposes only the customer projection, not raw orders.
+  const { data: customers = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['store-customers', assignedStoreId],
+    queryFn: () => storeService.getStoreCustomers(assignedStoreId!),
     enabled: !!assignedStoreId,
   });
-
-  // Extract unique customers from transactions
-  const customers = (() => {
-    if (!transactionsData?.transactions) return [];
-    const uniqueCustomers = new Map<string, Customer>();
-
-    transactionsData.transactions.forEach((trx: Transaction) => {
-      if (trx.customer_id && trx.customer_name) {
-        const customerId = trx.customer_id;
-        if (!uniqueCustomers.has(customerId)) {
-          // Determine customer type based on employee_code
-          const isInternal = !!trx.customer_employee_code;
-          uniqueCustomers.set(customerId, {
-            id: customerId,
-            name: trx.customer_name,
-            email: trx.customer_email || '',
-            phone: '', // Transaction doesn't have phone
-            no_wa: trx.customer_no_wa,
-            employee_code: trx.customer_employee_code,
-            type: isInternal ? 'internal' : 'external',
-            status: 'active',
-            created_at: trx.created_at,
-          });
-        }
-      }
-    });
-
-    return Array.from(uniqueCustomers.values());
-  })();
 
   // Helper function to open WhatsApp
   const handleWhatsAppClick = (noWa?: string) => {
@@ -161,6 +130,11 @@ export default function Customers() {
       {isLoading ? (
         <GlassCard className="p-4">
           <p className="text-center text-muted-foreground">Loading...</p>
+        </GlassCard>
+      ) : error ? (
+        <GlassCard className="p-4">
+          <p role="alert">Data pelanggan belum dapat dimuat.</p>
+          <Button variant="outline" onClick={() => void refetch()}>Coba lagi</Button>
         </GlassCard>
       ) : !assignedStoreId ? (
         <GlassCard className="p-4">

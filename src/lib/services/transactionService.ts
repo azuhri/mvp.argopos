@@ -12,6 +12,11 @@ export interface TransactionListResult {
 }
 
 class TransactionService {
+  async markReadyPickup(transactionId: string): Promise<void> {
+    const response = await apiClient.markTransactionReadyPickup(transactionId);
+    if (!response.success) throw new Error(response.message || "Gagal menandai pesanan siap diambil");
+  }
+
   async listTransactions(params: TransactionListParams = {}): Promise<TransactionListResult> {
     const response = await apiClient.listTransactions(params);
 

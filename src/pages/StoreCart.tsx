@@ -23,7 +23,9 @@ import { GlassCard } from "@/components/shared/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { getCartSummary, updateCartQty, removeFromCart, clearCart } from "@/lib/storefront";
+import { getCart, updateCartQty, updateCartStock, removeFromCart, clearCart } from "@/lib/storefront";
+import { buildCheckoutCart } from "@/lib/checkoutCart";
+import { getConfirmedCommerceLocation, getPreferredCommerceLocation } from "@/lib/commerceLocation";
 import { formatCurrency } from "@/lib/mockData";
 import { config } from "@/lib/config";
 import { toast } from "sonner";
@@ -35,8 +37,9 @@ import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { upsertPendingPayment } from "@/lib/pendingPaymentStorage";
-import { paymentService, validatedCheckoutUrl } from "@/lib/services/paymentService";
+import { openDokuCheckout, PaymentRequestError, paymentService } from "@/lib/services/paymentService";
 import { getStorePaymentSettings, storePaymentSettingsQueryKey } from "@/lib/services/storePaymentSettingsService";
+import { useVoucherQuote } from "@/hooks/useVoucherQuote";
 import { DokuMethodDialog } from "@/components/commerce/DokuMethodDialog";
 
 interface ProductStock {
@@ -45,6 +48,8 @@ interface ProductStock {
   base_price: number;
   discount_price: number;
   final_price: number;
+  tax_percentage?: number;
+  status?: boolean;
   master_product: {
     id: string;
     product_name: string;
@@ -102,7 +107,8 @@ interface CreateTransactionRequest {
     qty: number;
   }>;
   customer_name?: string;
-  employee_code?: string;
+  customer_type?: "INTERNAL" | "EXTERNAL";
+  voucher_code?: string;
   no_wa?: string;
   email?: string;
 }
@@ -164,7 +170,14 @@ function PaymentMethodIcon({ paymentType }: { paymentType: string }) {
 export default function StoreCart() {
   const { locationCode } = useParams<{ locationCode: string }>();
   const navigate = useNavigate();
-  const [cart, setCart] = useState(getCartSummary());
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const isShoppingContextCurrent = () => mounted.current && Boolean(locationCode) &&
+    getConfirmedCommerceLocation() === locationCode && getPreferredCommerceLocation() === locationCode;
+  const [storedCart, setStoredCart] = useState(getCart);
   const [updating, setUpdating] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
   const [dokuMethodDialogOpen, setDokuMethodDialogOpen] = useState(false);
@@ -180,7 +193,7 @@ export default function StoreCart() {
 
   // Customer information form state
   const [isInternalCustomer, setIsInternalCustomer] = useState(false);
-  const [employeeCodeOrNIK, setEmployeeCodeOrNIK] = useState('');
+  const [internalPhone, setInternalPhone] = useState('');
   const [isValidatingEmployee, setIsValidatingEmployee] = useState(false);
   const [isEmployeeValid, setIsEmployeeValid] = useState<boolean | null>(null);
   const [externalCustomer, setExternalCustomer] = useState({
@@ -194,6 +207,8 @@ export default function StoreCart() {
   const [isOpeningDokuCheckout, setIsOpeningDokuCheckout] = useState(false);
   const checkoutSubmitting = useRef(false);
   const employeeValidationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const employeeValidationVersion = useRef(0);
+  const [employeeValidationError, setEmployeeValidationError] = useState("");
   const externalValidationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Track image loading states for cart items
@@ -276,20 +291,6 @@ export default function StoreCart() {
     refetchInterval: 60000, // Check every minute
   });
 
-  // Update cart summary when storeData loads
-  useEffect(() => {
-    if (storeData) {
-      const products = storeData.product_stores.map(p => ({
-        id: p.id,
-        name: p.master_product.product_name,
-        price: p.base_price,
-        stock: p.stock,
-      }));
-      setCart(getCartSummary(products));
-    }
-  }, [storeData]);
-
-
   const findProductById = (productId: string) => {
     return storeData?.product_stores.find(p => p.id === productId);
   }
@@ -297,15 +298,7 @@ export default function StoreCart() {
   // Update cart summary when localStorage changes
   useEffect(() => {
     const handleStorageChange = () => {
-      if (storeData) {
-        const products = storeData.product_stores.map(p => ({
-          id: p.id,
-          name: p.master_product.product_name,
-          price: p.base_price,
-          stock: p.stock,
-        }));
-        setCart(getCartSummary(products));
-      }
+      setStoredCart(getCart());
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -315,9 +308,12 @@ export default function StoreCart() {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
     };
-  }, [storeData]);
+  }, []);
 
+  const cart = useMemo(() => buildCheckoutCart(storedCart, storeData?.product_stores, config.endpointUrl), [storedCart, storeData]);
   const { items, total, totalItems } = cart;
+  const voucher = useVoucherQuote(storeData?.location_id ?? "", items.map((item) => ({ product_stock_id: item.productId, qty: item.qty })), total, cart.isReady);
+  const payableTotal = voucher.quote?.payable_amount ?? total;
   const totalTax = items.reduce((sum, item) => {
     const priceWithTax = item.productPrice || item.product.price || 0;
     const taxPercentage = item.tax_percentage || 0;
@@ -326,6 +322,7 @@ export default function StoreCart() {
   }, 0);
 
   const handleUpdateQty = (productId: string, newQty: number) => {
+    if (!isShoppingContextCurrent()) return;
     const product = findProductById(productId);
 
     if (newQty < 0) return;
@@ -341,6 +338,7 @@ export default function StoreCart() {
         toast.error("Stok tidak mencukupi");
         return;
       }
+      if (product) updateCartStock(productId, product.stock);
       const result = updateCartQty(productId, newQty);
       if (!result.success) {
         toast.error(result.message);
@@ -352,63 +350,57 @@ export default function StoreCart() {
   };
 
   const refreshCart = () => {
-    if (storeData) {
-      const products = storeData.product_stores.map(p => ({
-        id: p.id,
-        name: p.master_product.product_name,
-        price: p.base_price,
-        stock: p.stock,
-      }));
-      setCart(getCartSummary(products));
-    }
+    setStoredCart(getCart());
+  };
+
+  const handleRemoveUnavailable = () => {
+    if (!isShoppingContextCurrent()) return;
+    cart.unavailableItems.forEach((item) => removeFromCart(item.productId));
+    refreshCart();
+    window.dispatchEvent(new Event("storage"));
+    toast.success("Produk yang tidak tersedia dihapus dari keranjang");
   };
 
   const handleClearCart = () => {
+    if (!isShoppingContextCurrent()) return;
     clearCart();
     refreshCart();
     toast.success("Keranjang dikosongkan");
   };
 
-  // Validate employee code or NIK
-  const validateEmployee = async (code: string) => {
-    if (!code.trim()) {
-      setIsEmployeeValid(null);
-      return;
-    }
-
-    setIsValidatingEmployee(true);
-
+  // A response can only validate the phone that was submitted, never a later edit.
+  const validateEmployee = async (noWA: string, version: number) => {
     try {
       const response = await fetch(`${config.apiUrl}/users/check-valid-employee`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          employee_code_or_nik: code.trim()
-        })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ no_wa: noWA.trim() }),
       });
-
       const result = await response.json();
-
-      if (result.success && result.is_valid) {
-        setIsEmployeeValid(true);
-      } else {
-        setIsEmployeeValid(false);
-      }
+      if (version !== employeeValidationVersion.current) return;
+      const valid = response.ok && result.success === true && result.is_valid === true;
+      setIsEmployeeValid(valid);
+      setEmployeeValidationError(valid ? "" : response.status >= 500
+        ? "Validasi nomor belum tersedia. Coba masukkan ulang nomor Anda."
+        : "Nomor belum terdaftar atau data tidak unik. Periksa nomor atau hubungi admin.");
     } catch {
+      if (version !== employeeValidationVersion.current) return;
       setIsEmployeeValid(false);
+      setEmployeeValidationError("Validasi nomor belum tersedia. Coba masukkan ulang nomor Anda.");
     } finally {
-      setIsValidatingEmployee(false);
+      if (version === employeeValidationVersion.current) setIsValidatingEmployee(false);
     }
   };
 
-  // Handle employee code/NIK input change
-  const handleEmployeeCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInternalPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setEmployeeCodeOrNIK(value);
+    setInternalPhone(value);
+    setIsEmployeeValid(null);
+    setEmployeeValidationError("");
+    const version = ++employeeValidationVersion.current;
     if (employeeValidationTimer.current) clearTimeout(employeeValidationTimer.current);
-    employeeValidationTimer.current = setTimeout(() => validateEmployee(value), 800);
+    setIsValidatingEmployee(Boolean(value.trim()));
+    if (value.trim()) employeeValidationTimer.current = setTimeout(() => void validateEmployee(value, version), 800);
   };
 
   // Validate external customer by no_wa
@@ -458,6 +450,7 @@ export default function StoreCart() {
 
   useEffect(() => {
     return () => {
+      employeeValidationVersion.current += 1;
       if (employeeValidationTimer.current) clearTimeout(employeeValidationTimer.current);
       if (externalValidationTimer.current) clearTimeout(externalValidationTimer.current);
     };
@@ -465,7 +458,15 @@ export default function StoreCart() {
 
   // Create transaction
   const handleCreateTransaction = async (bypassPickupTimeCheck = false, dokuConfirmed = false) => {
-    if (checkoutSubmitting.current) return;
+    if (checkoutSubmitting.current || !isShoppingContextCurrent()) return;
+    if (!cart.isReady) {
+      toast.error("Periksa produk yang tidak tersedia atau jumlah stok di keranjang sebelum melanjutkan.");
+      return;
+    }
+    if (voucher.pending || voucher.needsValidation) {
+      toast.error("Terapkan ulang atau hapus kode voucher sebelum melanjutkan.");
+      return;
+    }
     if (paymentSettingsUnavailable) {
       toast.error("Pembayaran outlet belum tersedia. Periksa kembali beberapa saat lagi.");
       return;
@@ -503,7 +504,7 @@ export default function StoreCart() {
 
     if (isInternalCustomer) {
       if (!isEmployeeValid) {
-        toast.error('Validasi employee terlebih dahulu');
+        toast.error('Masukkan nomor WhatsApp / ponsel karyawan yang terdaftar');
         return;
       }
     } else {
@@ -538,6 +539,9 @@ export default function StoreCart() {
 
     try {
       const currentSettings = await paymentSettingsQuery.refetch();
+      // Changing the shared cart owner unmounts this page, but does not cancel
+      // this promise. Never submit the previous store after that change.
+      if (!isShoppingContextCurrent()) return;
       if (currentSettings.error || !currentSettings.data ||
           (currentSettings.data.payment_mode === "DOKU") !== (selectedPaymentMethod === "DOKU") ||
           (currentSettings.data.payment_mode === "DOKU" && !currentSettings.data.doku_available)) {
@@ -586,10 +590,12 @@ export default function StoreCart() {
         transactionRequest.carts = carts.map(({ product_stock_id, qty }) => ({ product_stock_id, qty }));
       }
 
+      if (voucher.quote) transactionRequest.voucher_code = voucher.quote.voucher_code;
+
       // Add customer information based on type
       if (isInternalCustomer) {
-        transactionRequest.customer_name = employeeCodeOrNIK.trim();
-        transactionRequest.employee_code = employeeCodeOrNIK.trim();
+        transactionRequest.customer_type = "INTERNAL";
+        transactionRequest.no_wa = internalPhone.trim();
       } else {
         transactionRequest.customer_name = externalCustomer.name.trim();
         transactionRequest.no_wa = externalCustomer.nowa.trim();
@@ -597,6 +603,7 @@ export default function StoreCart() {
       }
 
       // Create transaction via API
+      if (!isShoppingContextCurrent()) return;
       const response = await fetch(`${config.apiUrl}/transactions`, {
         method: 'POST',
         credentials: transactionRequest.payment_provider === "DOKU" ? "include" : "same-origin",
@@ -606,7 +613,14 @@ export default function StoreCart() {
         body: JSON.stringify(transactionRequest)
       });
 
-      if (!response.ok) throw new Error("Gagal membuat transaksi");
+      if (!response.ok) {
+        if (transactionRequest.payment_provider === "DOKU" && response.status >= 500) {
+          if (isShoppingContextCurrent()) navigate(`/${locationCode}/commerce/payment-maintenance`, { replace: true });
+          return;
+        }
+        const failure = await response.json().catch(() => null);
+        throw new Error(failure?.error?.message || "Gagal membuat transaksi");
+      }
 
       const result = await response.json() as {
         success?: boolean;
@@ -628,31 +642,41 @@ export default function StoreCart() {
             }
           }
 
-          if (!isPersisted) {
+          if (!isPersisted && isShoppingContextCurrent()) {
             toast.warning(
               "Transaksi berhasil dibuat, tetapi pemulihan pembayaran belum tersimpan. Selesaikan pembayaran pada halaman berikutnya.",
             );
           }
         }
 
+        // The order may have committed while another tab changed stores. Keep
+        // its recovery reference above, but leave the new cart/navigation alone.
+        if (!isShoppingContextCurrent()) return;
         const paymentPath = `/${locationCode}/commerce/payment/${result.data.id}`;
         if (transactionRequest.payment_provider === "DOKU") {
           setIsOpeningDokuCheckout(true);
           clearCart();
+          let destination = `/${locationCode}/commerce/payment-maintenance/${result.data.id}`;
           try {
             const payment = await paymentService.createCheckout(result.data.id);
+            if (!isShoppingContextCurrent()) return;
+            if (payment.review_required) destination = paymentPath;
+            else if (payment.status === "PAID") destination = `/${locationCode}/commerce/payment-success/${result.data.id}`;
             if (payment.status === "PENDING" && payment.checkout_url && !payment.verification_pending &&
                 !payment.review_required && !["CREATING", "UNCERTAIN"].includes(payment.creation_state || "") &&
                 Date.parse(payment.expires_at) > Date.now()) {
-              const checkoutUrl = validatedCheckoutUrl(payment.checkout_url);
-              window.location.assign(checkoutUrl);
+              openDokuCheckout(result.data.id, payment.checkout_url);
               return;
             }
-          } catch {
-            toast.warning("Pesanan sudah dibuat. Periksa status pembayaran pada detail transaksi sebelum mencoba kembali.");
+          } catch (error) {
+            if (error instanceof PaymentRequestError && [401, 403, 404].includes(error.status)) {
+              destination = paymentPath;
+              if (isShoppingContextCurrent()) toast.error(error.message);
+            }
           }
+          if (!isShoppingContextCurrent()) return;
           setIsOpeningDokuCheckout(false);
-          navigate(paymentPath);
+          navigate(destination, { replace: true });
           return;
         }
 
@@ -660,13 +684,13 @@ export default function StoreCart() {
         clearCart();
         navigate(paymentPath);
       } else {
-        toast.error('Gagal membuat transaksi');
+        if (isShoppingContextCurrent()) toast.error('Gagal membuat transaksi');
       }
-    } catch {
-      toast.error('Gagal membuat transaksi');
+    } catch (error) {
+      if (isShoppingContextCurrent()) toast.error(error instanceof Error ? error.message : 'Gagal membuat transaksi');
     } finally {
       checkoutSubmitting.current = false;
-      setIsCreatingTransaction(false);
+      if (mounted.current) setIsCreatingTransaction(false);
     }
   };
 
@@ -699,11 +723,18 @@ export default function StoreCart() {
     if (!remainsAvailable) setSelectedPaymentMethod(null);
   }, [filteredPaymentMethods, selectedPaymentMethod, isDokuMode, paymentSettingsUnavailable]);
 
-  // Reset employee validation when switching customer type
-  useEffect(() => {
+  // Reset before rendering the new form, so a delayed effect cannot erase the
+  // customer's first input after switching types.
+  const handleCustomerTypeChange = (internal: boolean) => {
+    if (internal === isInternalCustomer) return;
+    employeeValidationVersion.current += 1;
+    if (employeeValidationTimer.current) clearTimeout(employeeValidationTimer.current);
+    setIsValidatingEmployee(false);
+    setEmployeeValidationError("");
     setIsEmployeeValid(null);
-    setEmployeeCodeOrNIK('');
-  }, [isInternalCustomer]);
+    setInternalPhone('');
+    setIsInternalCustomer(internal);
+  };
 
   if (storeLoading) {
     return (
@@ -803,6 +834,12 @@ export default function StoreCart() {
           </div>
         </div>
 
+        {!cart.isReady && <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-bold">Periksa kembali produk di keranjang</p>
+          <p className="mt-1">Ada produk yang tidak tersedia atau jumlahnya melebihi stok toko saat ini. Perbaiki keranjang sebelum memakai voucher atau melanjutkan pembayaran.</p>
+          {cart.unavailableItems.length > 0 && <Button type="button" variant="outline" className="mt-3" disabled={isCreatingTransaction} onClick={handleRemoveUnavailable}>Hapus produk tidak tersedia</Button>}
+        </div>}
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.8fr)]">
           <div className="space-y-4">
             <div className="commerce-panel overflow-hidden px-4 pb-1 pt-1 md:px-5">
@@ -868,9 +905,8 @@ export default function StoreCart() {
                               <p className="text-xs font-bold text-[#071a4f] md:text-sm">
                                 {formatCurrency(item.product.price)}
                               </p>
-                              <p className="text-xs font-semibold text-emerald-700">
-                                Stok tersedia: {findProductById(item.productId)?.stock ?? 0}
-                              </p>
+                              {item.issue ? <p className="mt-1 text-xs font-semibold text-red-700">{item.issue}</p> : <p className="text-xs font-semibold text-emerald-700">Stok tersedia: {item.product.stock}</p>}
+                              {!item.unavailable && item.product.stock > 0 && item.qty > item.product.stock && <Button type="button" variant="outline" size="sm" className="mt-2" disabled={isCreatingTransaction} onClick={() => handleUpdateQty(item.productId, item.product.stock)}>Sesuaikan menjadi {item.product.stock} item</Button>}
                               <div className="flex mt-2 items-start md:items-center">
                                 <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
                                   <Button
@@ -878,7 +914,7 @@ export default function StoreCart() {
                                     size="sm"
                                     className="h-7 w-7 rounded-sm p-0 text-[#071a4f] hover:bg-slate-200 md:h-8 md:w-8"
                                     onClick={() => handleUpdateQty(item.productId, item.qty - 1)}
-                                    disabled={updating === item.productId}
+                                    disabled={updating === item.productId || item.unavailable || isCreatingTransaction}
                                     aria-label={`Kurangi ${item.product.name}`}
                                   >
                                     {updating === item.productId ? (
@@ -895,7 +931,7 @@ export default function StoreCart() {
                                     size="sm"
                                     className="h-7 w-7 rounded-sm p-0 text-[#071a4f] hover:bg-slate-200 md:h-8 md:w-8"
                                     onClick={() => handleUpdateQty(item.productId, item.qty + 1)}
-                                    disabled={updating === item.productId || (item.product?.stock !== undefined && item.qty >= item.product.stock)}
+                                    disabled={updating === item.productId || item.unavailable || isCreatingTransaction || item.qty >= item.product.stock}
                                     aria-label={`Tambah ${item.product.name}`}
                                   >
                                     {updating === item.productId ? (
@@ -926,7 +962,7 @@ export default function StoreCart() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleUpdateQty(item.productId, 0)}
-                            disabled={updating === item.productId}
+                            disabled={updating === item.productId || isCreatingTransaction}
                             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border-red-100 bg-red-50 p-0 text-red-600 hover:border-red-200 hover:bg-red-100 hover:text-red-700 md:h-9 md:w-9"
                             aria-label={`Hapus ${item.product.name}`}
                           >
@@ -952,17 +988,18 @@ export default function StoreCart() {
 
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between text-sm font-semibold">
-                  <span className="text-slate-500">Subtotal ({totalItems} item)</span>
-                  <span>{formatCurrency(total - totalTax)}</span>
+                  <span className="text-slate-500">Subtotal {voucher.quote ? "termasuk pajak " : ""}({totalItems} item)</span>
+                  <span>{formatCurrency(voucher.quote?.base_amount ?? total - totalTax)}</span>
                 </div>
-                <div className="flex justify-between text-sm font-semibold text-slate-500">
+                {!voucher.quote && <div className="flex justify-between text-sm font-semibold text-slate-500">
                   <span>Pajak</span>
                   <span>+{formatCurrency(totalTax)}</span>
-                </div>
+                </div>}
+                {voucher.quote && <div className="flex justify-between gap-3 text-sm font-semibold text-emerald-700"><span>Voucher {voucher.quote.voucher_code}</span><span>−{formatCurrency(voucher.quote.discount_amount)}</span></div>}
                 <Separator />
                 <div className="flex justify-between text-lg font-extrabold">
                   <span>Total</span>
-                  <span className="text-[#071a4f]">{formatCurrency(total)}</span>
+                  <span className="text-[#071a4f]">{formatCurrency(payableTotal)}</span>
                 </div>
               </div>
             </GlassCard>
@@ -980,7 +1017,8 @@ export default function StoreCart() {
                 <div className="mb-4 grid grid-cols-2 rounded-md bg-slate-100 p-1" role="group" aria-label="Jenis pembeli">
                   <button
                     type="button"
-                    onClick={() => setIsInternalCustomer(false)}
+                    onClick={() => handleCustomerTypeChange(false)}
+                    disabled={isCreatingTransaction || isOpeningDokuCheckout}
                     aria-pressed={!isInternalCustomer}
                     className={`h-9 rounded-sm px-2 text-xs font-bold transition ${!isInternalCustomer ? "bg-white text-[#071a4f] shadow-sm" : "text-slate-500"}`}
                   >
@@ -988,7 +1026,8 @@ export default function StoreCart() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsInternalCustomer(true)}
+                    onClick={() => handleCustomerTypeChange(true)}
+                    disabled={isCreatingTransaction || isOpeningDokuCheckout}
                     aria-pressed={isInternalCustomer}
                     className={`h-9 rounded-sm px-2 text-xs font-bold transition ${isInternalCustomer ? "bg-white text-[#071a4f] shadow-sm" : "text-slate-500"}`}
                   >
@@ -999,16 +1038,20 @@ export default function StoreCart() {
                 {isInternalCustomer && (
                   <div className="space-y-3">
                     <div>
-                      <Label htmlFor="employee-code" className="mb-2 block text-xs font-bold text-slate-600">
-                        Kode karyawan atau NIK
+                      <Label htmlFor="internal-phone" className="mb-2 block text-xs font-bold text-slate-600">
+                        Nomor WhatsApp / ponsel karyawan
                       </Label>
                       <div className="relative">
                         <Input
-                          id="employee-code"
-                          placeholder="Masukkan kode atau NIK"
-                          value={employeeCodeOrNIK}
-                          onChange={handleEmployeeCodeChange}
-                          disabled={isEmployeeValid === true}
+                          id="internal-phone"
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          aria-describedby="internal-phone-help"
+                          placeholder="Contoh: 081234567890"
+                          value={internalPhone}
+                          onChange={handleInternalPhoneChange}
+                          disabled={isCreatingTransaction || isOpeningDokuCheckout}
                         />
                         {isValidatingEmployee && (
                           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -1016,16 +1059,17 @@ export default function StoreCart() {
                           </div>
                         )}
                       </div>
+                      <p id="internal-phone-help" className="mt-1.5 text-xs text-slate-500">Gunakan nomor WhatsApp / ponsel yang terdaftar pada data pengguna.</p>
                       {isEmployeeValid === true && (
                         <p className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-emerald-700">
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          Karyawan valid, cutoff tersedia
+                          Nomor karyawan terdaftar
                         </p>
                       )}
                       {isEmployeeValid === false && (
                         <p className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-red-600">
                           <XCircle className="h-3.5 w-3.5" />
-                          Data karyawan tidak valid
+                          {employeeValidationError}
                         </p>
                       )}
                     </div>
@@ -1087,6 +1131,16 @@ export default function StoreCart() {
                 )}
               </div>
 
+              <Separator className="my-4" />
+
+              <div className="mb-4 space-y-2">
+                <Label htmlFor="checkout-voucher" className="font-bold">Kode voucher (opsional)</Label>
+                <div className="flex gap-2"><Input id="checkout-voucher" placeholder="Masukkan kode voucher" autoCapitalize="characters" maxLength={20} value={voucher.code} disabled={isCreatingTransaction} onChange={(event) => voucher.changeCode(event.target.value)} /><Button type="button" variant="outline" disabled={!cart.isReady || voucher.pending || isCreatingTransaction || !voucher.code.trim()} onClick={() => void voucher.apply()}>{voucher.pending ? "Memeriksa…" : "Terapkan"}</Button></div>
+                {voucher.error && <p role="alert" className="text-sm text-red-600">{voucher.error}</p>}
+                {voucher.quote && <p role="status" className="text-sm font-semibold text-emerald-700">{voucher.quote.voucher_code}: hemat {formatCurrency(voucher.quote.discount_amount)}</p>}
+                {!voucher.pending && !voucher.error && voucher.needsValidation && <p className="text-xs text-slate-500">Terapkan kode untuk memeriksa potongan pada keranjang ini.</p>}
+                {voucher.code && <Button type="button" variant="ghost" size="sm" disabled={isCreatingTransaction} onClick={() => voucher.changeCode("")}>Hapus voucher</Button>}
+              </div>
               <Separator className="my-4" />
 
               <div className="mb-4">
@@ -1164,7 +1218,7 @@ export default function StoreCart() {
               <div className="mb-5 flex items-center justify-between rounded-md bg-[#071a4f] px-4 py-3.5 text-white">
                 <span className="text-sm font-bold text-white/75">Total pembayaran</span>
                 <span className="text-xl font-extrabold">
-                  {formatCurrency(total)}
+                  {formatCurrency(payableTotal)}
                 </span>
               </div>
 
@@ -1172,7 +1226,7 @@ export default function StoreCart() {
                 <Button
                   className="commerce-orange-button h-12 w-full rounded-md font-extrabold"
                   size="lg"
-                  disabled={!selectedPaymentMethod || paymentSettingsUnavailable || paymentSettingsQuery.isFetching || isCreatingTransaction}
+                  disabled={!cart.isReady || !selectedPaymentMethod || paymentSettingsUnavailable || paymentSettingsQuery.isFetching || isCreatingTransaction}
                   onClick={() => handleCreateTransaction()}
                 >
                   {isCreatingTransaction ? (
@@ -1205,10 +1259,10 @@ export default function StoreCart() {
         methods={dokuMethods}
         selectedMethod={selectedDokuMethod}
         onSelectMethod={(method) => { setSelectedDokuMethod(method); setDokuSelectionError(""); }}
-        amount={total}
+        amount={payableTotal}
         busy={isCreatingTransaction || paymentSettingsQuery.isFetching}
-        unavailable={paymentSettingsUnavailable}
-        error={dokuSelectionError}
+        unavailable={paymentSettingsUnavailable || !cart.isReady}
+        error={!cart.isReady ? "Periksa kembali produk di keranjang sebelum melanjutkan." : dokuSelectionError}
         onConfirm={() => void handleCreateTransaction(dokuPickupAcknowledged, true)}
       />
 
